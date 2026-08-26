@@ -77,6 +77,8 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_API_URL: https://pattyproject.co.uk
         run: npm run build
 
       - name: Upload frontend
