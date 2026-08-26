@@ -36,14 +36,16 @@ dist/
 dist-ssr/
 *.local
 
-# Environment variables
+# Environment variables & Secrets
 .env
 .env.*
+.env.production
+.env.production.*
 .env.local
 .env.development.local
 .env.test.local
-.env.production
-.env.production.local
+!.env.example
+!*/.env.example
 
 # IDEs & System files
 .vscode/
@@ -53,15 +55,27 @@ dist-ssr/
 .DS_Store
 Thumbs.db
 
-# Databases & SQLite
+# Databases, SQLite & SQL Dumps
 *.db
 *.sqlite
 *.sqlite3
 *.db-journal
 *.db-wal
 *.db-shm
+*.sql
+*.dump
 patty_project.db
+
+# Certificates, Keys & Logs
+*.pem
+*.key
+*.crt
+*.pfx
+*.log
+
 # Archives & Build Bundles
 *.tar.gz
 *.zip
 *.tar
+*.7z
+*.rar
