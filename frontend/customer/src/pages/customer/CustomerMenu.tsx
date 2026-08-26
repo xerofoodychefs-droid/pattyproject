@@ -305,16 +305,16 @@ export const CustomerMenu: React.FC = () => {
                 <div
                   key={`${offer.id}-${idx}`}
                   onClick={() => handleOfferClick(offer)}
-                  className="shrink-0 flex-shrink-0 w-[260px] sm:w-[285px] max-w-[300px] h-[78px] sm:h-[86px] rounded-xl bg-gradient-to-r from-[#170E08] via-[#120B06] to-[#0D0D0D] border border-[#2D180E] hover:border-[#FF5A00] p-2.5 sm:p-3 flex items-center justify-between gap-2.5 relative overflow-hidden group cursor-pointer shadow-md hover:shadow-[#FF5A00]/30 transition-all hover:scale-[1.02]"
+                  className="shrink-0 min-w-[250px] sm:min-w-[285px] max-w-[320px] h-[78px] sm:h-[86px] rounded-xl bg-gradient-to-r from-[#170E08] via-[#120B06] to-[#0D0D0D] border border-[#2D180E] hover:border-[#FF5A00] p-2.5 sm:p-3 flex items-center justify-between gap-3 relative overflow-hidden group cursor-pointer shadow-md hover:shadow-[#FF5A00]/30 transition-all hover:scale-[1.02]"
                 >
                   {/* Glowing Background Radial */}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#FF5A00]/10 rounded-full blur-xl pointer-events-none" />
 
                   {/* Text Details */}
-                  <div className="min-w-0 flex-1 space-y-1 relative z-10 overflow-hidden">
+                  <div className="min-w-0 flex-1 space-y-1 relative z-10">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {offer.badge && (
-                        <span className="text-[9px] sm:text-[10px] font-black uppercase bg-[#FF5A00] text-white px-1.5 py-0.5 rounded tracking-wide shadow-sm shrink-0">
+                        <span className="text-[9px] sm:text-[10px] font-black uppercase bg-[#FF5A00] text-white px-1.5 py-0.5 rounded tracking-wide shadow-sm">
                           {offer.badge}
                         </span>
                       )}
@@ -332,25 +332,23 @@ export const CustomerMenu: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Fixed Size Thumbnail Container (Prevents mobile image expansion) */}
-                  <div className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] sm:w-16 sm:h-16 sm:min-w-[64px] sm:min-h-[64px] sm:max-w-[64px] sm:max-h-[64px] rounded-lg overflow-hidden bg-black border border-[#2A2A2A] shrink-0 flex-shrink-0 flex items-center justify-center relative z-10">
-                    {offer.image_url ? (
-                      <img
-                        src={offer.image_url}
-                        alt={offer.title}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = '/placeholder-burger.svg';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#1C1C1C] flex items-center justify-center text-[#FF5A00]">
-                        <Sparkles className="w-5 h-5" />
-                      </div>
-                    )}
-                  </div>
+                  {/* Thumbnail Image */}
+                  {offer.image_url ? (
+                    <img
+                      src={offer.image_url}
+                      alt={offer.title}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-13 h-13 sm:w-16 sm:h-16 rounded-lg object-cover bg-black border border-[#2A2A2A] shrink-0 group-hover:scale-105 transition-transform relative z-10"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/placeholder-burger.svg';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-lg bg-[#1C1C1C] border border-[#2A2A2A] flex items-center justify-center text-[#FF5A00] shrink-0 relative z-10">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
