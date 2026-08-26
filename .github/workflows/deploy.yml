@@ -126,44 +126,32 @@ jobs:
             echo "Database changed: $DATABASE_CHANGED"
 
             if [ "$FRONTEND_CHANGED" = "true" ]; then
+              echo "=== Preparing frontend deployment ==="
+
+              if [ ! -d "/tmp/patty-customer-dist" ]; then
+                echo "ERROR: Frontend build directory not found"
+                exit 1
+              fi
+
               echo "=== Publishing frontend ==="
 
-              sudo rm -rf /var/www/patty/customer/*
-              sudo cp -r /tmp/patty-customer-dist/* /var/www/patty/customer/
-
-              sudo chown -R www-data:www-data /var/www/patty/customer
-
-              rm -rf /tmp/patty-customer-dist
+              sudo -n /usr/local/sbin/patty-deploy \
+                true \
+                false \
+                false
 
               echo "=== Frontend deployed ==="
             fi
 
-            if [ "$BACKEND_CHANGED" = "true" ]; then
-              echo "=== Updating backend ==="
+            if [ "$BACKEND_CHANGED" = "true" ] || [ "$DATABASE_CHANGED" = "true" ]; then
+              echo "=== Running controlled backend/database deployment ==="
 
-              sudo docker compose up -d patty_backend
+              sudo -n /usr/local/sbin/patty-deploy \
+                false \
+                "$BACKEND_CHANGED" \
+                "$DATABASE_CHANGED"
 
-              echo "=== Waiting for backend environment ==="
-
-              for i in $(seq 1 30); do
-                if sudo docker exec patty_backend \
-                  python -c "import alembic" >/dev/null 2>&1; then
-                  break
-                fi
-
-                sleep 2
-              done
-
-              echo "=== Backend updated ==="
-            fi
-
-            if [ "$DATABASE_CHANGED" = "true" ]; then
-              echo "=== Running PostgreSQL migrations ==="
-
-              sudo docker exec patty_backend \
-                sh -c "alembic upgrade head"
-
-              echo "=== PostgreSQL migrations completed ==="
+              echo "=== Backend/database deployment completed ==="
             fi
 
             echo "=== Deployment completed successfully ==="
