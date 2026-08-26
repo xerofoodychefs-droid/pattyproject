@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { User } from '../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+import { API_BASE } from '../api/client';
 
 interface AuthState {
   token: string | null;

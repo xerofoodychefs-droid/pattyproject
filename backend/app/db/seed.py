@@ -167,18 +167,18 @@ def seed_db():
     branch_central = Branch(
         name="Patty Project - Central London",
         code="PP-LDN-01",
-        address="10-12 Russell Street, Covent Garden, London",
+        address_line1="10-12 Russell Street, Covent Garden, London",
         city="London",
         postcode="WC2B 5HZ",
         phone="+44 20 7123 4567",
-        email="central@pattyproject.co.uk",
         latitude=51.5126,
         longitude=-0.1215,
-        is_active=True,
+        delivery_enabled=True,
+        collection_enabled=True,
         ordering_enabled=True,
-        opening_time="11:00",
-        closing_time="23:00",
-        operating_hours={
+        delivery_radius_miles=2.0,
+        is_active=True,
+        opening_hours={
             "monday": {"open": "11:00", "close": "23:00"},
             "tuesday": {"open": "11:00", "close": "23:00"},
             "wednesday": {"open": "11:00", "close": "23:00"},
@@ -186,27 +186,24 @@ def seed_db():
             "friday": {"open": "11:00", "close": "00:00"},
             "saturday": {"open": "11:00", "close": "00:00"},
             "sunday": {"open": "12:00", "close": "22:00"}
-        },
-        delivery_policy="FREE Delivery up to 2 miles from this location.",
-        service_areas=["WC1", "WC2", "W1", "EC1", "EC2", "EC4", "SE1"],
-        busy_mode=False
+        }
     )
 
     branch_westfield = Branch(
         name="Patty Project - Westfield Stratford",
         code="PP-LDN-02",
-        address="The Arcade, Westfield Stratford City, London",
+        address_line1="The Arcade, Westfield Stratford City, London",
         city="London",
         postcode="E20 1EQ",
         phone="+44 20 8987 6543",
-        email="westfield@pattyproject.co.uk",
         latitude=51.5434,
         longitude=-0.0072,
-        is_active=True,
+        delivery_enabled=True,
+        collection_enabled=True,
         ordering_enabled=True,
-        opening_time="11:30",
-        closing_time="22:30",
-        operating_hours={
+        delivery_radius_miles=2.0,
+        is_active=True,
+        opening_hours={
             "monday": {"open": "11:30", "close": "22:30"},
             "tuesday": {"open": "11:30", "close": "22:30"},
             "wednesday": {"open": "11:30", "close": "22:30"},
@@ -214,10 +211,7 @@ def seed_db():
             "friday": {"open": "11:30", "close": "23:30"},
             "saturday": {"open": "11:30", "close": "23:30"},
             "sunday": {"open": "12:00", "close": "21:30"}
-        },
-        delivery_policy="FREE Delivery up to 2 miles from this location.",
-        service_areas=["E20", "E15", "E7", "E9", "E13"],
-        busy_mode=False
+        }
     )
     db.add_all([branch_central, branch_westfield])
     db.flush()
@@ -229,12 +223,12 @@ def seed_db():
     ])
 
     # 6. Create Menu Categories
-    cat_burgers = Category(name="Gourmet Burgers", description="Handcrafted artisanal patties smashed to perfection", display_order=1)
-    cat_chicken = Category(name="Crispy Chicken", description="Double-dredged buttermilk fried chicken", display_order=2)
-    cat_sides = Category(name="Loaded Sides", description="Skin-on fries, loaded tots, and onion rings", display_order=3)
-    cat_shakes = Category(name="Craft Shakes", description="Thick milkshakes blended with real gelato", display_order=4)
-    cat_drinks = Category(name="Drinks", description="Cold sodas, craft brews, and mocktails", display_order=5)
-    cat_sauces = Category(name="House Dips", description="Signature secret sauces and dressings", display_order=6)
+    cat_burgers = Category(name="Gourmet Burgers", slug="gourmet-burgers", display_order=1)
+    cat_chicken = Category(name="Crispy Chicken", slug="crispy-chicken", display_order=2)
+    cat_sides = Category(name="Loaded Sides", slug="loaded-sides", display_order=3)
+    cat_shakes = Category(name="Craft Shakes", slug="craft-shakes", display_order=4)
+    cat_drinks = Category(name="Drinks", slug="drinks", display_order=5)
+    cat_sauces = Category(name="House Dips", slug="house-dips", display_order=6)
     db.add_all([cat_burgers, cat_chicken, cat_sides, cat_shakes, cat_drinks, cat_sauces])
     db.flush()
 
@@ -242,79 +236,72 @@ def seed_db():
     p1 = Product(
         category_id=cat_burgers.id,
         name="Classic Beef Burger",
-        description="Dry-aged prime beef patty, American cheddar, crispy lettuce, tomato, pickles & signature Patty sauce in toasted brioche.",
+        sku="BURGER-CLASSIC",
+        short_description="Dry-aged prime beef patty, American cheddar, crispy lettuce, tomato, pickles & signature Patty sauce in toasted brioche.",
         base_price=8.99,
         image_url="/images/products/classic-burger.jpg",
         is_active=True,
-        is_featured=True,
-        calories=680,
-        dietary_tags=["Halal"]
+        is_bestseller=True
     )
     p2 = Product(
         category_id=cat_burgers.id,
         name="Double Patty Smash",
-        description="Two 3.5oz dry-aged beef patties smashed ultra-crispy, double American cheese, caramelized onions & smoky mayo.",
+        sku="BURGER-DOUBLE-SMASH",
+        short_description="Two 3.5oz dry-aged beef patties smashed ultra-crispy, double American cheese, caramelized onions & smoky mayo.",
         base_price=11.95,
         image_url="/images/products/double-smash.jpg",
         is_active=True,
-        is_featured=True,
-        calories=920,
-        dietary_tags=["Halal"]
+        is_bestseller=True
     )
     p3 = Product(
         category_id=cat_chicken.id,
         name="Spicy Nashville Chicken",
-        description="Buttermilk fried chicken breast dipped in Nashville hot oil, topped with sweet slaw, dill pickles & garlic aioli.",
+        sku="CHICKEN-NASHVILLE",
+        short_description="Buttermilk fried chicken breast dipped in Nashville hot oil, topped with sweet slaw, dill pickles & garlic aioli.",
         base_price=9.45,
         image_url="/images/products/nashville-chicken.jpg",
         is_active=True,
-        is_featured=True,
-        calories=750,
-        dietary_tags=["Halal", "Spicy"]
+        is_bestseller=True
     )
     p4 = Product(
         category_id=cat_burgers.id,
         name="Truffle Mushroom Burger",
-        description="Beef patty topped with Swiss cheese, sautéed garlic butter mushrooms and rich black truffle mayo.",
+        sku="BURGER-TRUFFLE",
+        short_description="Beef patty topped with Swiss cheese, sautéed garlic butter mushrooms and rich black truffle mayo.",
         base_price=10.95,
         image_url="/images/products/truffle-burger.jpg",
         is_active=True,
-        is_featured=False,
-        calories=810,
-        dietary_tags=["Halal"]
+        is_bestseller=False
     )
     p5 = Product(
         category_id=cat_sides.id,
         name="French Fries (Regular)",
-        description="Crispy golden skin-on fries seasoned with sea salt and rosemary dust.",
+        sku="SIDE-FRIES-REG",
+        short_description="Crispy golden skin-on fries seasoned with sea salt and rosemary dust.",
         base_price=2.49,
         image_url="/images/products/fries.jpg",
         is_active=True,
-        is_featured=False,
-        calories=380,
-        dietary_tags=["Vegan", "Vegetarian", "Halal"]
+        is_bestseller=False
     )
     p6 = Product(
         category_id=cat_sides.id,
         name="Loaded Cheesy Bacon Fries",
-        description="Fries smothered in warm cheese sauce, crispy beef bacon bits and diced jalapeños.",
+        sku="SIDE-LOADED-FRIES",
+        short_description="Fries smothered in warm cheese sauce, crispy beef bacon bits and diced jalapeños.",
         base_price=6.45,
         image_url="/images/products/loaded-fries.jpg",
         is_active=True,
-        is_featured=True,
-        calories=620,
-        dietary_tags=["Halal"]
+        is_bestseller=True
     )
     p7 = Product(
         category_id=cat_drinks.id,
         name="Coca Cola 500ml",
-        description="Chilled 500ml Coca-Cola bottle.",
+        sku="DRINK-COKE-500ML",
+        short_description="Chilled 500ml Coca-Cola bottle.",
         base_price=1.59,
         image_url="/images/products/coke.jpg",
         is_active=True,
-        is_featured=False,
-        calories=140,
-        dietary_tags=["Halal"]
+        is_bestseller=False
     )
     db.add_all([p1, p2, p3, p4, p5, p6, p7])
     db.flush()
@@ -342,14 +329,14 @@ def seed_db():
     db.add_all([r1, r2, r3])
 
     # 10. Promotional Coupons
-    cpn1 = Coupon(code="PATTY10", description="10% off entire order", coupon_type="PERCENTAGE", discount_value=10.0, min_order_value=15.0, is_active=True)
-    cpn2 = Coupon(code="BURGER5", description="£5 off orders over £25", coupon_type="FIXED_AMOUNT", discount_value=5.0, min_order_value=25.0, is_active=True)
-    cpn3 = Coupon(code="FREESHIP", description="Free delivery promotion", coupon_type="FREE_SHIPPING", discount_value=0.0, min_order_value=0.0, is_active=True)
+    cpn1 = Coupon(code="PATTY10", name="10% off entire order", coupon_type="PERCENTAGE", discount_value=10.0, min_order_value=15.0, is_active=True)
+    cpn2 = Coupon(code="BURGER5", name="£5 off orders over £25", coupon_type="FIXED_AMOUNT", discount_value=5.0, min_order_value=25.0, is_active=True)
+    cpn3 = Coupon(code="FREESHIP", name="Free delivery promotion", coupon_type="FREE_SHIPPING", discount_value=0.0, min_order_value=0.0, is_active=True)
     db.add_all([cpn1, cpn2, cpn3])
 
     # 11. Printers
-    printer1 = Printer(branch_id=branch_central.id, name="Central Kitchen Receipt Printer", ip_address="192.168.1.201", port=9100, is_active=True)
-    printer2 = Printer(branch_id=branch_westfield.id, name="Westfield Kitchen Printer", ip_address="192.168.1.202", port=9100, is_active=True)
+    printer1 = Printer(branch_id=branch_central.id, name="Central Kitchen Receipt Printer", ip_address="192.168.1.201", is_active=True)
+    printer2 = Printer(branch_id=branch_westfield.id, name="Westfield Kitchen Printer", ip_address="192.168.1.202", is_active=True)
     db.add_all([printer1, printer2])
 
     # 12. Seed Real Sample Orders

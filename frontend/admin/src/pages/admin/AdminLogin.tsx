@@ -5,8 +5,8 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
 export const AdminLogin: React.FC = () => {
-  const [email, setEmail] = useState('admin@pattyproject.co.uk');
-  const [password, setPassword] = useState('Admin123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
@@ -18,18 +18,41 @@ export const AdminLogin: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your email address.');
+      return;
+    }
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res: any = await api.post('/auth/login', { email, password });
-      if (res.user?.role !== 'SUPER_ADMIN' && res.user?.role !== 'BRANCH_ADMIN') {
-        setError('Access denied. Admin privileges required to access this portal.');
+      localStorage.removeItem('patty_token');
+      localStorage.removeItem('patty_refresh_token');
+      localStorage.removeItem('patty_user');
+
+      const res: any = await api.post('/auth/login', { email: cleanEmail, password });
+      
+      if (!res || !res.access_token || !res.user) {
+        setError('Invalid response received from authentication server.');
         return;
       }
+
+      if (res.user.role !== 'SUPER_ADMIN' && res.user.role !== 'BRANCH_ADMIN') {
+        setError('Access denied. Administrator privileges required to access this portal.');
+        return;
+      }
+
       setAuth(res.access_token, res.user, res.refresh_token);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      const errMsg = err?.detail || err?.message || 'Incorrect email or password.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

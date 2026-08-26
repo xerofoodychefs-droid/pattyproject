@@ -14,7 +14,7 @@ export const OrderConfirmation: React.FC = () => {
     if (orderNumber) {
       setLoading(true);
       setError('');
-      api.get<Order>(`/orders/${orderNumber}`)
+      api.get<Order>(`/orders/${encodeURIComponent(orderNumber)}`)
         .then((ord) => {
           setOrder(ord);
         })

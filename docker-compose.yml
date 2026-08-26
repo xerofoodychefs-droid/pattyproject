@@ -1,0 +1,59 @@
+# ==============================================================================
+# Patty Project UK — Production Docker Compose Configuration
+# Architecture: Host Nginx -> Private Bridge Network (patty_network) -> PostgreSQL 16
+# ==============================================================================
+
+version: '3.8'
+
+networks:
+  patty_network:
+    name: patty_network
+    driver: bridge
+    internal: false  # Allows egress for external payment webhooks / GIS OAuth when FastAPI is attached
+
+volumes:
+  patty_postgres_data:
+    name: patty_postgres_data
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 Production Database Service (NO HOST PORT BINDING)
+  # ----------------------------------------------------------------------------
+  patty_postgres:
+    image: postgres:16-alpine
+    container_name: patty_postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - patty_network
+    # CRITICAL SECURITY RULE: Zero host ports exposed.
+    # ports: section is intentionally omitted to prevent public or host access.
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-patty_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-patty_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - patty_postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init_postgres_app_user.sh:/docker-entrypoint-initdb.d/init_postgres_app_user.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-patty_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2560M
+        reservations:
+          memory: 1024M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

@@ -26,7 +26,7 @@ import app.models
 
 EXPECTED_BACKUP_PATH = r"C:\Users\HP\Desktop\pattyproject_backups\patty_project_backup_2026-08-25_12-30-54.db"
 EXPECTED_BACKUP_SHA256 = "3e565aa8da292fc13675cac426d818f07a708fc123139367b7a4314327f4da95"
-EXPECTED_ALEMBIC_REVISION = "ed7049002652"
+EXPECTED_ALEMBIC_REVISIONS = ["c748291b5a10", "ed7049002652"]
 
 # Dependency-safe topological table migration order (26 application tables)
 MIGRATION_TABLE_ORDER = [
@@ -221,9 +221,9 @@ class DataMigrator:
         with self.dst_engine.connect() as conn:
             res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
             rev = res[0] if res else None
-            if rev != EXPECTED_ALEMBIC_REVISION:
+            if rev not in EXPECTED_ALEMBIC_REVISIONS:
                 raise RuntimeError(
-                    f"MIGRATION BLOCKED: Target Alembic revision is '{rev}', expected '{EXPECTED_ALEMBIC_REVISION}'."
+                    f"MIGRATION BLOCKED: Target Alembic revision is '{rev}', expected one of {EXPECTED_ALEMBIC_REVISIONS}."
                 )
             self.results["alembic_revision"] = rev
 
@@ -475,7 +475,7 @@ def run_migration(source_path: str = EXPECTED_BACKUP_PATH, target_url: Optional[
     # Step 2: Connect & Verify Target
     migrator.connect()
     migrator.check_target_schema_and_emptiness()
-    print(f"Target Schema:   Verified (Alembic Revision: {EXPECTED_ALEMBIC_REVISION})")
+    print(f"Target Schema:   Verified (Alembic Revision: {migrator.results.get('alembic_revision')})")
     print(f"Target State:    Verified Clean & Empty (0 existing application records)")
 
     # Step 3: Execute Migration

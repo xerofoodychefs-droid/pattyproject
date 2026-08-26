@@ -1,4 +1,5 @@
-const API_BASE = '/api/v1';
+const RAW_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'http://194.164.120.249' : '');
+export const API_BASE = `${RAW_BASE ? RAW_BASE.replace(/\/$/, '') : ''}/api/v1`;
 
 let refreshPromise: Promise<string | null> | null = null;
 
@@ -40,7 +41,13 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
-  const token = localStorage.getItem('patty_token');
+  const isAuthEndpoint =
+    endpoint.includes('/auth/login') ||
+    endpoint.includes('/auth/register') ||
+    endpoint.includes('/auth/google') ||
+    endpoint.includes('/auth/refresh');
+
+  const token = !isAuthEndpoint ? localStorage.getItem('patty_token') : null;
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -58,7 +65,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
     });
 
     // If 401 and we have a refresh token and this is not already a retry or an auth endpoint
-    if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/register')) {
+    if (response.status === 401 && !isRetry && !isAuthEndpoint) {
       const refreshToken = localStorage.getItem('patty_refresh_token');
       if (refreshToken) {
         if (!refreshPromise) {
@@ -83,14 +90,20 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
         detailMsg = data.detail.map((e: any) => (typeof e === 'string' ? e : e.msg || e.message || JSON.stringify(e))).join(', ');
       }
 
-      if (response.status === 401) {
-        detailMsg = 'Session expired. Please log out and log in again to continue.';
-      } else if (!detailMsg && typeof data.message === 'string') {
+      if (!detailMsg && typeof data.message === 'string') {
         detailMsg = data.message;
       } else if (!detailMsg && typeof data.error === 'string') {
         detailMsg = data.error;
-      } else if (!detailMsg) {
-        detailMsg = response.statusText ? `Error: ${response.status} ${response.statusText}` : 'An unexpected error occurred';
+      }
+
+      if (!detailMsg) {
+        if (response.status === 401) {
+          detailMsg = endpoint.includes('/auth/login')
+            ? 'Incorrect email or password'
+            : 'Session expired. Please log out and log in again to continue.';
+        } else {
+          detailMsg = response.statusText ? `Error: ${response.status} ${response.statusText}` : 'An unexpected error occurred';
+        }
       }
 
       const customErr: any = new Error(detailMsg);
