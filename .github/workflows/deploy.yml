@@ -1,0 +1,169 @@
+name: Patty Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  detect:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      backend: ${{ steps.changes.outputs.backend }}
+      database: ${{ steps.changes.outputs.database }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed areas
+        id: changes
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED="$(git diff --name-only "$AFTER^" "$AFTER")"
+          else
+            CHANGED="$(git diff --name-only "$BEFORE" "$AFTER")"
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -qE '^frontend/'; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED" | grep -qE '^backend/|^docker-compose\.yml$'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED" | grep -qE '^backend/alembic/|^backend/app/models/|^backend/app/db/'; then
+            echo "database=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "database=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-frontend:
+    name: Build Frontend
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 194.164.120.249
+          username: pattyadmin
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "frontend/dist/*"
+          target: "/tmp/patty-customer-dist"
+          strip_components: 2
+
+  deploy:
+    name: Deploy to IONOS
+    needs:
+      - detect
+      - build-frontend
+    if: |
+      always() &&
+      needs.detect.result == 'success' &&
+      (needs.build-frontend.result == 'success' ||
+       needs.build-frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy backend and publish frontend
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: 194.164.120.249
+          username: pattyadmin
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            cd ~/pattyproject
+
+            echo "=== Pulling latest main ==="
+            git fetch origin main
+            git reset --hard origin/main
+
+            FRONTEND_CHANGED="${{ needs.detect.outputs.frontend }}"
+            BACKEND_CHANGED="${{ needs.detect.outputs.backend }}"
+            DATABASE_CHANGED="${{ needs.detect.outputs.database }}"
+
+            echo "Frontend changed: $FRONTEND_CHANGED"
+            echo "Backend changed: $BACKEND_CHANGED"
+            echo "Database changed: $DATABASE_CHANGED"
+
+            if [ "$FRONTEND_CHANGED" = "true" ]; then
+              echo "=== Publishing frontend ==="
+
+              sudo rm -rf /var/www/patty/customer/*
+              sudo cp -r /tmp/patty-customer-dist/* /var/www/patty/customer/
+
+              sudo chown -R www-data:www-data /var/www/patty/customer
+
+              rm -rf /tmp/patty-customer-dist
+
+              echo "=== Frontend deployed ==="
+            fi
+
+            if [ "$BACKEND_CHANGED" = "true" ]; then
+              echo "=== Updating backend ==="
+
+              sudo docker compose up -d patty_backend
+
+              echo "=== Waiting for backend environment ==="
+
+              for i in $(seq 1 30); do
+                if sudo docker exec patty_backend \
+                  python -c "import alembic" >/dev/null 2>&1; then
+                  break
+                fi
+
+                sleep 2
+              done
+
+              echo "=== Backend updated ==="
+            fi
+
+            if [ "$DATABASE_CHANGED" = "true" ]; then
+              echo "=== Running PostgreSQL migrations ==="
+
+              sudo docker exec patty_backend \
+                sh -c "alembic upgrade head"
+
+              echo "=== PostgreSQL migrations completed ==="
+            fi
+
+            echo "=== Deployment completed successfully ==="
