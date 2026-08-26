@@ -1,4 +1,4 @@
-const RAW_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'http://194.164.120.249' : '');
+const RAW_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://pattyproject.co.uk' : '');
 export const API_BASE = `${RAW_BASE ? RAW_BASE.replace(/\/$/, '') : ''}/api/v1`;
 
 let refreshPromise: Promise<string | null> | null = null;
