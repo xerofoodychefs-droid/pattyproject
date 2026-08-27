@@ -26,6 +26,7 @@ import { CustomerContact } from './pages/customer/CustomerContact';
 import { CustomerAbout } from './pages/customer/CustomerAbout';
 import { CustomerPrivacyPolicy } from './pages/customer/CustomerPrivacyPolicy';
 import { RefundCancellationPolicy } from './pages/customer/RefundCancellationPolicy';
+import { TermsOfService } from './pages/customer/TermsOfService';
 import { CustomerFooter } from './components/customer/CustomerFooter';
 import { MockCheckoutPage } from './pages/customer/MockCheckoutPage';
 
@@ -40,11 +41,11 @@ const CustomerLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children
   const orderingPortalPages = ['/order', '/cart', '/checkout', '/orders', '/profile', '/addresses', '/payment-methods', '/mock-checkout'];
   const isOrderingPortal = orderingPortalPages.includes(location.pathname) || location.pathname.startsWith('/order-confirmation') || location.pathname.startsWith('/mock-checkout');
 
-  const hideBottomNavPages = ['/', '/contact', '/select-location', '/about', '/privacy', '/privacy-policy', '/offers', '/refund-cancellation'];
+  const hideBottomNavPages = ['/', '/contact', '/select-location', '/about', '/privacy', '/privacy-policy', '/offers', '/refund-cancellation', '/terms-and-service', '/terms', '/terms-of-service'];
   const showBottomNav = !hideBottomNavPages.includes(location.pathname);
 
   // Footer only on public marketing/showcase pages
-  const publicPagesWithFooter = ['/', '/offers', '/about', '/contact', '/privacy', '/privacy-policy', '/refund-cancellation'];
+  const publicPagesWithFooter = ['/', '/offers', '/about', '/contact', '/privacy', '/privacy-policy', '/refund-cancellation', '/terms-and-service', '/terms', '/terms-of-service'];
   const showFooter = publicPagesWithFooter.includes(location.pathname);
 
   const isOrderNowFlowPage =
@@ -137,6 +138,9 @@ export function App() {
           <Route path="/privacy" element={<CustomerLayoutShell><CustomerPrivacyPolicy /></CustomerLayoutShell>} />
           <Route path="/privacy-policy" element={<CustomerLayoutShell><CustomerPrivacyPolicy /></CustomerLayoutShell>} />
           <Route path="/refund-cancellation" element={<CustomerLayoutShell><RefundCancellationPolicy /></CustomerLayoutShell>} />
+          <Route path="/terms-and-service" element={<CustomerLayoutShell><TermsOfService /></CustomerLayoutShell>} />
+          <Route path="/terms-of-service" element={<CustomerLayoutShell><TermsOfService /></CustomerLayoutShell>} />
+          <Route path="/terms" element={<CustomerLayoutShell><TermsOfService /></CustomerLayoutShell>} />
           <Route path="/product/:productId" element={<CustomerLayoutShell><ProductDetailPage /></CustomerLayoutShell>} />
           <Route path="/cart" element={<CustomerLayoutShell><CustomerCart /></CustomerLayoutShell>} />
           <Route path="/checkout" element={<CustomerLayoutShell><CustomerCheckout /></CustomerLayoutShell>} />
