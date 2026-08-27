@@ -34,6 +34,7 @@ def list_public_branches(db: Session = Depends(get_db)):
     return db.query(Branch).filter(Branch.is_active == True).all()
 
 @router.get("/stats", response_model=List[BranchStatsResponse])
+@router.get("/stats/", response_model=List[BranchStatsResponse])
 def get_branch_order_stats(
     current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
     db: Session = Depends(get_db)
