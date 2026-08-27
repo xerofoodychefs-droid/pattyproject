@@ -57,3 +57,48 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # FastAPI Backend Service
+  # ----------------------------------------------------------------------------
+  patty_backend:
+    image: python:3.11-slim
+    container_name: patty_backend
+    restart: unless-stopped
+    working_dir: /app
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - patty_network
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_DB: ${POSTGRES_DB:-patty_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-patty_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      patty_postgres:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt psycopg2-binary
+      && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/docs', timeout=5)\""
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
