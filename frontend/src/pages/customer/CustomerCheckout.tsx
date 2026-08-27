@@ -188,10 +188,10 @@ export const CustomerCheckout: React.FC = () => {
           style: {
             '.input-container': {
               borderColor: '#242424',
-              borderRadius: '8px',
-              backgroundColor: '#151515'
+              borderRadius: '8px'
             },
             'input': {
+              backgroundColor: '#151515',
               color: '#F5F5F5',
               fontSize: '14px',
               fontFamily: 'inherit'
