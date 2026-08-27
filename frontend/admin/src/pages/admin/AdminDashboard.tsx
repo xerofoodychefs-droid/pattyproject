@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ArrowLeft, Download, Calendar, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { api } from '../../api/client';
-import { Branch, Order } from '../../types';
+import { Branch, Order, BranchStats } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { AdminCreateBranchModal } from './AdminCreateBranchModal';
 
@@ -10,6 +10,7 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchStats, setBranchStats] = useState<Record<string, BranchStats>>({});
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,21 +19,37 @@ export const AdminDashboard: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchBranches();
+    fetchBranches(false);
+    const interval = setInterval(() => {
+      fetchBranches(true);
+    }, 8000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchBranches = async () => {
+  const fetchBranches = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
-      const data: Branch[] = await api.get('/branches');
-      let filtered = data || [];
+      const [branchData, statsData] = await Promise.all([
+        api.get<Branch[]>('/branches'),
+        api.get<BranchStats[]>('/branches/stats').catch(() => [])
+      ]);
+      let filtered = branchData || [];
       if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids.length > 0) {
         filtered = filtered.filter((b) => user.branch_ids.includes(b.id));
       }
       setBranches(filtered);
+
+      if (Array.isArray(statsData)) {
+        const statsMap: Record<string, BranchStats> = {};
+        statsData.forEach((s) => {
+          statsMap[s.branch_id] = s;
+        });
+        setBranchStats(statsMap);
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -75,19 +92,19 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* Page Header */}
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-wide">Dashboard</h1>
-          <p className="text-[#9CA3AF] text-sm mt-0.5">
+          <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
+          <p className="text-[#9CA3AF] text-sm mt-1">
             {user?.role === 'BRANCH_ADMIN' ? 'View and manage orders for your assigned branch.' : 'View and manage orders for each branch.'}
           </p>
         </div>
         {user?.role === 'SUPER_ADMIN' && (
           <button
             onClick={() => setShowCreateBranchModal(true)}
-            className="bg-[#FF5500] hover:bg-[#E04B00] text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all shadow-md shadow-[#FF5500]/20 cursor-pointer"
+            className="bg-[#FF5500] hover:bg-[#E04D00] text-white px-5 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-lg shadow-[#FF5500]/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Create Branch</span>
@@ -115,47 +132,55 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1F1F1F]">
-                {branches.map((b) => (
-                  <tr
-                    key={b.id}
-                    onClick={() => handleSelectBranch(b)}
-                    className="hover:bg-[#1A1A1A] cursor-pointer transition-colors"
-                  >
-                    <td className="px-6 py-4 flex items-center gap-3">
-                      <span className="w-10 h-10 rounded-xl bg-[#FF5500]/10 text-[#FF5500] font-bold flex items-center justify-center border border-[#FF5500]/30">
-                        {b.code}
-                      </span>
-                      <div>
-                        <p className="font-semibold text-white">{b.name}</p>
-                        <p className="text-xs text-[#9CA3AF]">{b.postcode}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-center font-semibold text-white">{b.code === 'LC' ? 512 : 342}</td>
-                    <td className="px-6 py-4 text-center text-[#10B981] font-semibold">{b.code === 'LC' ? 462 : 308}</td>
-                    <td className="px-6 py-4 text-center text-[#EF4444] font-semibold">{b.code === 'LC' ? 20 : 14}</td>
-                    <td className="px-6 py-4 text-center text-[#FF5500] font-semibold">{b.code === 'LC' ? 30 : 20}</td>
-                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
-                        {user?.role === 'SUPER_ADMIN' && (
+                {branches.map((b) => {
+                  const stats = branchStats[b.id] || {
+                    total_orders: 0,
+                    completed_orders: 0,
+                    cancelled_orders: 0,
+                    pending_orders: 0
+                  };
+                  return (
+                    <tr
+                      key={b.id}
+                      onClick={() => handleSelectBranch(b)}
+                      className="hover:bg-[#1A1A1A] cursor-pointer transition-colors"
+                    >
+                      <td className="px-6 py-4 flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-xl bg-[#FF5500]/10 text-[#FF5500] font-bold flex items-center justify-center border border-[#FF5500]/30">
+                          {b.code}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-white">{b.name}</p>
+                          <p className="text-xs text-[#9CA3AF]">{b.postcode}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center font-semibold text-white">{stats.total_orders}</td>
+                      <td className="px-6 py-4 text-center text-[#10B981] font-semibold">{stats.completed_orders}</td>
+                      <td className="px-6 py-4 text-center text-[#EF4444] font-semibold">{stats.cancelled_orders}</td>
+                      <td className="px-6 py-4 text-center text-[#FF5500] font-semibold">{stats.pending_orders}</td>
+                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2">
+                          {user?.role === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => setBranchToDelete(b)}
+                              title="Delete Branch"
+                              className="p-2 text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-xl transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => setBranchToDelete(b)}
-                            title="Delete Branch"
-                            className="p-2 text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-xl transition-all cursor-pointer"
+                            onClick={() => handleSelectBranch(b)}
+                            title="View Branch Orders"
+                            className="p-2 text-[#9CA3AF] hover:text-white hover:bg-[#1A1A1A] rounded-xl transition-all cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <ChevronRight className="w-5 h-5" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleSelectBranch(b)}
-                          title="View Branch Orders"
-                          className="p-2 text-[#9CA3AF] hover:text-white hover:bg-[#1A1A1A] rounded-xl transition-all cursor-pointer"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -178,7 +203,7 @@ export const AdminDashboard: React.FC = () => {
               </span>
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedBranch.name}</h2>
-                <p className="text-[#9CA3AF] text-sm">512 Total Orders</p>
+                <p className="text-[#9CA3AF] text-sm">{orders.length} Total {orders.length === 1 ? 'Order' : 'Orders'}</p>
               </div>
             </div>
 

@@ -1,9 +1,19 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.branch import Branch
-from app.schemas.branch import BranchResponse, BranchCreate, BranchUpdate, NearestBranchRequest, NearestBranchResponse, NearestBranchInfo
+from app.models.order import Order, OrderStatus
+from app.schemas.branch import (
+    BranchResponse,
+    BranchCreate,
+    BranchUpdate,
+    NearestBranchRequest,
+    NearestBranchResponse,
+    NearestBranchInfo,
+    BranchStatsResponse
+)
 from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
 from app.services.branch_service import (
@@ -22,6 +32,64 @@ router = APIRouter()
 def list_public_branches(db: Session = Depends(get_db)):
     """Returns active public branches."""
     return db.query(Branch).filter(Branch.is_active == True).all()
+
+@router.get("/stats", response_model=List[BranchStatsResponse])
+def get_branch_order_stats(
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """
+    Authoritative real-time order statistics calculated from PostgreSQL for each branch.
+    Guaranteed route ordering before parameterized /{branch_id} endpoints to avoid path collisions.
+    """
+    branches_query = db.query(Branch).filter(Branch.is_active == True)
+    if current_user.role == UserRole.BRANCH_ADMIN:
+        assigned_ids = [bu.branch_id for bu in current_user.branch_assignments]
+        branches_query = branches_query.filter(Branch.id.in_(assigned_ids))
+
+    active_branches = branches_query.all()
+    results = []
+
+    for b in active_branches:
+        total = db.query(func.count(Order.id)).filter(Order.branch_id == b.id).scalar() or 0
+        completed = db.query(func.count(Order.id)).filter(
+            Order.branch_id == b.id,
+            Order.status.in_([OrderStatus.DELIVERED, OrderStatus.COLLECTED])
+        ).scalar() or 0
+        cancelled = db.query(func.count(Order.id)).filter(
+            Order.branch_id == b.id,
+            Order.status.in_([
+                OrderStatus.CANCELLED,
+                OrderStatus.REFUNDED,
+                OrderStatus.REFUND_PENDING,
+                OrderStatus.REJECTED
+            ])
+        ).scalar() or 0
+        pending = db.query(func.count(Order.id)).filter(
+            Order.branch_id == b.id,
+            Order.status.in_([
+                OrderStatus.INCOMING,
+                OrderStatus.PENDING_PAYMENT,
+                OrderStatus.PAID,
+                OrderStatus.ACCEPTED,
+                OrderStatus.PREPARING,
+                OrderStatus.READY,
+                OrderStatus.OUT_FOR_DELIVERY,
+                OrderStatus.READY_FOR_COLLECTION
+            ])
+        ).scalar() or 0
+
+        results.append(BranchStatsResponse(
+            branch_id=b.id,
+            code=b.code,
+            name=b.name,
+            total_orders=total,
+            completed_orders=completed,
+            cancelled_orders=cancelled,
+            pending_orders=pending
+        ))
+
+    return results
 
 @router.post("", response_model=BranchResponse)
 @router.post("/", response_model=BranchResponse)

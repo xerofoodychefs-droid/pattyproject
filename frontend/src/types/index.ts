@@ -26,6 +26,16 @@ export interface Branch {
   is_active: boolean;
 }
 
+export interface BranchStats {
+  branch_id: string;
+  code: string;
+  name: string;
+  total_orders: number;
+  completed_orders: number;
+  cancelled_orders: number;
+  pending_orders: number;
+}
+
 export interface ProductModifier {
   id: string;
   name: string;

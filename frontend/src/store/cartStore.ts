@@ -36,6 +36,7 @@ interface CartState {
   applyCoupon: (code: string, discount: number) => void;
   removeCoupon: () => void;
   clearCart: () => void;
+  reconcileActiveBranches: (activeBranches: Branch[]) => void;
   
   getSubtotal: () => number;
   getDeliveryFee: () => number;
@@ -180,6 +181,47 @@ export const useCartStore = create<CartState>((set, get) => ({
   clearCart: () => {
     safeSetStorage('patty_cart_items', []);
     set({ items: [], couponCode: null, discountAmount: 0 });
+  },
+
+  reconcileActiveBranches: (activeBranches) => {
+    const { selectedBranch } = get();
+    if (!activeBranches || activeBranches.length === 0) return;
+    if (!selectedBranch) return;
+
+    // 1. Authoritative UUID match check
+    const uuidMatch = activeBranches.find((b) => b.id === selectedBranch.id && b.is_active !== false);
+    if (uuidMatch) {
+      if (JSON.stringify(uuidMatch) !== JSON.stringify(selectedBranch)) {
+        safeSetStorage('patty_selected_branch', uuidMatch);
+        set({ selectedBranch: uuidMatch, nearestBranchForCollection: uuidMatch });
+      }
+      return;
+    }
+
+    // 2. Only when stored UUID is invalid/deleted: Exact unique code or name recovery
+    const exactCodeMatches = activeBranches.filter(
+      (b) => b.code && selectedBranch.code && b.code.trim().toUpperCase() === selectedBranch.code.trim().toUpperCase() && b.is_active !== false
+    );
+    if (exactCodeMatches.length === 1) {
+      const recovered = exactCodeMatches[0];
+      safeSetStorage('patty_selected_branch', recovered);
+      set({ selectedBranch: recovered, nearestBranchForCollection: recovered });
+      return;
+    }
+
+    const exactNameMatches = activeBranches.filter(
+      (b) => b.name && selectedBranch.name && b.name.trim().toLowerCase() === selectedBranch.name.trim().toLowerCase() && b.is_active !== false
+    );
+    if (exactNameMatches.length === 1) {
+      const recovered = exactNameMatches[0];
+      safeSetStorage('patty_selected_branch', recovered);
+      set({ selectedBranch: recovered, nearestBranchForCollection: recovered });
+      return;
+    }
+
+    // 3. If invalid UUID and no exact recovery, reset branch to require explicit customer selection
+    safeSetStorage('patty_selected_branch', null);
+    set({ selectedBranch: null, nearestBranchForCollection: null });
   },
 
   getSubtotal: () => {

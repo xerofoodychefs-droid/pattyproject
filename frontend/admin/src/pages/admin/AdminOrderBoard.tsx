@@ -31,22 +31,6 @@ export const AdminOrderBoard: React.FC = () => {
     }
   }, [user]);
 
-  const mergeAndReconcileOrders = (incomingOrders: Order[]) => {
-    setOrders((prevOrders) => {
-      const incomingMap = new Map(incomingOrders.map((o) => [o.id, o]));
-      const updatedExisting = prevOrders.map((existing) => {
-        const incoming = incomingMap.get(existing.id);
-        if (incoming) {
-          incomingMap.delete(existing.id);
-          return incoming;
-        }
-        return existing;
-      });
-      const brandNew = Array.from(incomingMap.values());
-      return [...brandNew, ...updatedExisting];
-    });
-  };
-
   const fetchOrders = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
@@ -61,8 +45,8 @@ export const AdminOrderBoard: React.FC = () => {
       if (params.length) url += `?${params.join('&')}`;
 
       const data: Order[] = await api.get(url);
-      if (data) {
-        mergeAndReconcileOrders(data);
+      if (Array.isArray(data)) {
+        setOrders(data);
       }
     } catch (err) {
       console.error('Failed to load orders', err);

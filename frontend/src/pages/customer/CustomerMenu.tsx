@@ -42,20 +42,20 @@ export const CustomerMenu: React.FC = () => {
 
     const loadAllMenuData = async () => {
       try {
-        let currentBranch = selectedBranch;
+        // Authoritative branch UUID reconciliation
+        let activeBranches: Branch[] = [];
+        try {
+          const branches = await api.get<Branch[]>('/branches');
+          activeBranches = (branches || []).filter((b) => b.is_active !== false);
+          useCartStore.getState().reconcileActiveBranches(activeBranches);
+        } catch (e) {
+          console.error('Failed to load branch list:', e);
+        }
 
-        // If no branch selected, fetch active branches concurrently
-        if (!currentBranch) {
-          try {
-            const branches = await api.get<Branch[]>('/branches');
-            const activeBranches = branches.filter((b) => b.is_active !== false);
-            if (activeBranches.length > 0) {
-              currentBranch = activeBranches[0];
-              setSelectedBranch(currentBranch, null, false, currentBranch);
-            }
-          } catch (e) {
-            console.error('Failed to load branch list:', e);
-          }
+        let currentBranch = useCartStore.getState().selectedBranch;
+        if (!currentBranch && activeBranches.length > 0) {
+          currentBranch = activeBranches[0];
+          setSelectedBranch(currentBranch, null, false, currentBranch);
         }
 
         const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}` : '';

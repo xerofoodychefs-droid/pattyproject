@@ -177,3 +177,13 @@ class NearestBranchResponse(BaseModel):
     message: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
+class BranchStatsResponse(BaseModel):
+    branch_id: str
+    code: str
+    name: str
+    total_orders: int
+    completed_orders: int
+    cancelled_orders: int
+    pending_orders: int
+    model_config = ConfigDict(from_attributes=True)
+

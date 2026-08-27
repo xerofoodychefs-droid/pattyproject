@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ArrowLeft, Download, Calendar, Plus, Trash2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { api } from '../../api/client';
-import { Branch, Order } from '../../types';
+import { Branch, Order, BranchStats } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { AdminCreateBranchModal } from './AdminCreateBranchModal';
 
@@ -10,6 +10,7 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchStats, setBranchStats] = useState<Record<string, BranchStats>>({});
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,21 +19,37 @@ export const AdminDashboard: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchBranches();
+    fetchBranches(false);
+    const interval = setInterval(() => {
+      fetchBranches(true);
+    }, 8000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchBranches = async () => {
+  const fetchBranches = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
-      const data: Branch[] = await api.get('/branches');
-      let filtered = data || [];
+      const [branchData, statsData] = await Promise.all([
+        api.get<Branch[]>('/branches'),
+        api.get<BranchStats[]>('/branches/stats').catch(() => [])
+      ]);
+      let filtered = branchData || [];
       if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids.length > 0) {
         filtered = filtered.filter((b) => user.branch_ids.includes(b.id));
       }
       setBranches(filtered);
+
+      if (Array.isArray(statsData)) {
+        const statsMap: Record<string, BranchStats> = {};
+        statsData.forEach((s) => {
+          statsMap[s.branch_id] = s;
+        });
+        setBranchStats(statsMap);
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -134,49 +151,57 @@ export const AdminDashboard: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  branches.map((b) => (
-                    <tr
-                      key={b.id}
-                      onClick={() => handleSelectBranch(b)}
-                      className="hover:bg-[#121212] cursor-pointer transition-colors h-14"
-                    >
-                      <td className="px-5 py-3 flex items-center gap-3">
-                        <span className="w-9 h-9 rounded-lg bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-semibold text-xs flex items-center justify-center shrink-0">
-                          {b.code}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm text-[#F5F5F5] truncate">{b.name}</p>
-                          <p className="text-xs text-[#71717A] truncate">{b.address_line1}, {b.postcode}</p>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-center font-semibold text-[#F5F5F5]">{b.code === 'LC' ? 512 : 342}</td>
-                      <td className="px-5 py-3 text-center text-[#22C55E] font-semibold">{b.code === 'LC' ? 462 : 308}</td>
-                      <td className="px-5 py-3 text-center text-[#EF4444] font-semibold">{b.code === 'LC' ? 20 : 14}</td>
-                      <td className="px-5 py-3 text-center text-[#F59E0B] font-semibold">{b.code === 'LC' ? 30 : 20}</td>
-                      <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          {user?.role === 'SUPER_ADMIN' && (
+                  branches.map((b) => {
+                    const stats = branchStats[b.id] || {
+                      total_orders: 0,
+                      completed_orders: 0,
+                      cancelled_orders: 0,
+                      pending_orders: 0
+                    };
+                    return (
+                      <tr
+                        key={b.id}
+                        onClick={() => handleSelectBranch(b)}
+                        className="hover:bg-[#121212] cursor-pointer transition-colors h-14"
+                      >
+                        <td className="px-5 py-3 flex items-center gap-3">
+                          <span className="w-9 h-9 rounded-lg bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-semibold text-xs flex items-center justify-center shrink-0">
+                            {b.code}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-[#F5F5F5] truncate">{b.name}</p>
+                            <p className="text-xs text-[#71717A] truncate">{b.address_line1}, {b.postcode}</p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-center font-semibold text-[#F5F5F5]">{stats.total_orders}</td>
+                        <td className="px-5 py-3 text-center text-[#22C55E] font-semibold">{stats.completed_orders}</td>
+                        <td className="px-5 py-3 text-center text-[#EF4444] font-semibold">{stats.cancelled_orders}</td>
+                        <td className="px-5 py-3 text-center text-[#F59E0B] font-semibold">{stats.pending_orders}</td>
+                        <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {user?.role === 'SUPER_ADMIN' && (
+                              <button
+                                onClick={() => setBranchToDelete(b)}
+                                title="Delete Branch"
+                                aria-label="Delete branch"
+                                className="w-8 h-8 rounded-lg bg-[#151515] border border-[#242424] text-[#71717A] hover:text-[#EF4444] hover:border-[#EF4444]/40 hover:bg-[#EF4444]/10 flex items-center justify-center transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
-                              onClick={() => setBranchToDelete(b)}
-                              title="Delete Branch"
-                              aria-label="Delete branch"
-                              className="w-8 h-8 rounded-lg bg-[#151515] border border-[#242424] text-[#71717A] hover:text-[#EF4444] hover:border-[#EF4444]/40 hover:bg-[#EF4444]/10 flex items-center justify-center transition-colors cursor-pointer"
+                              onClick={() => handleSelectBranch(b)}
+                              title="View Branch Orders"
+                              aria-label="View branch orders"
+                              className="w-8 h-8 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#F5F5F5] hover:border-[#333333] flex items-center justify-center transition-colors cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <ChevronRight className="w-4 h-4" />
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleSelectBranch(b)}
-                            title="View Branch Orders"
-                            aria-label="View branch orders"
-                            className="w-8 h-8 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#F5F5F5] hover:border-[#333333] flex items-center justify-center transition-colors cursor-pointer"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -200,7 +225,7 @@ export const AdminDashboard: React.FC = () => {
               </span>
               <div>
                 <h2 className="text-xl font-bold text-[#F5F5F5]">{selectedBranch.name}</h2>
-                <p className="text-[#A1A1AA] text-xs">512 Total Orders Recorded</p>
+                <p className="text-[#A1A1AA] text-xs">{orders.length} Total {orders.length === 1 ? 'Order' : 'Orders'} Recorded</p>
               </div>
             </div>
 
