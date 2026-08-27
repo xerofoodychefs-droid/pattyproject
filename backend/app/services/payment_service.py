@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, Set
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from dataclasses import dataclass
+from app.core.config import settings
 from app.models.payment import Payment, PaymentStatus, PaymentProvider, PaymentEvent
 from app.models.order import Order, OrderStatus, OrderStatusHistory
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
@@ -90,7 +91,10 @@ class BasePaymentProvider(ABC):
         amount: float,
         currency: str = "GBP",
         customer_info: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None
+        idempotency_key: Optional[str] = None,
+        source_id: Optional[str] = None,
+        order_number: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """Initializes payment session & returns checkout token or redirect URL."""
         pass
@@ -122,7 +126,10 @@ class MockPaymentProvider(BasePaymentProvider):
         amount: float,
         currency: str = "GBP",
         customer_info: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None
+        idempotency_key: Optional[str] = None,
+        source_id: Optional[str] = None,
+        order_number: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         tx_id = f"TXN_{uuid.uuid4().hex[:10].upper()}"
         return {
@@ -184,8 +191,20 @@ class MockPaymentProvider(BasePaymentProvider):
         }
 
 
-# Active Provider instance (Abstract factory ready for client gateway swap)
-payment_provider: BasePaymentProvider = MockPaymentProvider()
+def get_payment_provider() -> BasePaymentProvider:
+    """Dynamically resolves and returns the configured payment provider."""
+    provider_name = (settings.PAYMENT_PROVIDER or "").lower()
+    if provider_name == "square" or (settings.is_production and settings.SQUARE_ACCESS_TOKEN):
+        try:
+            from app.services.square_service import SquarePaymentProvider
+            return SquarePaymentProvider()
+        except Exception as e:
+            logger.error(f"Failed to initialize SquarePaymentProvider: {e}")
+    return MockPaymentProvider()
+
+
+# Active Provider instance
+payment_provider: BasePaymentProvider = get_payment_provider()
 
 
 # Payment Ledger & Service Operations

@@ -18,6 +18,7 @@ class PaymentStatus:
 
 class PaymentProvider:
     MOCK = "MOCK"
+    SQUARE = "SQUARE"
     STRIPE = "STRIPE"
     RAZORPAY = "RAZORPAY"
     ADYEN = "ADYEN"

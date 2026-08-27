@@ -1,5 +1,5 @@
 import os, pathlib
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -38,7 +38,14 @@ class Settings(BaseSettings):
     
     # Environment & Payment Provider
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development"))
-    PAYMENT_PROVIDER: str = os.getenv("PAYMENT_PROVIDER", "mock")
+    PAYMENT_PROVIDER: str = os.getenv("PAYMENT_PROVIDER", "square" if os.getenv("ENVIRONMENT") == "production" else "mock")
+
+    # Square Payment Gateway Configuration
+    SQUARE_APPLICATION_ID: Optional[str] = os.getenv("SQUARE_APPLICATION_ID")
+    SQUARE_LOCATION_ID: Optional[str] = os.getenv("SQUARE_LOCATION_ID")
+    SQUARE_ACCESS_TOKEN: Optional[str] = os.getenv("SQUARE_ACCESS_TOKEN")
+    SQUARE_ENVIRONMENT: str = os.getenv("SQUARE_ENVIRONMENT", "production" if os.getenv("ENVIRONMENT") == "production" else "sandbox")
+    SQUARE_WEBHOOK_SIGNATURE_KEY: Optional[str] = os.getenv("SQUARE_WEBHOOK_SIGNATURE_KEY")
 
     # Google Identity Services (GIS) OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "mock-google-client-id.apps.googleusercontent.com")
@@ -46,6 +53,18 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() == "production"
+
+    @property
+    def is_square_sandbox(self) -> bool:
+        if self.SQUARE_APPLICATION_ID and self.SQUARE_APPLICATION_ID.startswith("sandbox-"):
+            return True
+        return self.SQUARE_ENVIRONMENT.lower() in ["sandbox", "development", "testing"]
+
+    @property
+    def square_base_url(self) -> str:
+        if self.is_square_sandbox:
+            return "https://connect.squareupsandbox.com"
+        return "https://connect.squareup.com"
 
     @property
     def cors_origins(self) -> List[str]:
