@@ -349,7 +349,7 @@ export const CustomerCheckout: React.FC = () => {
       const newOrder: any = await api.post('/orders', orderPayload);
 
       // Step 2: Create / Process Payment Session
-      const idempotencyKey = `idemp_${newOrder.id}_${Date.now()}`;
+      const idempotencyKey = `idemp_${newOrder.id}`;
       const sessionRes: any = await api.post(
         '/payments/create-session',
         {

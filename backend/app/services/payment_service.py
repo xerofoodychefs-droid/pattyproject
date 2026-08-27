@@ -100,7 +100,7 @@ class BasePaymentProvider(ABC):
         pass
 
     @abstractmethod
-    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes) -> bool:
+    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes, url: Optional[str] = None, **kwargs) -> bool:
         """Validates incoming webhook authenticity."""
         pass
 
@@ -144,7 +144,7 @@ class MockPaymentProvider(BasePaymentProvider):
             "payment_url": f"/mock-checkout/{tx_id}"
         }
 
-    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes) -> bool:
+    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes, url: Optional[str] = None, **kwargs) -> bool:
         # Development Mock signature verification check
         sig = headers.get("x-mock-signature") or headers.get("X-Mock-Signature")
         if sig == "invalid_signature":
@@ -239,10 +239,15 @@ def get_or_create_payment_for_order(
             db.refresh(existing_pending)
         return existing_pending
 
+    stable_key = idempotency_key or f"sq_idemp_{order.id}"
+    existing_key = db.query(Payment).filter(Payment.idempotency_key == stable_key).first()
+    if existing_key:
+        return existing_key
+
     payment = Payment(
         order_id=order.id,
         provider=provider,
-        idempotency_key=idempotency_key,
+        idempotency_key=stable_key,
         amount=order.total_amount,
         currency="GBP",
         status=PaymentStatus.PENDING,
