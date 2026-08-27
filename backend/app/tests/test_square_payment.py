@@ -1,0 +1,526 @@
+import pytest
+import uuid
+from unittest.mock import patch, AsyncMock, MagicMock
+from app.tests.db import client, reset_test_db, TestingSessionLocal
+from app.models.user import User, UserRole
+from app.models.product import Category, Product
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus as OrderPaymentStatus, OrderType
+from app.models.payment import Payment, PaymentStatus, PaymentProvider, PaymentEvent
+from app.models.branch import Branch
+from app.core.security import create_access_token
+from app.core.config import settings
+from app.services.square_service import SquarePaymentProvider, SquarePaymentError
+
+
+@pytest.fixture(autouse=True)
+def setup_db():
+    reset_test_db()
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def create_test_order(db_session, total_amount=25.0, status=OrderStatus.PENDING_PAYMENT):
+    branch_code = f"BR-{uuid.uuid4().hex[:4].upper()}"
+    branch = Branch(
+        id=str(uuid.uuid4()),
+        code=branch_code,
+        name="Edmonton Test Branch",
+        address_line1="124 Edmonton Road",
+        city="London",
+        postcode="N9 0TY",
+        latitude=51.6154,
+        longitude=-0.0708,
+        delivery_radius_miles=5.0,
+        is_active=True
+    )
+    db_session.add(branch)
+
+    order = Order(
+        id=str(uuid.uuid4()),
+        order_number=f"PP-{uuid.uuid4().hex[:6].upper()}",
+        branch_id=branch.id,
+        order_type=OrderType.COLLECTION,
+        customer_name="John Doe",
+        customer_email="john@example.com",
+        customer_phone="+447123456789",
+        status=status,
+        payment_status=OrderPaymentStatus.PENDING,
+        subtotal=total_amount,
+        total_amount=total_amount,
+        delivery_fee=0.0,
+        service_fee=0.0
+    )
+    db_session.add(order)
+    db_session.commit()
+    db_session.refresh(order)
+    return order
+
+
+def test_payment_config_endpoint():
+    """Verifies public configuration endpoint returns proper details and never leaks tokens."""
+    response = client.get("/api/v1/payments/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert "provider" in data
+    assert "environment" in data
+    # Strictly ensure access token is NEVER present in config response
+    assert "access_token" not in data
+    assert "SQUARE_ACCESS_TOKEN" not in data
+    assert "secret" not in str(data).lower()
+
+
+def test_successful_square_payment(setup_db):
+    """Verifies that a valid Square nonce charges successfully and transitions order to INCOMING."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=32.50)
+
+    mock_square_response = {
+        "payment": {
+            "id": f"sq_pay_{uuid.uuid4().hex[:12]}",
+            "status": "COMPLETED",
+            "amount_money": {"amount": 3250, "currency": "GBP"},
+            "reference_id": order.id,
+            "receipt_url": "https://squareup.com/receipt/preview/xyz"
+        }
+    }
+
+    mock_client = AsyncMock()
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json.return_value = mock_square_response
+    mock_client.post.return_value = mock_post_resp
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+                with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                    response = client.post(
+                        "/api/v1/payments/create-session",
+                        json={
+                            "order_id": order.id,
+                            "payment_method_type": "CARD",
+                            "source_id": "cnon:card-nonce-ok"
+                        },
+                        headers={"Idempotency-Key": f"idemp_{order.id}_1"}
+                    )
+
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["status"] == PaymentStatus.PAID
+                    assert data["order_id"] == order.id
+                    assert data["amount"] == 32.50
+                    assert data["transaction_id"].startswith("sq_pay_")
+
+                    # Verify in database
+                    db_session.refresh(order)
+                    assert order.payment_status == OrderPaymentStatus.PAID
+                    assert order.status == OrderStatus.INCOMING
+
+
+def test_declined_square_payment(setup_db):
+    """Verifies that card decline returns a clean user-facing error and leaves order unpaid."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=19.99)
+
+    mock_square_error = {
+        "errors": [
+            {
+                "code": "CARD_DECLINED",
+                "category": "PAYMENT_METHOD_ERROR",
+                "detail": "Card declined."
+            }
+        ]
+    }
+
+    mock_client = AsyncMock()
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 400
+    mock_post_resp.json.return_value = mock_square_error
+    mock_client.post.return_value = mock_post_resp
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+                with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                    response = client.post(
+                        "/api/v1/payments/create-session",
+                        json={
+                            "order_id": order.id,
+                            "payment_method_type": "CARD",
+                            "source_id": "cnon:card-nonce-declined"
+                        }
+                    )
+
+                    assert response.status_code == 400
+                    data = response.json()
+                    assert "declined" in str(data).lower() or "payment" in str(data).lower()
+
+                    # Database check: order must remain unpaid
+                    db_session.refresh(order)
+                    assert order.payment_status == OrderPaymentStatus.PENDING
+                    assert order.status == OrderStatus.PENDING_PAYMENT
+
+
+def test_invalid_order_payment():
+    """Verifies that non-existent orders return 404."""
+    response = client.post(
+        "/api/v1/payments/create-session",
+        json={
+            "order_id": str(uuid.uuid4()),
+            "payment_method_type": "CARD",
+            "source_id": "cnon:card-nonce-ok"
+        }
+    )
+    assert response.status_code == 404
+
+
+def test_cancelled_order_payment_rejected(setup_db):
+    """Verifies that cancelled orders cannot be charged."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=20.0, status=OrderStatus.CANCELLED)
+
+    response = client.post(
+        "/api/v1/payments/create-session",
+        json={
+            "order_id": order.id,
+            "payment_method_type": "CARD",
+            "source_id": "cnon:card-nonce-ok"
+        }
+    )
+    assert response.status_code == 400
+    assert "cancelled" in response.json()["detail"].lower()
+
+
+def test_already_paid_order_protection(setup_db):
+    """Verifies that an already paid order returns the existing payment idempotently."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=15.0)
+    order.payment_status = OrderPaymentStatus.PAID
+    order.status = OrderStatus.INCOMING
+
+    payment = Payment(
+        id=str(uuid.uuid4()),
+        order_id=order.id,
+        provider=PaymentProvider.SQUARE,
+        transaction_id="sq_pay_already_paid",
+        amount=15.0,
+        currency="GBP",
+        status=PaymentStatus.PAID
+    )
+    db_session.add(payment)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/payments/create-session",
+        json={
+            "order_id": order.id,
+            "payment_method_type": "CARD",
+            "source_id": "cnon:card-nonce-ok"
+        }
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == PaymentStatus.PAID
+    assert data["transaction_id"] == "sq_pay_already_paid"
+
+
+def test_square_webhook_signature_and_event(setup_db):
+    """Verifies that Square webhook events are normalized and processed safely."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=22.0)
+
+    payment = Payment(
+        id=str(uuid.uuid4()),
+        order_id=order.id,
+        provider=PaymentProvider.SQUARE,
+        transaction_id="sq_pay_webhook_test",
+        amount=22.0,
+        currency="GBP",
+        status=PaymentStatus.PENDING
+    )
+    db_session.add(payment)
+    db_session.commit()
+
+    webhook_payload = {
+        "event_id": f"evt_{uuid.uuid4().hex[:8]}",
+        "type": "payment.updated",
+        "data": {
+            "object": {
+                "payment": {
+                    "id": "sq_pay_webhook_test",
+                    "reference_id": order.id,
+                    "status": "COMPLETED",
+                    "amount_money": {"amount": 2200, "currency": "GBP"}
+                }
+            }
+        }
+    }
+
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+            response = client.post(
+                "/api/v1/payments/webhook",
+                json=webhook_payload,
+                headers={"x-square-hmacsha256-signature": "dummy_sig"}
+            )
+            assert response.status_code == 200
+
+            db_session.refresh(order)
+            db_session.refresh(payment)
+            assert payment.status == PaymentStatus.PAID
+            assert order.payment_status == OrderPaymentStatus.PAID
+            assert order.status == OrderStatus.INCOMING
+
+
+def test_same_payment_attempt_uses_same_idempotency_key(setup_db):
+    """Verifies that multiple calls for the same payment attempt reuse the persisted idempotency key."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=28.0)
+
+    sent_idempotency_keys = []
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        sent_idempotency_keys.append(idempotency_key)
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_idem_test",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None,
+            "receipt_url": "https://squareup.com/receipt/xyz"
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Call 1 (first attempt)
+                res1 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-1"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}"}
+                )
+                assert res1.status_code == 200
+
+                # Call 2 (retry of same attempt)
+                res2 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-1"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}"}
+                )
+                assert res2.status_code == 200
+
+                # Must have used the exact same stable idempotency key
+                assert len(sent_idempotency_keys) >= 1
+                assert sent_idempotency_keys[0] == f"idemp_{order.id}"
+
+
+def test_retry_does_not_create_duplicate_square_charge(setup_db):
+    """Verifies that retrying an already paid order returns the existing payment idempotently without calling charge_source again."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=40.0)
+
+    charge_call_count = [0]
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        charge_call_count[0] += 1
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_duplicate_prevention",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Initial payment
+                res1 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-ok"}
+                )
+                assert res1.status_code == 200
+                assert charge_call_count[0] == 1
+
+                # Duplicate / retry payment request on already paid order
+                res2 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-ok"}
+                )
+                assert res2.status_code == 200
+                # Charge count must remain 1 (no duplicate charge created with Square)
+                assert charge_call_count[0] == 1
+                assert res2.json()["transaction_id"] == "sq_pay_duplicate_prevention"
+
+
+def test_legitimate_new_payment_attempt_uses_new_key(setup_db):
+    """Verifies that when a prior payment failed, a new legitimate payment attempt uses its own distinct idempotency key."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=15.0)
+
+    # First attempt: payment failed (e.g. card declined)
+    failed_payment = Payment(
+        id=str(uuid.uuid4()),
+        order_id=order.id,
+        provider=PaymentProvider.SQUARE,
+        idempotency_key=f"idemp_{order.id}_attempt1",
+        amount=15.0,
+        currency="GBP",
+        status=PaymentStatus.FAILED,
+        error_code="CARD_DECLINED"
+    )
+    db_session.add(failed_payment)
+    db_session.commit()
+
+    captured_keys = []
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        captured_keys.append(idempotency_key)
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_new_attempt_ok",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Second attempt with a new idempotency key
+                res = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-new"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}_attempt2"}
+                )
+                assert res.status_code == 200
+                assert len(captured_keys) == 1
+                assert captured_keys[0] == f"idemp_{order.id}_attempt2"
+                assert captured_keys[0] != failed_payment.idempotency_key
+
+
+def test_unauthenticated_post_webhook_reaches_signature_validation_not_bearer_401(setup_db):
+    """Verifies that an unauthenticated POST reaches the webhook handler/signature validation instead of returning Bearer 401."""
+    db_session = setup_db
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "test_sig_key_123"):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                # Call without Authorization header and without signature
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    json={"type": "payment.updated", "event_id": "evt_test_unauth"},
+                    headers={"Content-Type": "application/json"}
+                )
+                # Must be 400 (Invalid webhook signature), NEVER 401 (Not authenticated)
+                assert res.status_code == 400
+                assert "Invalid webhook signature" in res.json().get("detail", "")
+                assert "www-authenticate" not in res.headers
+
+
+def test_invalid_square_signature_rejected(setup_db):
+    """Verifies that invalid Square signatures are rejected with HTTP 400."""
+    db_session = setup_db
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "test_sig_key_123"):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    json={"type": "payment.updated", "event_id": "evt_invalid_sig"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-square-hmacsha256-signature": "completely_invalid_signature_xyz"
+                    }
+                )
+                assert res.status_code == 400
+                assert "Invalid webhook signature" in res.json().get("detail", "")
+
+
+def test_valid_square_signature_accepted(setup_db):
+    """Verifies that valid Square signatures computed with HMAC-SHA256 are accepted."""
+    import json
+    import hmac
+    import hashlib
+    import base64
+
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=25.0)
+
+    sig_key = "prod_sig_key_secret_999"
+    webhook_url = "https://pattyproject.co.uk/api/v1/payments/webhook"
+    payload = {
+        "event_id": "evt_valid_sig_123",
+        "type": "payment.updated",
+        "data": {
+            "object": {
+                "payment": {
+                    "id": "sq_pay_verified_123",
+                    "reference_id": order.id,
+                    "status": "COMPLETED",
+                    "amount_money": {"amount": 2500, "currency": "GBP"}
+                }
+            }
+        }
+    }
+    raw_body = json.dumps(payload).encode("utf-8")
+    string_to_sign = webhook_url.encode("utf-8") + raw_body
+    valid_sig = base64.b64encode(hmac.new(sig_key.encode("utf-8"), string_to_sign, hashlib.sha256).digest()).decode("utf-8")
+
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", sig_key):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    content=raw_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-square-hmacsha256-signature": valid_sig,
+                        "Host": "pattyproject.co.uk"
+                    }
+                )
+                assert res.status_code == 200
+                assert res.json().get("status") in ["PAID", "SUCCESS", "COMPLETED", "PROCESSED"]
+
+
+def test_unauthenticated_get_webhook_endpoint_returns_200_not_bearer_401():
+    """Verifies GET /api/v1/payments/webhook returns 200 health info and does not fall into protected GET /{payment_id}."""
+    res = client.get("/api/v1/payments/webhook")
+    assert res.status_code == 200
+    assert res.json().get("status") == "active"
+    assert "Square Payments Webhook" in res.json().get("service", "")
+
+
+def test_protected_endpoints_still_require_bearer_authentication(setup_db):
+    """Verifies that protected payment routes still strictly require Bearer token authentication."""
+    # 1. Order payments ledger
+    res1 = client.get("/api/v1/payments/order/any-order-id")
+    assert res1.status_code == 401
+    assert "Not authenticated" in res1.json().get("detail", "") or "Could not validate credentials" in res1.json().get("detail", "")
+
+    # 2. Payment details by payment_id
+    res2 = client.get("/api/v1/payments/any-payment-id")
+    assert res2.status_code == 401
+    assert "Not authenticated" in res2.json().get("detail", "") or "Could not validate credentials" in res2.json().get("detail", "")
+
+    # 3. Refund payment
+    res3 = client.post("/api/v1/payments/any-payment-id/refund", json={"amount": 10.0})
+    assert res3.status_code == 401
+    assert "Not authenticated" in res3.json().get("detail", "") or "Could not validate credentials" in res3.json().get("detail", "")

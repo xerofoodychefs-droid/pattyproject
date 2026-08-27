@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, Set
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from dataclasses import dataclass
+from app.core.config import settings
 from app.models.payment import Payment, PaymentStatus, PaymentProvider, PaymentEvent
 from app.models.order import Order, OrderStatus, OrderStatusHistory
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
@@ -90,13 +91,16 @@ class BasePaymentProvider(ABC):
         amount: float,
         currency: str = "GBP",
         customer_info: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None
+        idempotency_key: Optional[str] = None,
+        source_id: Optional[str] = None,
+        order_number: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """Initializes payment session & returns checkout token or redirect URL."""
         pass
 
     @abstractmethod
-    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes) -> bool:
+    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes, url: Optional[str] = None, **kwargs) -> bool:
         """Validates incoming webhook authenticity."""
         pass
 
@@ -122,7 +126,10 @@ class MockPaymentProvider(BasePaymentProvider):
         amount: float,
         currency: str = "GBP",
         customer_info: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None
+        idempotency_key: Optional[str] = None,
+        source_id: Optional[str] = None,
+        order_number: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         tx_id = f"TXN_{uuid.uuid4().hex[:10].upper()}"
         return {
@@ -137,7 +144,7 @@ class MockPaymentProvider(BasePaymentProvider):
             "payment_url": f"/mock-checkout/{tx_id}"
         }
 
-    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes) -> bool:
+    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes, url: Optional[str] = None, **kwargs) -> bool:
         # Development Mock signature verification check
         sig = headers.get("x-mock-signature") or headers.get("X-Mock-Signature")
         if sig == "invalid_signature":
@@ -184,8 +191,20 @@ class MockPaymentProvider(BasePaymentProvider):
         }
 
 
-# Active Provider instance (Abstract factory ready for client gateway swap)
-payment_provider: BasePaymentProvider = MockPaymentProvider()
+def get_payment_provider() -> BasePaymentProvider:
+    """Dynamically resolves and returns the configured payment provider."""
+    provider_name = (settings.PAYMENT_PROVIDER or "").lower()
+    if provider_name == "square" or (settings.is_production and settings.SQUARE_ACCESS_TOKEN):
+        try:
+            from app.services.square_service import SquarePaymentProvider
+            return SquarePaymentProvider()
+        except Exception as e:
+            logger.error(f"Failed to initialize SquarePaymentProvider: {e}")
+    return MockPaymentProvider()
+
+
+# Active Provider instance
+payment_provider: BasePaymentProvider = get_payment_provider()
 
 
 # Payment Ledger & Service Operations
@@ -220,10 +239,15 @@ def get_or_create_payment_for_order(
             db.refresh(existing_pending)
         return existing_pending
 
+    stable_key = idempotency_key or f"sq_idemp_{order.id}"
+    existing_key = db.query(Payment).filter(Payment.idempotency_key == stable_key).first()
+    if existing_key:
+        return existing_key
+
     payment = Payment(
         order_id=order.id,
         provider=provider,
-        idempotency_key=idempotency_key,
+        idempotency_key=stable_key,
         amount=order.total_amount,
         currency="GBP",
         status=PaymentStatus.PENDING,

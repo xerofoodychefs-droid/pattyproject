@@ -56,7 +56,25 @@ export const CustomerCheckout: React.FC = () => {
   const [loyaltyData, setLoyaltyData] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
 
+  // Square Payment Gateway State
+  const [paymentConfig, setPaymentConfig] = useState<{
+    provider: string;
+    application_id?: string;
+    location_id?: string;
+    environment?: string;
+  } | null>(null);
+  const [squareCardInstance, setSquareCardInstance] = useState<any>(null);
+  const [squareReady, setSquareReady] = useState<boolean>(false);
+  const [squareLoading, setSquareLoading] = useState<boolean>(false);
+
   React.useEffect(() => {
+    // Fetch public payment configuration
+    api.get<any>('/payments/config')
+      .then((cfg) => {
+        if (cfg) setPaymentConfig(cfg);
+      })
+      .catch(() => {});
+
     // Populate user profile details into input fields
     if (user) {
       if (user.full_name) setCustomerName((prev) => prev || user.full_name);
@@ -122,6 +140,101 @@ export const CustomerCheckout: React.FC = () => {
         .catch(() => {});
     }
   }, [user]);
+
+  // Load and mount Square Web Payments Card SDK when navigating to Step 2
+  React.useEffect(() => {
+    if (step !== 2 || !paymentConfig || paymentConfig.provider !== 'square') {
+      return;
+    }
+    if (!paymentConfig.application_id || !paymentConfig.location_id) {
+      return;
+    }
+
+    let isMounted = true;
+    const appId = paymentConfig.application_id;
+    const locId = paymentConfig.location_id;
+    const isSandbox = paymentConfig.environment === 'sandbox' || appId.startsWith('sandbox-');
+    const sdkSrc = isSandbox
+      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
+      : 'https://web.squarecdn.com/v1/square.js';
+
+    const loadSquareSDK = async () => {
+      setSquareLoading(true);
+      if (!(window as any).Square) {
+        const existingScript = document.querySelector(`script[src="${sdkSrc}"]`);
+        if (!existingScript) {
+          const script = document.createElement('script');
+          script.src = sdkSrc;
+          script.type = 'text/javascript';
+          script.async = true;
+          document.head.appendChild(script);
+          await new Promise<void>((resolve, reject) => {
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'));
+          });
+        } else {
+          await new Promise<void>((resolve) => {
+            existingScript.addEventListener('load', () => resolve());
+            setTimeout(resolve, 500);
+          });
+        }
+      }
+
+      if (!isMounted || !(window as any).Square) return;
+
+      try {
+        const payments = (window as any).Square.payments(appId, locId);
+        const card = await payments.card({
+          style: {
+            '.input-container': {
+              borderColor: '#242424',
+              borderRadius: '8px',
+              backgroundColor: '#151515'
+            },
+            'input': {
+              color: '#F5F5F5',
+              fontSize: '14px',
+              fontFamily: 'inherit'
+            },
+            'input::placeholder': {
+              color: '#71717A'
+            },
+            '.input-container.is-focus': {
+              borderColor: '#FF5A00'
+            },
+            '.input-container.is-error': {
+              borderColor: '#EF4444'
+            }
+          }
+        });
+
+        const container = document.getElementById('square-card-container');
+        if (container && isMounted) {
+          container.innerHTML = '';
+          await card.attach('#square-card-container');
+          if (isMounted) {
+            setSquareCardInstance(card);
+            setSquareReady(true);
+          }
+        }
+      } catch (err: any) {
+        console.error('Square initialization error:', err);
+      } finally {
+        if (isMounted) setSquareLoading(false);
+      }
+    };
+
+    loadSquareSDK();
+
+    return () => {
+      isMounted = false;
+      if (squareCardInstance && typeof squareCardInstance.destroy === 'function') {
+        try {
+          squareCardInstance.destroy();
+        } catch {}
+      }
+    };
+  }, [step, paymentConfig]);
 
   const selectSavedAddress = (addr: CustomerAddress) => {
     setSelectedAddressId(addr.id);
@@ -189,6 +302,20 @@ export const CustomerCheckout: React.FC = () => {
 
     setLoading(true);
     try {
+      let sourceId: string | undefined = undefined;
+
+      // Tokenize card via Square Web Payments SDK if Square is active
+      if (paymentConfig?.provider === 'square' && squareCardInstance) {
+        const tokenResult = await squareCardInstance.tokenize();
+        if (tokenResult.status !== 'OK') {
+          const firstErr = tokenResult.errors?.[0]?.message || 'Card verification failed. Please check your card details and try again.';
+          setError(firstErr);
+          setLoading(false);
+          return;
+        }
+        sourceId = tokenResult.token;
+      }
+
       // Step 1: Create Order
       const fullPhone = `+44 ${phoneDigits}`;
       const orderPayload = {
@@ -221,13 +348,14 @@ export const CustomerCheckout: React.FC = () => {
 
       const newOrder: any = await api.post('/orders', orderPayload);
 
-      // Step 2: Create Payment Session with Canonical Contract
-      const idempotencyKey = `idemp_${newOrder.id}_${Date.now()}`;
+      // Step 2: Create / Process Payment Session
+      const idempotencyKey = `idemp_${newOrder.id}`;
       const sessionRes: any = await api.post(
         '/payments/create-session',
         {
           order_id: newOrder.id,
-          payment_method_type: 'CARD'
+          payment_method_type: 'CARD',
+          source_id: sourceId
         },
         {
           headers: {
@@ -236,7 +364,10 @@ export const CustomerCheckout: React.FC = () => {
         }
       );
 
-      if (sessionRes && sessionRes.transaction_id) {
+      if (sessionRes && sessionRes.status === 'PAID') {
+        clearCart();
+        navigate(`/order-confirmation/${newOrder.order_number}`);
+      } else if (sessionRes && sessionRes.transaction_id && sessionRes.provider === 'MOCK') {
         navigate(`/mock-checkout/${sessionRes.transaction_id}`);
       } else if (sessionRes && sessionRes.payment_url) {
         navigate(sessionRes.payment_url);
@@ -732,22 +863,57 @@ export const CustomerCheckout: React.FC = () => {
           ) : (
             /* STEP 2: PAYMENT METHOD */
             <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
-              <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider">
-                Payment Method
-              </h2>
+              <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]">
+                <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#FF5A00]" />
+                  <span>Payment Details</span>
+                </h2>
+                <span className="bg-[#22C55E]/10 border border-[#166534] text-[#22C55E] text-[10px] font-semibold uppercase px-2 py-0.5 rounded flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  256-Bit SSL Encrypted
+                </span>
+              </div>
 
-              <div className="p-4 rounded-lg border border-[#6B2A0D] bg-[#241209] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-[#FF5A00]/10 border border-[#FF5A00]/30 flex items-center justify-center text-[#FF5A00]">
-                    <Building2 className="w-4.5 h-4.5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm text-[#F5F5F5]">Client Payment Gateway</p>
-                    <p className="text-xs text-[#A1A1AA]">Pay securely via our trusted payment partner</p>
+              {paymentConfig?.provider === 'square' ? (
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-lg border border-[#242424] bg-[#151515] space-y-3">
+                    <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                      <span className="font-medium text-[#F5F5F5]">Credit / Debit Card / Digital Wallet</span>
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-[#71717A]">
+                        <span>VISA</span>
+                        <span>•</span>
+                        <span>MC</span>
+                        <span>•</span>
+                        <span>AMEX</span>
+                      </div>
+                    </div>
+
+                    {/* Square Card Component Mounted Target */}
+                    <div className="relative min-h-[90px] w-full">
+                      {squareLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#151515] rounded-lg text-xs text-[#A1A1AA] gap-2">
+                          <div className="w-4 h-4 border-2 border-[#FF5A00] border-t-transparent rounded-full animate-spin" />
+                          <span>Loading secure card inputs...</span>
+                        </div>
+                      )}
+                      <div id="square-card-container" className="w-full" />
+                    </div>
                   </div>
                 </div>
-                <input type="radio" checked readOnly className="w-4 h-4 accent-[#FF5A00]" />
-              </div>
+              ) : (
+                <div className="p-4 rounded-lg border border-[#6B2A0D] bg-[#241209] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-[#FF5A00]/10 border border-[#FF5A00]/30 flex items-center justify-center text-[#FF5A00]">
+                      <Building2 className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-[#F5F5F5]">Patty Secure Checkout</p>
+                      <p className="text-xs text-[#A1A1AA]">Pay securely via our payment gateway</p>
+                    </div>
+                  </div>
+                  <input type="radio" checked readOnly className="w-4 h-4 accent-[#FF5A00]" />
+                </div>
+              )}
 
               {/* Saved Cards Selector for Logged-In Loyalty Customers */}
               {user && savedCards.length > 0 && (

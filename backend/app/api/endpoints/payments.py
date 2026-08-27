@@ -11,17 +11,22 @@ from app.schemas.payment import (
     PaymentSessionCreateRequest,
     PaymentSessionResponse,
     PaymentRefundRequest,
-    PaymentWebhookPayload
+    PaymentWebhookPayload,
+    PaymentConfigResponse,
+    PaymentProcessRequest
 )
 from app.services.payment_service import (
-    payment_provider,
+    get_payment_provider,
     get_or_create_payment_for_order,
     transition_payment_status,
     process_payment_refund,
     process_payment_event,
+    award_order_loyalty_points,
     NormalizedPaymentEvent,
-    InvalidPaymentTransitionError
+    InvalidPaymentTransitionError,
+    MockPaymentProvider
 )
+from app.services.square_service import SquarePaymentError
 from app.services.branch_service import calculate_haversine_miles, MAX_DELIVERY_RADIUS_MILES
 from app.api.endpoints.auth import require_role, get_current_user
 from app.models.user import UserRole, User
@@ -31,11 +36,27 @@ router = APIRouter()
 
 def check_mock_gateway_allowed():
     """Refuses execution if mock gateway is called in production environment."""
-    if settings.is_production and settings.PAYMENT_PROVIDER == "mock":
+    if settings.is_production:
         raise HTTPException(
             status_code=403,
             detail="Mock payment gateway is strictly disabled in production environments."
         )
+
+
+@router.get("/config", response_model=PaymentConfigResponse)
+def get_payment_configuration():
+    """
+    Returns public client gateway configuration (Application ID, Location ID, Environment).
+    Strictly excludes server-side secrets and access tokens.
+    """
+    provider_name = (settings.PAYMENT_PROVIDER or "").lower()
+    is_square = provider_name == "square" or bool(settings.SQUARE_ACCESS_TOKEN and settings.SQUARE_APPLICATION_ID)
+    return PaymentConfigResponse(
+        provider="square" if is_square else "mock",
+        application_id=settings.SQUARE_APPLICATION_ID if is_square else None,
+        location_id=settings.SQUARE_LOCATION_ID if is_square else None,
+        environment="sandbox" if settings.is_square_sandbox else "production"
+    )
 
 
 @router.post("/create-session", response_model=PaymentSessionResponse)
@@ -45,7 +66,7 @@ async def create_payment_session(
     db: Session = Depends(get_db)
 ):
     """
-    Initializes payment session with provider-independent Payment domain.
+    Initializes payment session or executes direct Square payment when source_id is provided.
     Canonical contract:
     POST /api/v1/payments/create-session
     Headers:
@@ -53,10 +74,15 @@ async def create_payment_session(
     JSON Body:
       {
         "order_id": "<ORDER_ID>",
-        "payment_method_type": "CARD"
+        "payment_method_type": "CARD",
+        "source_id": "cnon:..." (optional Square nonce)
       }
     """
-    check_mock_gateway_allowed()
+    provider = get_payment_provider()
+    target_provider_name = PaymentProvider.SQUARE if (settings.PAYMENT_PROVIDER == "square" or settings.SQUARE_ACCESS_TOKEN) else PaymentProvider.MOCK
+
+    if target_provider_name == PaymentProvider.MOCK:
+        check_mock_gateway_allowed()
 
     target_order_id = request_data.order_id
     effective_idempotency_key = idempotency_key or request_data.idempotency_key
@@ -106,7 +132,8 @@ async def create_payment_session(
                 currency=existing_paid.currency,
                 status=PaymentStatus.PAID,
                 client_secret=None,
-                payment_url=None
+                payment_url=None,
+                order_number=order.order_number
             )
 
     method_type = request_data.payment_method_type if request_data and request_data.payment_method_type else "CARD"
@@ -115,28 +142,66 @@ async def create_payment_session(
     payment = get_or_create_payment_for_order(
         db=db,
         order=order,
-        provider=PaymentProvider.MOCK,
+        provider=target_provider_name,
         idempotency_key=effective_idempotency_key,
         payment_method_type=method_type
     )
 
-    session_data = await payment_provider.create_payment_session(
-        order_id=order.id,
-        amount=payment.amount,
-        currency=payment.currency,
-        customer_info={"name": order.customer_name, "email": order.customer_email},
-        idempotency_key=effective_idempotency_key
-    )
+    # Idempotent re-request check for existing uncharged mock session
+    if payment.transaction_id and not request_data.source_id and target_provider_name == PaymentProvider.MOCK:
+        final_tx_id = payment.transaction_id
+        return PaymentSessionResponse(
+            provider=payment.provider,
+            order_id=order.id,
+            payment_id=payment.id,
+            transaction_id=final_tx_id,
+            amount=payment.amount,
+            currency=payment.currency,
+            status=payment.status,
+            client_secret=f"sec_mock_{final_tx_id}",
+            payment_url=f"/mock-checkout/{final_tx_id}",
+            order_number=order.order_number
+        )
 
-    if not payment.transaction_id:
+    try:
+        session_data = await provider.create_payment_session(
+            order_id=order.id,
+            amount=payment.amount,
+            currency=payment.currency,
+            customer_info={"name": order.customer_name, "email": order.customer_email},
+            idempotency_key=effective_idempotency_key,
+            source_id=request_data.source_id,
+            order_number=order.order_number
+        )
+    except SquarePaymentError as exc:
+        payment.status = PaymentStatus.FAILED
+        payment.error_code = exc.error_code
+        payment.error_message = exc.message
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail={"code": exc.error_code, "message": exc.message}
+        )
+
+    # Update payment transaction ID and status if charged directly
+    if session_data.get("transaction_id"):
         payment.transaction_id = session_data.get("transaction_id")
         order.payment_transaction_id = session_data.get("transaction_id")
-        db.commit()
-        db.refresh(payment)
+
+    if session_data.get("status") == PaymentStatus.PAID:
+        payment.status = PaymentStatus.PAID
+        payment.raw_response = session_data.get("raw_response")
+        order.payment_status = PaymentStatus.PAID
+        if order.status == OrderStatus.PENDING_PAYMENT:
+            order.status = OrderStatus.INCOMING
+        award_order_loyalty_points(db, order)
+
+    db.commit()
+    db.refresh(payment)
 
     final_tx_id = payment.transaction_id or session_data.get("transaction_id", "")
-    client_sec = session_data.get("client_secret") or f"sec_mock_{final_tx_id}"
-    pay_url = session_data.get("payment_url") or f"/mock-checkout/{final_tx_id}"
+    client_sec = session_data.get("client_secret") or (f"sec_mock_{final_tx_id}" if target_provider_name == PaymentProvider.MOCK else None)
+    pay_url = session_data.get("payment_url") or (f"/mock-checkout/{final_tx_id}" if target_provider_name == PaymentProvider.MOCK else None)
 
     return PaymentSessionResponse(
         provider=payment.provider,
@@ -147,23 +212,38 @@ async def create_payment_session(
         currency=payment.currency,
         status=payment.status,
         client_secret=client_sec,
-        payment_url=pay_url
+        payment_url=pay_url,
+        order_number=order.order_number,
+        receipt_url=session_data.get("receipt_url")
     )
+
+
+@router.get("/webhook")
+def get_webhook_status():
+    """
+    Public webhook reachability endpoint.
+    Explicitly defined so GET requests to /api/v1/payments/webhook do not fall through to GET /{payment_id}.
+    """
+    return {
+        "status": "active",
+        "service": "Square Payments Webhook",
+        "endpoint": f"{settings.API_V1_STR}/payments/webhook",
+        "supported_methods": ["POST", "GET"]
+    }
 
 
 @router.post("/webhook")
 async def payment_gateway_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Inbound provider webhook endpoint for server-to-server gateway callbacks.
-    Verifies gateway signature, normalizes event, and processes state lifecycle atomically.
+    Publicly reachable without Bearer authentication. Authenticity is strictly enforced via Square HMAC-SHA256 signature verification.
     """
-    check_mock_gateway_allowed()
-
+    provider = get_payment_provider()
     raw_body = await request.body()
     headers = dict(request.headers)
 
     # Signature / authenticity validation
-    is_valid = await payment_provider.verify_webhook_signature(headers, raw_body)
+    is_valid = await provider.verify_webhook_signature(headers, raw_body, url=str(request.url))
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
@@ -173,7 +253,10 @@ async def payment_gateway_webhook(request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # Normalize incoming gateway event
-    event = payment_provider.normalize_webhook_payload(headers=headers, payload=payload)
+    event = provider.normalize_webhook_payload(headers=headers, payload=payload)
+
+    if event.provider == PaymentProvider.MOCK:
+        check_mock_gateway_allowed()
 
     try:
         result = process_payment_event(db=db, event=event)
@@ -200,7 +283,7 @@ async def mock_simulate_payment(request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     headers = dict(request.headers)
-    event = payment_provider.normalize_webhook_payload(headers=headers, payload=payload)
+    event = MockPaymentProvider().normalize_webhook_payload(headers=headers, payload=payload)
 
     try:
         result = process_payment_event(db=db, event=event)
