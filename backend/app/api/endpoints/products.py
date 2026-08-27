@@ -311,9 +311,20 @@ def delete_product(
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    db.delete(prod)
-    db.commit()
-    return {"message": "Product deleted successfully", "id": product_id}
+    from app.models.order import OrderItem
+    order_items_count = db.query(OrderItem).filter(OrderItem.product_id == product_id).count()
+
+    if order_items_count > 0:
+        # Safe archiving to preserve historical order integrity and foreign keys
+        prod.is_active = False
+        db.query(Inventory).filter(Inventory.product_id == product_id).update({Inventory.is_available: False})
+        db.commit()
+        return {"message": "Product archived successfully", "id": product_id, "archived": True}
+    else:
+        # Hard delete if no historical orders exist for this product
+        db.delete(prod)
+        db.commit()
+        return {"message": "Product deleted successfully", "id": product_id, "deleted": True}
 
 # ==========================================
 # BRANCH-ISOLATED INVENTORY & STOCK ENDPOINTS
