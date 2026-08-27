@@ -212,11 +212,11 @@ class SquarePaymentProvider(BasePaymentProvider):
         """
         sig_key = settings.SQUARE_WEBHOOK_SIGNATURE_KEY
         if not sig_key:
-            # If no webhook key configured, allow in development or log warning
+            # If no webhook key configured, allow in development or reject in production
             if not settings.is_production:
                 return True
-            logger.warning("[SQUARE_WEBHOOK] SQUARE_WEBHOOK_SIGNATURE_KEY is not configured.")
-            return True
+            logger.warning("[SQUARE_WEBHOOK] SQUARE_WEBHOOK_SIGNATURE_KEY is not configured in production.")
+            return False
 
         signature_header = headers.get("x-square-hmacsha256-signature") or headers.get("X-Square-Hmacsha256-Signature")
         if not signature_header:
