@@ -218,11 +218,25 @@ async def create_payment_session(
     )
 
 
+@router.get("/webhook")
+def get_webhook_status():
+    """
+    Public webhook reachability endpoint.
+    Explicitly defined so GET requests to /api/v1/payments/webhook do not fall through to GET /{payment_id}.
+    """
+    return {
+        "status": "active",
+        "service": "Square Payments Webhook",
+        "endpoint": f"{settings.API_V1_STR}/payments/webhook",
+        "supported_methods": ["POST", "GET"]
+    }
+
+
 @router.post("/webhook")
 async def payment_gateway_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Inbound provider webhook endpoint for server-to-server gateway callbacks.
-    Verifies gateway signature, normalizes event, and processes state lifecycle atomically.
+    Publicly reachable without Bearer authentication. Authenticity is strictly enforced via Square HMAC-SHA256 signature verification.
     """
     provider = get_payment_provider()
     raw_body = await request.body()

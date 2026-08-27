@@ -416,3 +416,111 @@ def test_legitimate_new_payment_attempt_uses_new_key(setup_db):
                 assert len(captured_keys) == 1
                 assert captured_keys[0] == f"idemp_{order.id}_attempt2"
                 assert captured_keys[0] != failed_payment.idempotency_key
+
+
+def test_unauthenticated_post_webhook_reaches_signature_validation_not_bearer_401(setup_db):
+    """Verifies that an unauthenticated POST reaches the webhook handler/signature validation instead of returning Bearer 401."""
+    db_session = setup_db
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "test_sig_key_123"):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                # Call without Authorization header and without signature
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    json={"type": "payment.updated", "event_id": "evt_test_unauth"},
+                    headers={"Content-Type": "application/json"}
+                )
+                # Must be 400 (Invalid webhook signature), NEVER 401 (Not authenticated)
+                assert res.status_code == 400
+                assert "Invalid webhook signature" in res.json().get("detail", "")
+                assert "www-authenticate" not in res.headers
+
+
+def test_invalid_square_signature_rejected(setup_db):
+    """Verifies that invalid Square signatures are rejected with HTTP 400."""
+    db_session = setup_db
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "test_sig_key_123"):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    json={"type": "payment.updated", "event_id": "evt_invalid_sig"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-square-hmacsha256-signature": "completely_invalid_signature_xyz"
+                    }
+                )
+                assert res.status_code == 400
+                assert "Invalid webhook signature" in res.json().get("detail", "")
+
+
+def test_valid_square_signature_accepted(setup_db):
+    """Verifies that valid Square signatures computed with HMAC-SHA256 are accepted."""
+    import json
+    import hmac
+    import hashlib
+    import base64
+
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=25.0)
+
+    sig_key = "prod_sig_key_secret_999"
+    webhook_url = "https://pattyproject.co.uk/api/v1/payments/webhook"
+    payload = {
+        "event_id": "evt_valid_sig_123",
+        "type": "payment.updated",
+        "data": {
+            "object": {
+                "payment": {
+                    "id": "sq_pay_verified_123",
+                    "reference_id": order.id,
+                    "status": "COMPLETED",
+                    "amount_money": {"amount": 2500, "currency": "GBP"}
+                }
+            }
+        }
+    }
+    raw_body = json.dumps(payload).encode("utf-8")
+    string_to_sign = webhook_url.encode("utf-8") + raw_body
+    valid_sig = base64.b64encode(hmac.new(sig_key.encode("utf-8"), string_to_sign, hashlib.sha256).digest()).decode("utf-8")
+
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", sig_key):
+            with patch.object(settings, "ENVIRONMENT", "production"):
+                res = client.post(
+                    "/api/v1/payments/webhook",
+                    content=raw_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-square-hmacsha256-signature": valid_sig,
+                        "Host": "pattyproject.co.uk"
+                    }
+                )
+                assert res.status_code == 200
+                assert res.json().get("status") in ["PAID", "SUCCESS", "COMPLETED", "PROCESSED"]
+
+
+def test_unauthenticated_get_webhook_endpoint_returns_200_not_bearer_401():
+    """Verifies GET /api/v1/payments/webhook returns 200 health info and does not fall into protected GET /{payment_id}."""
+    res = client.get("/api/v1/payments/webhook")
+    assert res.status_code == 200
+    assert res.json().get("status") == "active"
+    assert "Square Payments Webhook" in res.json().get("service", "")
+
+
+def test_protected_endpoints_still_require_bearer_authentication(setup_db):
+    """Verifies that protected payment routes still strictly require Bearer token authentication."""
+    # 1. Order payments ledger
+    res1 = client.get("/api/v1/payments/order/any-order-id")
+    assert res1.status_code == 401
+    assert "Not authenticated" in res1.json().get("detail", "") or "Could not validate credentials" in res1.json().get("detail", "")
+
+    # 2. Payment details by payment_id
+    res2 = client.get("/api/v1/payments/any-payment-id")
+    assert res2.status_code == 401
+    assert "Not authenticated" in res2.json().get("detail", "") or "Could not validate credentials" in res2.json().get("detail", "")
+
+    # 3. Refund payment
+    res3 = client.post("/api/v1/payments/any-payment-id/refund", json={"amount": 10.0})
+    assert res3.status_code == 401
+    assert "Not authenticated" in res3.json().get("detail", "") or "Could not validate credentials" in res3.json().get("detail", "")
