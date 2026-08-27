@@ -60,7 +60,7 @@ class SquarePaymentProvider(BasePaymentProvider):
         Creates and processes a Square payment when source_id is provided,
         or initializes payment metadata for frontend tokenization.
         """
-        effective_idemp = idempotency_key or f"sq_idemp_{order_id}_{uuid.uuid4().hex[:8]}"
+        effective_idemp = idempotency_key or f"sq_idemp_{order_id}"
 
         # If source_id (token/nonce from Square Web Payments SDK) is present, charge directly
         if source_id:
@@ -110,7 +110,7 @@ class SquarePaymentProvider(BasePaymentProvider):
             )
 
         amount_pence = int(round(float(amount) * 100))
-        effective_idemp = idempotency_key or f"sq_{order_id}_{uuid.uuid4().hex[:8]}"
+        effective_idemp = idempotency_key or f"sq_idemp_{order_id}"
         note_text = f"Patty Project Order {order_number or order_id[:8]}"
 
         payload: Dict[str, Any] = {
@@ -206,9 +206,9 @@ class SquarePaymentProvider(BasePaymentProvider):
             "raw_response": payment_obj
         }
 
-    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes) -> bool:
+    async def verify_webhook_signature(self, headers: Dict[str, str], body: bytes, url: Optional[str] = None) -> bool:
         """
-        Validates Square HMAC-SHA256 webhook signatures.
+        Validates Square HMAC-SHA256 webhook signatures using the notification URL and body.
         """
         sig_key = settings.SQUARE_WEBHOOK_SIGNATURE_KEY
         if not sig_key:
@@ -222,17 +222,33 @@ class SquarePaymentProvider(BasePaymentProvider):
         if not signature_header:
             return False
 
-        notification_url = f"{settings.API_V1_STR}/payments/webhook"
-        string_to_sign = notification_url.encode("utf-8") + body
+        # 1. Check with request URL if provided
+        candidate_urls = []
+        if url:
+            candidate_urls.append(url)
+            # If internal docker url (http://), also add https version
+            if url.startswith("http://"):
+                candidate_urls.append("https://" + url[7:])
 
-        computed_hmac = hmac.new(
-            sig_key.encode("utf-8"),
-            string_to_sign,
-            hashlib.sha256
-        ).digest()
-        computed_sig = base64.b64encode(computed_hmac).decode("utf-8")
+        # 2. Add canonical production webhook URL
+        host = headers.get("x-forwarded-host") or headers.get("host") or "pattyproject.co.uk"
+        candidate_urls.append(f"https://{host}{settings.API_V1_STR}/payments/webhook")
+        candidate_urls.append(f"https://pattyproject.co.uk{settings.API_V1_STR}/payments/webhook")
+        candidate_urls.append(f"{settings.API_V1_STR}/payments/webhook")
 
-        return hmac.compare_digest(signature_header, computed_sig)
+        for notification_url in candidate_urls:
+            string_to_sign = notification_url.encode("utf-8") + body
+            computed_hmac = hmac.new(
+                sig_key.encode("utf-8"),
+                string_to_sign,
+                hashlib.sha256
+            ).digest()
+            computed_sig = base64.b64encode(computed_hmac).decode("utf-8")
+
+            if hmac.compare_digest(signature_header, computed_sig):
+                return True
+
+        return False
 
     def normalize_webhook_payload(self, headers: Dict[str, str], payload: Dict[str, Any]) -> NormalizedPaymentEvent:
         """

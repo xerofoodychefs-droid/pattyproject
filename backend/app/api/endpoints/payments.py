@@ -229,7 +229,7 @@ async def payment_gateway_webhook(request: Request, db: Session = Depends(get_db
     headers = dict(request.headers)
 
     # Signature / authenticity validation
-    is_valid = await provider.verify_webhook_signature(headers, raw_body)
+    is_valid = await provider.verify_webhook_signature(headers, raw_body, url=str(request.url))
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 

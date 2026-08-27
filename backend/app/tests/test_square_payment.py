@@ -277,3 +277,142 @@ def test_square_webhook_signature_and_event(setup_db):
             assert payment.status == PaymentStatus.PAID
             assert order.payment_status == OrderPaymentStatus.PAID
             assert order.status == OrderStatus.INCOMING
+
+
+def test_same_payment_attempt_uses_same_idempotency_key(setup_db):
+    """Verifies that multiple calls for the same payment attempt reuse the persisted idempotency key."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=28.0)
+
+    sent_idempotency_keys = []
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        sent_idempotency_keys.append(idempotency_key)
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_idem_test",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None,
+            "receipt_url": "https://squareup.com/receipt/xyz"
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Call 1 (first attempt)
+                res1 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-1"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}"}
+                )
+                assert res1.status_code == 200
+
+                # Call 2 (retry of same attempt)
+                res2 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-1"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}"}
+                )
+                assert res2.status_code == 200
+
+                # Must have used the exact same stable idempotency key
+                assert len(sent_idempotency_keys) >= 1
+                assert sent_idempotency_keys[0] == f"idemp_{order.id}"
+
+
+def test_retry_does_not_create_duplicate_square_charge(setup_db):
+    """Verifies that retrying an already paid order returns the existing payment idempotently without calling charge_source again."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=40.0)
+
+    charge_call_count = [0]
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        charge_call_count[0] += 1
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_duplicate_prevention",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Initial payment
+                res1 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-ok"}
+                )
+                assert res1.status_code == 200
+                assert charge_call_count[0] == 1
+
+                # Duplicate / retry payment request on already paid order
+                res2 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-ok"}
+                )
+                assert res2.status_code == 200
+                # Charge count must remain 1 (no duplicate charge created with Square)
+                assert charge_call_count[0] == 1
+                assert res2.json()["transaction_id"] == "sq_pay_duplicate_prevention"
+
+
+def test_legitimate_new_payment_attempt_uses_new_key(setup_db):
+    """Verifies that when a prior payment failed, a new legitimate payment attempt uses its own distinct idempotency key."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=15.0)
+
+    # First attempt: payment failed (e.g. card declined)
+    failed_payment = Payment(
+        id=str(uuid.uuid4()),
+        order_id=order.id,
+        provider=PaymentProvider.SQUARE,
+        idempotency_key=f"idemp_{order.id}_attempt1",
+        amount=15.0,
+        currency="GBP",
+        status=PaymentStatus.FAILED,
+        error_code="CARD_DECLINED"
+    )
+    db_session.add(failed_payment)
+    db_session.commit()
+
+    captured_keys = []
+
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+        captured_keys.append(idempotency_key)
+        return {
+            "provider": PaymentProvider.SQUARE,
+            "order_id": order_id,
+            "transaction_id": "sq_pay_new_attempt_ok",
+            "idempotency_key": idempotency_key,
+            "amount": amount,
+            "currency": currency,
+            "status": PaymentStatus.PAID,
+            "client_secret": None,
+            "payment_url": None
+        }
+
+    with patch.object(SquarePaymentProvider, "charge_source", fake_charge_source):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "fake_test_token"):
+                # Second attempt with a new idempotency key
+                res = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD", "source_id": "cnon:card-new"},
+                    headers={"Idempotency-Key": f"idemp_{order.id}_attempt2"}
+                )
+                assert res.status_code == 200
+                assert len(captured_keys) == 1
+                assert captured_keys[0] == f"idemp_{order.id}_attempt2"
+                assert captured_keys[0] != failed_payment.idempotency_key
