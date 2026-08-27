@@ -202,9 +202,9 @@ export const CustomerFooter: React.FC = () => {
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 sm:gap-6">
             <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link to="/refund-cancellation" className="hover:text-white transition-colors">Refund & Cancellation Policy</Link>
+            <Link to="/terms-and-service" className="hover:text-white transition-colors">Terms of Service</Link>
           </div>
           <p className="font-medium text-white">Patty Project © 2026. All rights reserved.</p>
-          <a href="#terms" className="hover:text-white transition-colors">Terms of Service</a>
         </div>
       </div>
     </footer>
