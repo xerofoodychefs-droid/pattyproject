@@ -143,13 +143,17 @@ export const AdminProducts: React.FC = () => {
   };
 
   const handleDeleteProduct = async (id: string, name: string) => {
-    if (user?.role !== 'SUPER_ADMIN') return;
-    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+    if (user?.role !== 'SUPER_ADMIN') {
+      alert('Only Super Administrators have permission to delete products.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
       try {
         await api.delete(`/products/${id}`);
-        fetchInitialData();
-      } catch (err) {
-        console.error(err);
+        await fetchInitialData();
+      } catch (err: any) {
+        console.error('Failed to delete product:', err);
+        alert(err?.message || 'Failed to delete product. Please try again.');
       }
     }
   };
