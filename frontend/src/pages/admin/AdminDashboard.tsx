@@ -31,7 +31,10 @@ export const AdminDashboard: React.FC = () => {
     try {
       const [branchData, statsData] = await Promise.all([
         api.get<Branch[]>('/branches'),
-        api.get<BranchStats[]>('/branches/stats').catch(() => [])
+        api.get<BranchStats[]>('/branches/stats').catch((err) => {
+          console.warn('[AdminDashboard] /branches/stats fetch failed:', err?.message || err);
+          return [];
+        })
       ]);
       let filtered = branchData || [];
       if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids.length > 0) {
