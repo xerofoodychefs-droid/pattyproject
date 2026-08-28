@@ -8,6 +8,314 @@ import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
 import { loadSquareSdk, SQUARE_CARD_STYLE } from '../../utils/squarePayments';
 
+// ==========================================
+// 1. ISOLATED SQUARE CARD PAYMENT COMPONENT
+// ==========================================
+interface SquareCardSectionProps {
+  payments: any;
+  onCardReady: (ready: boolean) => void;
+  onCardInstance: (card: any) => void;
+}
+
+const SquareCardSection: React.FC<SquareCardSectionProps> = ({
+  payments,
+  onCardReady,
+  onCardInstance,
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!payments) return;
+    let isMounted = true;
+
+    const initCard = async () => {
+      setLoading(true);
+      setError(null);
+
+      // Clean up previous instance
+      if (cardRef.current) {
+        try {
+          await cardRef.current.destroy();
+        } catch {}
+        cardRef.current = null;
+        onCardInstance(null);
+        onCardReady(false);
+      }
+
+      try {
+        let cardInstance: any;
+        try {
+          cardInstance = await payments.card({
+            style: SQUARE_CARD_STYLE,
+          });
+        } catch (styleErr) {
+          console.warn('[Square Card] Styled card fallback:', styleErr);
+          cardInstance = await payments.card();
+        }
+
+        if (!isMounted || !cardInstance) return;
+
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+          await cardInstance.attach(containerRef.current);
+          if (isMounted) {
+            cardRef.current = cardInstance;
+            onCardInstance(cardInstance);
+            onCardReady(true);
+            setLoading(false);
+          }
+        }
+      } catch (err: any) {
+        console.error('[Square Card] Attachment error:', err);
+        if (isMounted) {
+          setError(err?.message || 'Failed to initialize secure card input.');
+          onCardReady(false);
+          setLoading(false);
+        }
+      }
+    };
+
+    initCard();
+
+    return () => {
+      isMounted = false;
+      if (cardRef.current) {
+        try {
+          cardRef.current.destroy();
+        } catch {}
+        cardRef.current = null;
+      }
+      onCardInstance(null);
+      onCardReady(false);
+    };
+  }, [payments]);
+
+  return (
+    <div className="p-4 rounded-xl border border-[#242424] bg-[#121212] space-y-3.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold text-xs text-[#F5F5F5]">Credit / Debit Card</span>
+        <div className="flex items-center gap-1.5">
+          {/* VISA Badge */}
+          <div className="h-5 px-1.5 bg-[#1A1F71] rounded flex items-center justify-center shadow-xs">
+            <span className="text-[10px] font-black italic tracking-tighter text-white">VISA</span>
+          </div>
+          {/* Mastercard Badge */}
+          <div className="h-5 px-1.5 bg-[#222222] border border-[#333333] rounded flex items-center justify-center shadow-xs">
+            <div className="flex -space-x-1 items-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#EB001B]" />
+              <div className="w-2.5 h-2.5 rounded-full bg-[#F79E1B] opacity-90" />
+            </div>
+          </div>
+          {/* AMEX Badge */}
+          <div className="h-5 px-1.5 bg-[#006FCF] rounded flex items-center justify-center shadow-xs">
+            <span className="text-[9px] font-bold text-white tracking-tight">AMEX</span>
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="p-3 bg-[#241209] border border-[#EF4444]/40 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : (
+        <div className="relative min-h-[90px] w-full">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#121212] rounded-lg text-xs text-[#A1A1AA] gap-2 z-10">
+              <div className="w-4 h-4 border-2 border-[#FF5A00] border-t-transparent rounded-full animate-spin" />
+              <span>Loading secure card inputs...</span>
+            </div>
+          )}
+          <div
+            id="square-card-container"
+            ref={containerRef}
+            className="w-full"
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// 2. ISOLATED DIGITAL WALLETS COMPONENT
+// ==========================================
+interface SquareDigitalWalletsSectionProps {
+  payments: any;
+  total: number;
+  loading: boolean;
+  paymentLoading: boolean;
+  activePaymentMethod: 'CARD' | 'GOOGLE_PAY' | 'APPLE_PAY' | null;
+  onGooglePayPayment: (gpayInstance: any) => void;
+  onApplePayPayment: (apayInstance: any) => void;
+}
+
+const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = ({
+  payments,
+  total,
+  loading,
+  paymentLoading,
+  activePaymentMethod,
+  onGooglePayPayment,
+  onApplePayPayment,
+}) => {
+  const [googlePayAvailable, setGooglePayAvailable] = useState<boolean>(false);
+  const [applePayAvailable, setApplePayAvailable] = useState<boolean>(false);
+  const googlePayRef = useRef<any>(null);
+  const applePayRef = useRef<any>(null);
+  const paymentRequestRef = useRef<any>(null);
+  const googlePayContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!payments) return;
+    let isMounted = true;
+
+    const initWallets = async () => {
+      try {
+        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
+        const req = payments.paymentRequest({
+          countryCode: 'GB',
+          currencyCode: 'GBP',
+          total: {
+            amount: formattedTotal,
+            label: 'Patty Project',
+          },
+        });
+        paymentRequestRef.current = req;
+
+        // Check Google Pay
+        try {
+          const gpay = await payments.googlePay(req);
+          if (isMounted && gpay) {
+            googlePayRef.current = gpay;
+            setGooglePayAvailable(true);
+          }
+        } catch {
+          if (isMounted) setGooglePayAvailable(false);
+        }
+
+        // Check Apple Pay
+        try {
+          const apay = await payments.applePay(req);
+          if (isMounted && apay) {
+            applePayRef.current = apay;
+            setApplePayAvailable(true);
+          }
+        } catch {
+          if (isMounted) setApplePayAvailable(false);
+        }
+      } catch (err) {
+        console.warn('[Square Wallets] Init notice:', err);
+      }
+    };
+
+    initWallets();
+
+    return () => {
+      isMounted = false;
+      if (googlePayRef.current) {
+        try {
+          googlePayRef.current.destroy();
+        } catch {}
+        googlePayRef.current = null;
+      }
+      applePayRef.current = null;
+      paymentRequestRef.current = null;
+      setGooglePayAvailable(false);
+      setApplePayAvailable(false);
+    };
+  }, [payments]);
+
+  // Update total in payment request dynamically when total changes
+  useEffect(() => {
+    if (paymentRequestRef.current && typeof paymentRequestRef.current.update === 'function') {
+      try {
+        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
+        paymentRequestRef.current.update({
+          total: {
+            amount: formattedTotal,
+            label: 'Patty Project',
+          },
+        });
+      } catch {}
+    }
+  }, [total]);
+
+  // Mount Google Pay button when available
+  useEffect(() => {
+    if (googlePayAvailable && googlePayRef.current && googlePayContainerRef.current) {
+      googlePayContainerRef.current.innerHTML = '';
+      googlePayRef.current
+        .attach(googlePayContainerRef.current, {
+          buttonSizeMode: 'fill',
+          buttonColor: 'black',
+          buttonType: 'buy',
+        })
+        .catch((err: any) => {
+          console.warn('[Square Google Pay] attach notice:', err);
+        });
+    }
+  }, [googlePayAvailable]);
+
+  if (!googlePayAvailable && !applePayAvailable) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="w-full">
+        {/* Apple Pay Button */}
+        {applePayAvailable && (
+          <button
+            type="button"
+            id="apple-pay-button"
+            onClick={() => onApplePayPayment(applePayRef.current)}
+            disabled={loading || paymentLoading}
+            className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
+            aria-label="Pay with Apple Pay"
+          >
+            {activePaymentMethod === 'APPLE_PAY' && paymentLoading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <svg className="h-5 w-auto fill-current" viewBox="0 0 170 85" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M150.37 39.26c-.08-11.66 9.53-17.27 9.97-17.55-5.43-7.94-13.88-9.03-16.89-9.15-7.19-.73-14.04 4.24-17.69 4.24-3.65 0-9.29-4.14-15.29-4.03-7.88.12-15.15 4.58-19.2 11.62-8.18 14.19-2.09 35.19 5.86 46.68 3.89 5.62 8.53 11.93 14.62 11.7 5.86-.23 8.08-3.79 15.17-3.79 7.09 0 9.08 3.79 15.25 3.67 6.28-.12 10.26-5.69 14.12-11.34 4.47-6.53 6.31-12.85 6.42-13.18-.14-.06-12.25-4.7-12.34-18.49zM138.83 17.5c3.24-3.93 5.43-9.39 4.83-14.86-4.68.19-10.35 3.12-13.7 7.05-2.93 3.4-5.5 8.94-4.81 14.28 5.23.41 10.45-2.54 13.68-6.47z" />
+                  <path d="M30.43 14.47h8.86v56.88h-8.86V14.47zM64.67 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82zM102.32 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82z" />
+                </svg>
+                <span className="text-xs font-semibold">Pay</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Google Pay Button Mounted Target */}
+        {googlePayAvailable && (
+          <div
+            id="square-google-pay-button"
+            ref={googlePayContainerRef}
+            onClick={() => onGooglePayPayment(googlePayRef.current)}
+            className="w-full h-11 cursor-pointer overflow-hidden rounded-lg shadow-sm"
+          />
+        )}
+      </div>
+
+      <div className="relative flex py-1.5 items-center">
+        <div className="flex-grow border-t border-[#242424]" />
+        <span className="flex-shrink mx-3 text-[11px] uppercase tracking-wider font-semibold text-[#71717A]">
+          Or Pay with Card
+        </span>
+        <div className="flex-grow border-t border-[#242424]" />
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 3. MAIN CUSTOMER CHECKOUT COMPONENT
+// ==========================================
 export const CustomerCheckout: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const {
@@ -57,7 +365,7 @@ export const CustomerCheckout: React.FC = () => {
   const [loyaltyData, setLoyaltyData] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
 
-  // Square Payment Gateway State & Digital Wallets
+  // Square Payment Gateway State
   const [paymentConfig, setPaymentConfig] = useState<{
     provider: string;
     application_id?: string;
@@ -65,18 +373,9 @@ export const CustomerCheckout: React.FC = () => {
     environment?: string;
   } | null>(null);
 
-  const paymentsRef = useRef<any>(null);
+  const [squarePayments, setSquarePayments] = useState<any>(null);
   const cardInstanceRef = useRef<any>(null);
-  const googlePayInstanceRef = useRef<any>(null);
-  const applePayInstanceRef = useRef<any>(null);
-  const paymentRequestRef = useRef<any>(null);
-  const cardContainerRef = useRef<HTMLDivElement | null>(null);
-  const googlePayContainerRef = useRef<HTMLDivElement | null>(null);
-
   const [squareCardReady, setSquareCardReady] = useState<boolean>(false);
-  const [googlePayAvailable, setGooglePayAvailable] = useState<boolean>(false);
-  const [applePayAvailable, setApplePayAvailable] = useState<boolean>(false);
-  const [squareLoading, setSquareLoading] = useState<boolean>(false);
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [activePaymentMethod, setActivePaymentMethod] = useState<'CARD' | 'GOOGLE_PAY' | 'APPLE_PAY' | null>(null);
 
@@ -174,23 +473,10 @@ export const CustomerCheckout: React.FC = () => {
   const effectiveDiscount = Math.min(subtotal, discountAmount + loyaltyDiscount);
   const total = Math.max(0, subtotal - effectiveDiscount + delivery + getServiceFee());
 
-  // Helper to build digital wallet payment request
-  const buildPaymentRequest = (payments: any, amountVal: number) => {
-    const formattedTotal = (amountVal > 0 ? amountVal : 0.01).toFixed(2);
-    return payments.paymentRequest({
-      countryCode: 'GB',
-      currencyCode: 'GBP',
-      total: {
-        amount: formattedTotal,
-        label: 'Patty Project',
-      },
-    });
-  };
-
-  // Primary Square Web Payments SDK initialization when Step 2 is active
-  // NOTE: Does NOT depend on `total`, so total changes do NOT destroy card or wallet instances!
+  // Initialize Square payments client singleton when in Step 2
   useEffect(() => {
     if (step !== 2 || !paymentConfig || paymentConfig.provider !== 'square') {
+      setSquarePayments(null);
       return;
     }
     if (!paymentConfig.application_id || !paymentConfig.location_id) {
@@ -202,166 +488,22 @@ export const CustomerCheckout: React.FC = () => {
     const locId = paymentConfig.location_id;
     const isSandbox = paymentConfig.environment === 'sandbox' || appId.startsWith('sandbox-');
 
-    const initSquare = async () => {
-      setSquareLoading(true);
-      try {
-        const Square = await loadSquareSdk(isSandbox);
-        if (!isMounted || !Square) {
-          if (isMounted) setSquareLoading(false);
-          return;
+    loadSquareSdk(isSandbox)
+      .then((Square) => {
+        if (isMounted && Square) {
+          const payments = Square.payments(appId, locId);
+          setSquarePayments(payments);
         }
-
-        const payments = Square.payments(appId, locId);
-        paymentsRef.current = payments;
-
-        // 1. INDEPENDENT CARD INITIALIZATION
-        try {
-          if (cardInstanceRef.current) {
-            try {
-              cardInstanceRef.current.destroy();
-            } catch {}
-            cardInstanceRef.current = null;
-          }
-
-          let card;
-          try {
-            card = await payments.card({
-              style: SQUARE_CARD_STYLE,
-            });
-          } catch (styleErr) {
-            console.warn('Square styled card fallback:', styleErr);
-            card = await payments.card();
-          }
-
-          if (isMounted && card) {
-            let container = cardContainerRef.current || document.getElementById('square-card-container');
-            if (!container) {
-              await new Promise((r) => setTimeout(r, 60));
-              container = cardContainerRef.current || document.getElementById('square-card-container');
-            }
-            if (container && isMounted) {
-              container.innerHTML = '';
-              await card.attach(container);
-              if (isMounted) {
-                cardInstanceRef.current = card;
-                setSquareCardReady(true);
-              }
-            }
-          }
-        } catch (cardErr) {
-          console.error('Square Card initialization error:', cardErr);
-          if (isMounted) {
-            setSquareCardReady(false);
-          }
-        }
-
-        // 2. INDEPENDENT DIGITAL WALLETS INITIALIZATION
-        let req = null;
-        try {
-          req = buildPaymentRequest(payments, total);
-          paymentRequestRef.current = req;
-        } catch (reqErr) {
-          console.warn('Square paymentRequest creation notice:', reqErr);
-        }
-
-        if (req) {
-          // Google Pay Availability Check
-          try {
-            const googlePay = await payments.googlePay(req);
-            if (googlePay && isMounted) {
-              googlePayInstanceRef.current = googlePay;
-              setGooglePayAvailable(true);
-            }
-          } catch {
-            // Google Pay is unavailable on this device/browser
-            if (isMounted) {
-              googlePayInstanceRef.current = null;
-              setGooglePayAvailable(false);
-            }
-          }
-
-          // Apple Pay Availability Check
-          try {
-            const applePay = await payments.applePay(req);
-            if (applePay && isMounted) {
-              applePayInstanceRef.current = applePay;
-              setApplePayAvailable(true);
-            }
-          } catch {
-            // Apple Pay is unavailable on this device/browser
-            if (isMounted) {
-              applePayInstanceRef.current = null;
-              setApplePayAvailable(false);
-            }
-          }
-        }
-      } catch (sdkErr) {
-        console.error('Square SDK initialization error:', sdkErr);
-      } finally {
-        if (isMounted) {
-          setSquareLoading(false);
-        }
-      }
-    };
-
-    initSquare();
+      })
+      .catch((err) => {
+        console.error('[Square SDK] Load failed:', err);
+      });
 
     return () => {
       isMounted = false;
-      if (cardInstanceRef.current) {
-        try {
-          cardInstanceRef.current.destroy();
-        } catch {}
-        cardInstanceRef.current = null;
-      }
-      if (googlePayInstanceRef.current) {
-        try {
-          googlePayInstanceRef.current.destroy();
-        } catch {}
-        googlePayInstanceRef.current = null;
-      }
-      applePayInstanceRef.current = null;
-      paymentRequestRef.current = null;
-      paymentsRef.current = null;
-      setSquareCardReady(false);
-      setGooglePayAvailable(false);
-      setApplePayAvailable(false);
+      setSquarePayments(null);
     };
   }, [step, paymentConfig?.application_id, paymentConfig?.location_id, paymentConfig?.provider, paymentConfig?.environment]);
-
-  // Update PaymentRequest when total changes without destroying Card
-  useEffect(() => {
-    if (paymentRequestRef.current) {
-      try {
-        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
-        if (typeof paymentRequestRef.current.update === 'function') {
-          paymentRequestRef.current.update({
-            total: {
-              amount: formattedTotal,
-              label: 'Patty Project',
-            },
-          });
-        }
-      } catch {}
-    }
-  }, [total]);
-
-  // Mount Google Pay button when googlePayAvailable becomes true
-  useEffect(() => {
-    if (googlePayAvailable && googlePayInstanceRef.current) {
-      const container = googlePayContainerRef.current || document.getElementById('square-google-pay-button');
-      if (container) {
-        container.innerHTML = '';
-        googlePayInstanceRef.current.attach(container, {
-          buttonSizeMode: 'fill',
-          buttonColor: 'black',
-          buttonType: 'buy',
-        }).catch((attachErr: any) => {
-          console.warn('Google Pay button attach error:', attachErr);
-        });
-      }
-    }
-  }, [googlePayAvailable]);
 
   const handleContinueToPayment = () => {
     setError('');
@@ -443,7 +585,7 @@ export const CustomerCheckout: React.FC = () => {
         items: items.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
-          selected_modifiers: (i.selectedModifiers || []).map((m) => ({ name: m.name, price: m.price }))
+          selected_modifiers: (i.selectedModifiers || []).map((m) => ({ name: m.price ? m.name : m.name, price: m.price }))
         }))
       };
 
@@ -529,9 +671,9 @@ export const CustomerCheckout: React.FC = () => {
   };
 
   // 2. GOOGLE PAY HANDLER
-  const handleGooglePayPayment = async () => {
+  const handleGooglePayPayment = async (gpayInstance: any) => {
     if (loading || paymentLoading) return;
-    if (!googlePayInstanceRef.current) {
+    if (!gpayInstance) {
       setError('Google Pay is not available.');
       return;
     }
@@ -539,7 +681,7 @@ export const CustomerCheckout: React.FC = () => {
     setPaymentLoading(true);
     setActivePaymentMethod('GOOGLE_PAY');
     try {
-      const tokenResult = await googlePayInstanceRef.current.tokenize();
+      const tokenResult = await gpayInstance.tokenize();
       if (tokenResult.status !== 'OK') {
         const firstErr = tokenResult.errors?.[0]?.message || 'Google Pay payment could not be completed. Please try again.';
         setError(firstErr);
@@ -549,24 +691,24 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('GOOGLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Google Pay payment could not be completed. Please try again.');
+      setError(err?.message || 'Google Pay payment failed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
   };
 
-  // 3. APPLE PAY HANDLER (Invoked immediately within click handler)
-  const handleApplePayPayment = async () => {
+  // 3. APPLE PAY HANDLER
+  const handleApplePayPayment = async (apayInstance: any) => {
     if (loading || paymentLoading) return;
-    if (!applePayInstanceRef.current) {
-      setError('Apple Pay is not available on this device.');
+    if (!apayInstance) {
+      setError('Apple Pay is not available.');
       return;
     }
     setError('');
     setPaymentLoading(true);
     setActivePaymentMethod('APPLE_PAY');
     try {
-      const tokenResult = await applePayInstanceRef.current.tokenize();
+      const tokenResult = await apayInstance.tokenize();
       if (tokenResult.status !== 'OK') {
         const firstErr = tokenResult.errors?.[0]?.message || 'Apple Pay payment could not be completed. Please try again.';
         setError(firstErr);
@@ -576,477 +718,284 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('APPLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Apple Pay payment could not be completed. Please try again.');
+      setError(err?.message || 'Apple Pay payment failed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
   };
 
-
   return (
-    <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-20 text-[#F5F5F5]">
-      {/* Page Title & Stepper Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#F5F5F5] tracking-tight mb-6">
-          Checkout
-        </h1>
-
-        {/* Stepper Navigation */}
-        <div className="flex items-center gap-3 max-w-lg text-xs font-medium">
-          {/* Step 1 Pill */}
-          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-[#F5F5F5]' : 'text-[#71717A]'}`}>
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-              step > 1 ? 'bg-[#22C55E] text-white' : step === 1 ? 'bg-[#FF5A00] text-white shadow-sm' : 'bg-[#151515] border border-[#242424] text-[#71717A]'
-            }`}>
-              {step > 1 ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '1'}
-            </span>
-            <span className="font-semibold">Delivery</span>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      {/* STEPS BREADCRUMBS */}
+      <div className="flex items-center gap-2 text-sm text-[#A1A1AA] mb-8 overflow-x-auto pb-2">
+        <button
+          type="button"
+          onClick={() => setStep(1)}
+          className={`flex items-center gap-2 cursor-pointer font-medium ${
+            step >= 1 ? 'text-[#F5F5F5]' : 'text-[#71717A]'
+          }`}
+        >
+          <div
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+              step > 1
+                ? 'bg-[#22C55E] text-black'
+                : step === 1
+                ? 'bg-[#FF5A00] text-white'
+                : 'bg-[#1C1C1C] text-[#71717A]'
+            }`}
+          >
+            {step > 1 ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '1'}
           </div>
+          <span>Delivery</span>
+        </button>
 
-          <div className="flex-1 h-[1px] bg-[#242424]" />
+        <div className="w-8 h-[1px] bg-[#242424]" />
 
-          {/* Step 2 Pill */}
-          <div className={`flex items-center gap-2 ${step >= 2 ? 'text-[#F5F5F5]' : 'text-[#71717A]'}`}>
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-              step === 2 ? 'bg-[#FF5A00] text-white shadow-sm' : 'bg-[#151515] border border-[#242424] text-[#71717A]'
-            }`}>
-              2
-            </span>
-            <span className="font-semibold">Payment</span>
+        <div
+          className={`flex items-center gap-2 font-medium ${
+            step >= 2 ? 'text-[#F5F5F5]' : 'text-[#71717A]'
+          }`}
+        >
+          <div
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+              step === 2
+                ? 'bg-[#FF5A00] text-white'
+                : 'bg-[#1C1C1C] text-[#71717A]'
+            }`}
+          >
+            2
           </div>
+          <span>Payment</span>
+        </div>
 
-          <div className="flex-1 h-[1px] bg-[#242424]" />
+        <div className="w-8 h-[1px] bg-[#242424]" />
 
-          {/* Step 3 Pill */}
-          <div className="flex items-center gap-2 text-[#71717A]">
-            <span className="w-7 h-7 rounded-full bg-[#151515] border border-[#242424] text-[#71717A] flex items-center justify-center text-xs font-semibold">
-              3
-            </span>
-            <span className="font-medium">Confirmation</span>
+        <div className="flex items-center gap-2 text-[#71717A] font-medium">
+          <div className="w-6 h-6 rounded-full bg-[#1C1C1C] flex items-center justify-center text-xs font-semibold">
+            3
           </div>
+          <span>Confirmation</span>
         </div>
       </div>
 
+      <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F5F5] tracking-tight mb-8">
+        Checkout
+      </h1>
+
       {error && (
-        <div className="mb-6 p-3.5 bg-[#EF4444]/10 border border-[#EF4444]/20 text-[#EF4444] rounded-lg text-xs font-medium">
-          {error}
+        <div className="mb-6 p-4 rounded-lg bg-[#241209] border border-[#FF5A00]/40 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-[#FF5A00] shrink-0 mt-0.5" />
+          <div className="text-sm text-[#F5F5F5]">{error}</div>
         </div>
       )}
 
-      {/* 2-Column Desktop Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT COLUMN: Form Controls & Details */}
-        <div className="lg:col-span-7 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* LEFT COLUMN: Steps Form */}
+        <div className="lg:col-span-7 space-y-6">
           {step === 1 ? (
+            /* STEP 1: DELIVERY / COLLECTION DETAILS */
             <>
-              {/* Delivery Method Selector Card */}
+              {/* Order Type Toggle */}
               <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
-                <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider">
-                  Delivery Method
+                <h2 className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider">
+                  Order Type
                 </h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Delivery Option */}
-                  <div
-                    onClick={() => {
-                      if (isDeliveryEligible && (deliveryDistanceMiles === null || deliveryDistanceMiles <= 2.0)) {
-                        setOrderType('DELIVERY');
-                      }
-                    }}
-                    className={`p-4 rounded-lg border transition-all ${
-                      isDeliveryEligible && (deliveryDistanceMiles === null || deliveryDistanceMiles <= 2.0)
-                        ? orderType === 'DELIVERY'
-                          ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5] cursor-pointer'
-                          : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333] cursor-pointer'
-                        : 'bg-[#121212]/60 border-[#222222] opacity-50 cursor-not-allowed select-none'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          isDeliveryEligible ? 'bg-[#FF5A00]/10 border border-[#FF5A00]/30 text-[#FF5A00]' : 'bg-[#1A1A1A] text-[#71717A]'
-                        }`}>
-                          <Truck className="w-4.5 h-4.5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm text-[#F5F5F5]">Delivery</p>
-                          <p className="text-xs text-[#A1A1AA]">
-                            {isDeliveryEligible ? 'Direct home delivery' : 'Unavailable'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        orderType === 'DELIVERY' && isDeliveryEligible ? 'border-[#FF5A00]' : 'border-[#242424]'
-                      }`}>
-                        {orderType === 'DELIVERY' && isDeliveryEligible && <div className="w-2 h-2 rounded-full bg-[#FF5A00]" />}
-                      </div>
-                    </div>
-
-                    {(!isDeliveryEligible || (deliveryDistanceMiles !== null && deliveryDistanceMiles > 2.0)) && (
-                      <div className="mt-2.5 pt-2 border-t border-[#222222]">
-                        <span className="text-[10px] font-extrabold text-[#FF5500] uppercase tracking-wider block">
-                          WE PROVIDE DELIVERY UP TO 2 MILES ONLY
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* Collection Option */}
-                  <div
-                    onClick={() => setOrderType('COLLECTION')}
-                    className={`p-4 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${
-                      orderType === 'COLLECTION'
-                        ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5]'
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOrderType('DELIVERY')}
+                    className={`py-3 px-4 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      orderType === 'DELIVERY'
+                        ? 'bg-[#FF5A00] border-[#FF5A00] text-white shadow-md'
                         : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-[#FF5A00]/10 border border-[#FF5A00]/30 flex items-center justify-center text-[#FF5A00] shrink-0">
-                        <ShoppingBag className="w-4.5 h-4.5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-[#F5F5F5]">Collection</p>
-                        <p className="text-xs text-[#A1A1AA]">Store pickup</p>
-                      </div>
-                    </div>
+                    <Truck className="w-4 h-4" />
+                    <span>Delivery</span>
+                  </button>
 
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      orderType === 'COLLECTION' ? 'border-[#FF5A00]' : 'border-[#242424]'
-                    }`}>
-                      {orderType === 'COLLECTION' && <div className="w-2 h-2 rounded-full bg-[#FF5A00]" />}
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOrderType('COLLECTION')}
+                    className={`py-3 px-4 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      orderType === 'COLLECTION'
+                        ? 'bg-[#FF5A00] border-[#FF5A00] text-white shadow-md'
+                        : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Collection</span>
+                  </button>
                 </div>
-
-                {/* Red Color Delivery Disclaimer when Subtotal < 15.00 */}
-                {subtotal < 15.00 && !(couponCode && discountAmount > 0) && (
-                  <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg p-3 text-xs text-[#EF4444] font-medium flex items-start gap-2.5">
-                    <AlertTriangle className="w-4 h-4 text-[#EF4444] shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <p className="font-bold text-[#EF4444]">
-                        Disclaimer: For the delivery service you must cart at least €15.
-                      </p>
-                      <p className="text-[11px] text-[#F87171]">
-                        Add €{(15.00 - subtotal).toFixed(2)} more to reach €15.00 or choose Collection for store pickup.
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Contact Details Card */}
+              {/* Contact Information */}
               <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]">
-                  <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider">
-                    Contact Details
-                  </h2>
-                  <span className="text-xs text-[#71717A]">* Required</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <h2 className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider">
+                  Contact Information
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                      Full Name <span className="text-[#FF5A00]">*</span>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                      Full Name *
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Alex Morgan"
+                      required
+                      placeholder="e.g. John Doe"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                      required
+                      className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                      Email Address <span className="text-[#FF5A00]">*</span>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                      Email Address *
                     </label>
                     <input
                       type="email"
-                      placeholder="e.g. alex@example.com"
+                      required
+                      placeholder="e.g. john@example.com"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
-                      className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                      required
+                      className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
                     />
                   </div>
-                </div>
-              </div>
 
-              {/* Delivery Address Card (for orderType === 'DELIVERY') */}
-              {orderType === 'DELIVERY' && (
-                <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]">
-                    <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-[#FF5A00]" />
-                      <span>Delivery Address</span>
-                    </h2>
-                    <span className="text-xs text-[#71717A]">* Required</span>
-                  </div>
-
-                  <div className="space-y-3.5 pt-1">
-                    {/* Saved Addresses Selector */}
-                    {user && savedAddresses.length > 0 && (
-                      <div className="mb-4 pb-4 border-b border-[#1C1C1C] space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-[#FF5A00]">
-                            Saved Addresses
-                          </label>
-                          <Link
-                            to="/addresses"
-                            className="text-xs text-[#A1A1AA] hover:text-[#F5F5F5] underline transition-colors"
-                          >
-                            Manage Addresses
-                          </Link>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                          {savedAddresses.map((addr) => {
-                            const isSelected = selectedAddressId === addr.id;
-                            return (
-                              <div
-                                key={addr.id}
-                                onClick={() => selectSavedAddress(addr)}
-                                className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
-                                  isSelected
-                                    ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5]'
-                                    : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
-                                }`}
-                              >
-                                <div>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="font-semibold text-xs text-[#F5F5F5]">{addr.label}</span>
-                                    {addr.is_default && (
-                                      <span className="bg-[#FF5A00] text-white text-[9px] font-semibold uppercase px-1.5 py-0.2 rounded">
-                                        DEF
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-[#A1A1AA] truncate">
-                                    {addr.address_line1}, {addr.postcode}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Door number & Address line 1 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Door number
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Flat 4B"
-                          value={doorNumber}
-                          onChange={(e) => setDoorNumber(e.target.value)}
-                          className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Address line 1 <span className="text-[#FF5A00]">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Street name & number"
-                          value={addressLine1}
-                          onChange={(e) => setAddressLine1(e.target.value)}
-                          className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Address line 2 */}
-                    <div>
-                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                        Address line 2
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Apartment, suite, unit, etc. (optional)"
-                        value={addressLine2}
-                        onChange={(e) => setAddressLine2(e.target.value)}
-                        className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                      />
-                    </div>
-
-                    {/* Town/city & Post code */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Town / City
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="London"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Post code <span className="text-[#FF5A00]">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. W1U 6EP"
-                          value={postcode}
-                          onChange={(e) => setPostcode(e.target.value)}
-                          className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Country & Phone number */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Country
-                        </label>
-                        <input
-                          type="text"
-                          value={country}
-                          onChange={(e) => setCountry(e.target.value)}
-                          className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] focus:outline-none transition-colors"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                          Phone number <span className="text-[#FF5A00]">* (11 Digits)</span>
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <span className="h-11 px-3 bg-[#151515] border border-[#242424] rounded-lg flex items-center justify-center text-xs font-semibold text-[#FF5A00] shrink-0">
-                            +44
-                          </span>
-                          <input
-                            type="tel"
-                            placeholder="07123456789"
-                            maxLength={11}
-                            value={phoneDigits}
-                            onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                            className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                            required
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Delivery Instructions */}
-                    <div>
-                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                        Delivery Instructions
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Leave at door, ring doorbell"
-                        value={instructions}
-                        onChange={(e) => setInstructions(e.target.value)}
-                        className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Store Collection Details Card (for orderType === 'COLLECTION') */}
-              {orderType === 'COLLECTION' && (
-                <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]">
-                    <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-[#FF5A00]" />
-                      <span>Store Collection Details</span>
-                    </h2>
-                    <span className="bg-[#FF5A00]/10 border border-[#6B2A0D] text-[#FF5A00] text-[10px] font-semibold uppercase px-2 py-0.5 rounded">
-                      Store Pickup
-                    </span>
-                  </div>
-
-                  <div className="bg-[#151515] border border-[#242424] p-4 rounded-lg space-y-1">
-                    <p className="text-sm font-semibold text-[#F5F5F5]">{selectedBranch?.name || 'Patty Project'}</p>
-                    <p className="text-xs text-[#A1A1AA]">
-                      {selectedBranch?.address_line1}, {selectedBranch?.city} {selectedBranch?.postcode}
-                    </p>
-                    <p className="text-xs text-[#FF5A00] font-medium pt-1">
-                      Phone: {selectedBranch?.phone || '07417 521128'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1">
-                      Phone number <span className="text-[#FF5A00]">* (11 Digits)</span>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                      Phone Number * (11 digits)
                     </label>
-                    <div className="flex items-center gap-2">
-                      <span className="h-11 px-3 bg-[#151515] border border-[#242424] rounded-lg flex items-center justify-center text-xs font-semibold text-[#FF5A00] shrink-0">
+                    <div className="flex items-center">
+                      <div className="bg-[#151515] border border-[#242424] border-r-0 rounded-l-lg px-3 py-2.5 text-xs text-[#A1A1AA] font-mono shrink-0">
                         +44
-                      </span>
+                      </div>
                       <input
                         type="tel"
-                        placeholder="07123456789"
-                        maxLength={11}
-                        value={phoneDigits}
-                        onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                        className="w-full h-11 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
                         required
+                        maxLength={11}
+                        placeholder="07123456789"
+                        value={phoneDigits}
+                        onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, ''))}
+                        className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-r-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Address (if Delivery) */}
+              {orderType === 'DELIVERY' && (
+                <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider">
+                      Delivery Address
+                    </h2>
+                    {user && (
+                      <Link
+                        to="/addresses"
+                        className="text-xs text-[#FF5A00] hover:underline"
+                      >
+                        Manage Addresses
+                      </Link>
+                    )}
+                  </div>
+
+                  {/* Saved addresses selector */}
+                  {user && savedAddresses.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      <label className="text-xs font-medium text-[#A1A1AA]">
+                        Choose from saved addresses:
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {savedAddresses.map((addr) => (
+                          <button
+                            type="button"
+                            key={addr.id}
+                            onClick={() => selectSavedAddress(addr)}
+                            className={`p-3 rounded-lg border text-left text-xs transition-all cursor-pointer ${
+                              selectedAddressId === addr.id
+                                ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5]'
+                                : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
+                            }`}
+                          >
+                            <p className="font-semibold text-[#F5F5F5]">
+                              {addr.address_line1}
+                            </p>
+                            <p className="text-[11px] text-[#71717A]">{addr.postcode}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                        Door / Flat / Building (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Flat 4B"
+                        value={doorNumber}
+                        onChange={(e) => setDoorNumber(e.target.value)}
+                        className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                        Postcode *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. N9 9HF"
+                        value={postcode}
+                        onChange={(e) => setPostcode(e.target.value)}
+                        className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                        Address Line 1 *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 4 Market Parade, Hertford Road"
+                        value={addressLine1}
+                        onChange={(e) => setAddressLine1(e.target.value)}
+                        className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">
+                        Delivery Instructions (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Ring buzzer 4, leave by door"
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none"
                       />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Time Window Selector Card */}
-              <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-3">
-                <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider">
-                  {orderType === 'COLLECTION' ? 'Estimated Collection Time' : 'Estimated Delivery Time'}
-                </h2>
-                <div className="flex items-center gap-3 bg-[#151515] border border-[#242424] p-3 rounded-lg">
-                  <Clock className="w-4 h-4 text-[#FF5A00] shrink-0" />
-                  <select
-                    value={deliveryTime}
-                    onChange={(e) => setDeliveryTime(e.target.value)}
-                    className="bg-transparent text-[#F5F5F5] text-xs font-medium w-full focus:outline-none cursor-pointer"
-                  >
-                    {orderType === 'COLLECTION' ? (
-                      <>
-                        <option value="Ready for pickup in 15 - 20 mins" className="bg-[#151515]">
-                          Ready for pickup in 15 - 20 mins
-                        </option>
-                        <option value="Collect in 30 mins" className="bg-[#151515]">Collect in 30 mins</option>
-                        <option value="Collect in 45 mins" className="bg-[#151515]">Collect in 45 mins</option>
-                        <option value="Collect in 60 mins" className="bg-[#151515]">Collect in 60 mins</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="As soon as possible (20 - 30 mins)" className="bg-[#151515]">
-                          As soon as possible (20 - 30 mins)
-                        </option>
-                        <option value="18:00 - 18:30" className="bg-[#151515]">18:00 - 18:30</option>
-                        <option value="18:30 - 19:00" className="bg-[#151515]">18:30 - 19:00</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              {/* Continue to Payment Action CTA Button */}
               <button
+                type="button"
                 onClick={handleContinueToPayment}
-                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg transition-colors cursor-pointer mt-2 focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50"
+                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                Continue to Payment
+                <span>Continue to Payment</span>
+                <span>•</span>
+                <span>£{total.toFixed(2)}</span>
               </button>
             </>
           ) : (
@@ -1065,93 +1014,25 @@ export const CustomerCheckout: React.FC = () => {
 
               {paymentConfig?.provider === 'square' ? (
                 <div className="space-y-4">
-                  {/* 1. DIGITAL WALLETS (Apple Pay & Google Pay Express Checkout) */}
-                  {(googlePayAvailable || applePayAvailable) && (
-                    <div className="space-y-3">
-                      <div className="w-full">
-                        {/* Apple Pay Button */}
-                        {applePayAvailable && (
-                          <button
-                            type="button"
-                            id="apple-pay-button"
-                            onClick={handleApplePayPayment}
-                            disabled={loading || paymentLoading}
-                            className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
-                            aria-label="Pay with Apple Pay"
-                          >
-                            {activePaymentMethod === 'APPLE_PAY' && paymentLoading ? (
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <>
-                                <svg className="h-5 w-auto fill-current" viewBox="0 0 170 85" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M150.37 39.26c-.08-11.66 9.53-17.27 9.97-17.55-5.43-7.94-13.88-9.03-16.89-9.15-7.19-.73-14.04 4.24-17.69 4.24-3.65 0-9.29-4.14-15.29-4.03-7.88.12-15.15 4.58-19.2 11.62-8.18 14.19-2.09 35.19 5.86 46.68 3.89 5.62 8.53 11.93 14.62 11.7 5.86-.23 8.08-3.79 15.17-3.79 7.09 0 9.08 3.79 15.25 3.67 6.28-.12 10.26-5.69 14.12-11.34 4.47-6.53 6.31-12.85 6.42-13.18-.14-.06-12.25-4.7-12.34-18.49zM138.83 17.5c3.24-3.93 5.43-9.39 4.83-14.86-4.68.19-10.35 3.12-13.7 7.05-2.93 3.4-5.5 8.94-4.81 14.28 5.23.41 10.45-2.54 13.68-6.47z"/>
-                                  <path d="M30.43 14.47h8.86v56.88h-8.86V14.47zM64.67 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82zM102.32 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82z"/>
-                                </svg>
-                                <span className="text-xs font-semibold">Pay</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-
-                        {/* Google Pay Button Mounted Target */}
-                        {googlePayAvailable && (
-                          <div
-                            id="square-google-pay-button"
-                            ref={googlePayContainerRef}
-                            onClick={handleGooglePayPayment}
-                            className="w-full h-11 cursor-pointer overflow-hidden rounded-lg shadow-sm"
-                          />
-                        )}
-                      </div>
-
-                      <div className="relative flex py-1.5 items-center">
-                        <div className="flex-grow border-t border-[#242424]" />
-                        <span className="flex-shrink mx-3 text-[11px] uppercase tracking-wider font-semibold text-[#71717A]">
-                          Or Pay with Card
-                        </span>
-                        <div className="flex-grow border-t border-[#242424]" />
-                      </div>
-                    </div>
-                  )}
+                  {/* 1. DIGITAL WALLETS (Apple Pay & Google Pay) */}
+                  <SquareDigitalWalletsSection
+                    payments={squarePayments}
+                    total={total}
+                    loading={loading}
+                    paymentLoading={paymentLoading}
+                    activePaymentMethod={activePaymentMethod}
+                    onGooglePayPayment={handleGooglePayPayment}
+                    onApplePayPayment={handleApplePayPayment}
+                  />
 
                   {/* 2. SQUARE CARD PAYMENT FORM */}
-                  <div className="p-4 rounded-xl border border-[#242424] bg-[#121212] space-y-3.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-xs text-[#F5F5F5]">Credit / Debit Card</span>
-                      <div className="flex items-center gap-1.5">
-                        {/* VISA Badge */}
-                        <div className="h-5 px-1.5 bg-[#1A1F71] rounded flex items-center justify-center shadow-xs">
-                          <span className="text-[10px] font-black italic tracking-tighter text-white">VISA</span>
-                        </div>
-                        {/* Mastercard Badge */}
-                        <div className="h-5 px-1.5 bg-[#222222] border border-[#333333] rounded flex items-center justify-center shadow-xs">
-                          <div className="flex -space-x-1 items-center">
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#EB001B]" />
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#F79E1B] opacity-90" />
-                          </div>
-                        </div>
-                        {/* AMEX Badge */}
-                        <div className="h-5 px-1.5 bg-[#006FCF] rounded flex items-center justify-center shadow-xs">
-                          <span className="text-[9px] font-bold text-white tracking-tight">AMEX</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Square Card Component Mounted Target */}
-                    <div className="relative min-h-[90px] w-full">
-                      {squareLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#121212] rounded-lg text-xs text-[#A1A1AA] gap-2 z-10">
-                          <div className="w-4 h-4 border-2 border-[#FF5A00] border-t-transparent rounded-full animate-spin" />
-                          <span>Loading secure card inputs...</span>
-                        </div>
-                      )}
-                      <div
-                        id="square-card-container"
-                        ref={cardContainerRef}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
+                  <SquareCardSection
+                    payments={squarePayments}
+                    onCardReady={setSquareCardReady}
+                    onCardInstance={(card) => {
+                      cardInstanceRef.current = card;
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="p-4 rounded-lg border border-[#6B2A0D] bg-[#241209] flex items-center justify-between">
@@ -1264,7 +1145,7 @@ export const CustomerCheckout: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCardPayment}
-                disabled={loading || paymentLoading || (paymentConfig?.provider === 'square' && (!squareCardReady || squareLoading))}
+                disabled={loading || paymentLoading || (paymentConfig?.provider === 'square' && !squareCardReady)}
                 className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-bold rounded-xl shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50 active:scale-[0.99]"
               >
                 <Lock className="w-4 h-4" />
@@ -1303,45 +1184,54 @@ export const CustomerCheckout: React.FC = () => {
               </h2>
               <Link
                 to="/cart"
-                className="text-xs font-medium text-[#FF5A00] hover:text-[#E84F00] transition-colors"
+                className="text-xs font-semibold text-[#FF5A00] hover:underline"
               >
                 Edit Cart
               </Link>
             </div>
 
             {/* Cart Items List */}
-            <div className="divide-y divide-[#1C1C1C] max-h-[300px] overflow-y-auto pr-1">
+            <div className="divide-y divide-[#1C1C1C] max-h-72 overflow-y-auto pr-1">
               {items.map((item, idx) => {
-                const displayImg = item.product.image_url || '/placeholder-burger.svg';
+                const itemUnitTotal =
+                  item.product.base_price +
+                  (item.selectedModifiers || []).reduce((acc, m) => acc + (m.price || 0), 0);
+                const itemLineTotal = itemUnitTotal * item.quantity;
 
                 return (
-                  <div key={idx} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
-                    <img
-                      src={displayImg}
-                      alt={item.product.name}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = '/placeholder-burger.svg';
-                      }}
-                      className="w-12 h-12 object-cover rounded-lg border border-[#1C1C1C] bg-[#111111] shrink-0"
-                    />
-
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <p className="font-semibold text-xs text-[#F5F5F5] truncate">
-                        {item.product.name}
-                      </p>
-                      <p className="text-[11px] text-[#71717A] truncate">
-                        {item.selectedModifiers && item.selectedModifiers.length > 0
-                          ? item.selectedModifiers.map((m) => m.name).join(', ')
-                          : 'No Add-ons'}
-                      </p>
+                  <div key={`${item.product.id}-${idx}`} className="py-3 flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      {item.product.image_url ? (
+                        <img
+                          src={item.product.image_url}
+                          alt={item.product.name}
+                          className="w-10 h-10 rounded-lg object-cover bg-[#151515] shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-[#151515] border border-[#242424] flex items-center justify-center text-[#71717A] shrink-0">
+                          <ShoppingBag className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-semibold text-[#F5F5F5] leading-tight">
+                          {item.product.name}
+                        </p>
+                        {item.selectedModifiers && item.selectedModifiers.length > 0 ? (
+                          <p className="text-[11px] text-[#71717A] mt-0.5 leading-snug">
+                            {item.selectedModifiers.map((m) => m.name).join(', ')}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-[#71717A] mt-0.5">No Add-ons</p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-xs text-[#71717A] mr-2">
+                      <span className="text-[11px] text-[#71717A] mr-1.5 font-mono">
                         x{item.quantity}
                       </span>
-                      <span className="font-semibold text-xs text-[#F5F5F5]">
-                        £{item.lineTotal.toFixed(2)}
+                      <span className="text-xs font-semibold text-[#F5F5F5] font-mono">
+                        £{itemLineTotal.toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -1349,50 +1239,65 @@ export const CustomerCheckout: React.FC = () => {
               })}
             </div>
 
-            {/* Order Totals Summary */}
-            <div className="pt-3 border-t border-[#1C1C1C] space-y-2.5 text-sm text-[#A1A1AA]">
-              <div className="flex justify-between">
+            {/* Order Totals Calculation Breakdown */}
+            <div className="border-t border-[#1C1C1C] pt-3.5 space-y-2 text-xs">
+              <div className="flex justify-between text-[#A1A1AA]">
                 <span>Subtotal</span>
-                <span className="text-[#F5F5F5] font-medium">£{subtotal.toFixed(2)}</span>
+                <span className="font-mono text-[#F5F5F5]">£{subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Delivery fee</span>
-                <span className="text-[#F5F5F5] font-medium">£{delivery.toFixed(2)}</span>
-              </div>
-              {getServiceFee() > 0 && (
-                <div className="flex justify-between">
-                  <span>Service fee</span>
-                  <span className="text-[#F5F5F5] font-medium">£{getServiceFee().toFixed(2)}</span>
+
+              {orderType === 'DELIVERY' && (
+                <div className="flex justify-between text-[#A1A1AA]">
+                  <span>Delivery fee</span>
+                  <span className="font-mono text-[#F5F5F5]">
+                    {delivery === 0 ? 'FREE' : `£${delivery.toFixed(2)}`}
+                  </span>
                 </div>
               )}
+
+              <div className="flex justify-between text-[#A1A1AA]">
+                <span>Service fee</span>
+                <span className="font-mono text-[#F5F5F5]">
+                  £{getServiceFee().toFixed(2)}
+                </span>
+              </div>
+
               {discountAmount > 0 && (
-                <div className="flex justify-between text-[#22C55E] font-medium">
-                  <span>Coupon Discount</span>
-                  <span>-£{discountAmount.toFixed(2)}</span>
+                <div className="flex justify-between text-[#22C55E]">
+                  <span>Coupon Discount ({couponCode})</span>
+                  <span className="font-mono">-£{discountAmount.toFixed(2)}</span>
                 </div>
               )}
-              {loyaltyDiscount > 0 && (
-                <div className="flex justify-between text-[#FF5A00] font-medium">
-                  <span>Loyalty Reward ({redeemPoints.toLocaleString()} PTS)</span>
-                  <span>-£{loyaltyDiscount.toFixed(2)}</span>
+
+              {redeemPoints > 0 && (
+                <div className="flex justify-between text-[#FF5A00]">
+                  <span>Patty Points Redeemed ({redeemPoints.toLocaleString()} pts)</span>
+                  <span className="font-mono">-£{loyaltyDiscount.toFixed(2)}</span>
                 </div>
               )}
+
+              <div className="border-t border-[#242424] pt-3 flex justify-between items-baseline">
+                <span className="text-sm font-bold text-[#F5F5F5]">Total</span>
+                <span className="text-xl font-black text-[#FF5A00] font-mono">
+                  £{total.toFixed(2)}
+                </span>
+              </div>
             </div>
 
-            <div className="pt-3 border-t border-[#1C1C1C] flex items-center justify-between">
-              <span className="text-base font-semibold text-[#F5F5F5]">Total</span>
-              <span className="text-xl font-bold text-[#FF5A00]">£{total.toFixed(2)}</span>
+            {/* Loyalty Points Earning Banner */}
+            <div className="bg-[#151515] border border-[#242424] rounded-lg p-2.5 flex items-center justify-center gap-1.5 text-xs text-[#F5F5F5]">
+              <Star className="w-3.5 h-3.5 text-[#FF5A00] fill-[#FF5A00]" />
+              <span>
+                Earn{' '}
+                <strong className="text-[#FF5A00] font-mono">
+                  {Math.round(total * 100)}
+                </strong>{' '}
+                Patty Points on this order
+              </span>
             </div>
 
-            {/* Loyalty Points Badge (Authoritative 1p = 1pt) */}
-            <div className="bg-[#151515] border border-[#242424] text-[#A1A1AA] text-xs font-medium py-2 px-3 rounded-lg text-center flex items-center justify-center gap-1.5">
-              <Star className="w-3.5 h-3.5 fill-[#FF5A00] text-[#FF5A00]" />
-              <span>Earn <strong className="text-[#F5F5F5]">{Math.round(Math.max(0, subtotal - effectiveDiscount) * 100).toLocaleString()}</strong> Patty Points on this order</span>
-            </div>
-
-            {/* Secure Checkout Notice */}
-            <div className="pt-1 flex items-center gap-2 text-xs text-[#71717A]">
-              <ShieldCheck className="w-4 h-4 text-[#71717A]" />
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#71717A] pt-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#71717A]" />
               <span>Encrypted 256-bit SSL secure checkout</span>
             </div>
           </div>
