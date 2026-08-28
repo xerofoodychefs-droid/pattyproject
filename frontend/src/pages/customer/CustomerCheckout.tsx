@@ -216,19 +216,35 @@ export const CustomerCheckout: React.FC = () => {
 
         // 1. INDEPENDENT CARD INITIALIZATION
         try {
-          if (!cardInstanceRef.current) {
-            const card = await payments.card({
+          if (cardInstanceRef.current) {
+            try {
+              cardInstanceRef.current.destroy();
+            } catch {}
+            cardInstanceRef.current = null;
+          }
+
+          let card;
+          try {
+            card = await payments.card({
               style: SQUARE_CARD_STYLE,
             });
-            if (isMounted) {
-              cardInstanceRef.current = card;
-              const container = cardContainerRef.current || document.getElementById('square-card-container');
-              if (container) {
-                container.innerHTML = '';
-                await card.attach(container);
-                if (isMounted) {
-                  setSquareCardReady(true);
-                }
+          } catch (styleErr) {
+            console.warn('Square styled card fallback:', styleErr);
+            card = await payments.card();
+          }
+
+          if (isMounted && card) {
+            let container = cardContainerRef.current || document.getElementById('square-card-container');
+            if (!container) {
+              await new Promise((r) => setTimeout(r, 60));
+              container = cardContainerRef.current || document.getElementById('square-card-container');
+            }
+            if (container && isMounted) {
+              container.innerHTML = '';
+              await card.attach(container);
+              if (isMounted) {
+                cardInstanceRef.current = card;
+                setSquareCardReady(true);
               }
             }
           }

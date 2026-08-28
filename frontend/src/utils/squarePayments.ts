@@ -32,6 +32,11 @@ export function loadSquareSdk(isSandbox: boolean): Promise<any> {
     : 'https://web.squarecdn.com/v1/square.js';
 
   sdkLoadingPromise = new Promise((resolve, reject) => {
+    if (window.Square) {
+      resolve(window.Square);
+      return;
+    }
+
     // Check if script element already exists in document
     const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${sdkSrc}"]`);
     if (existingScript) {
@@ -50,6 +55,11 @@ export function loadSquareSdk(isSandbox: boolean): Promise<any> {
         sdkLoadingPromise = null;
         reject(new Error('Failed to load Square Web Payments SDK script.'));
       });
+      setTimeout(() => {
+        if (window.Square) {
+          resolve(window.Square);
+        }
+      }, 500);
       return;
     }
 
@@ -80,17 +90,16 @@ export function loadSquareSdk(isSandbox: boolean): Promise<any> {
 
 /**
  * Standard dark theme styling for the Square Card payment component matching Patty Project UI.
+ * Only uses strictly supported properties to avoid invalid style errors.
  */
 export const SQUARE_CARD_STYLE = {
   '.input-container': {
     borderColor: '#242424',
     borderRadius: '8px',
-    backgroundColor: '#151515',
   },
   'input': {
     color: '#F5F5F5',
     fontSize: '14px',
-    fontFamily: 'inherit',
   },
   'input::placeholder': {
     color: '#71717A',
