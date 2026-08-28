@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 import { api } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
+import { loadSquareSdk, SQUARE_CARD_STYLE } from '../../utils/squarePayments';
 
 export const CustomerCheckout: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
@@ -68,6 +69,9 @@ export const CustomerCheckout: React.FC = () => {
   const cardInstanceRef = useRef<any>(null);
   const googlePayInstanceRef = useRef<any>(null);
   const applePayInstanceRef = useRef<any>(null);
+  const paymentRequestRef = useRef<any>(null);
+  const cardContainerRef = useRef<HTMLDivElement | null>(null);
+  const googlePayContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [squareCardReady, setSquareCardReady] = useState<boolean>(false);
   const [googlePayAvailable, setGooglePayAvailable] = useState<boolean>(false);
@@ -170,7 +174,21 @@ export const CustomerCheckout: React.FC = () => {
   const effectiveDiscount = Math.min(subtotal, discountAmount + loyaltyDiscount);
   const total = Math.max(0, subtotal - effectiveDiscount + delivery + getServiceFee());
 
-  // Load and mount Square Web Payments SDK (Card, Google Pay, Apple Pay) when navigating to Step 2
+  // Helper to build digital wallet payment request
+  const buildPaymentRequest = (payments: any, amountVal: number) => {
+    const formattedTotal = (amountVal > 0 ? amountVal : 0.01).toFixed(2);
+    return payments.paymentRequest({
+      countryCode: 'GB',
+      currencyCode: 'GBP',
+      total: {
+        amount: formattedTotal,
+        label: 'Patty Project',
+      },
+    });
+  };
+
+  // Primary Square Web Payments SDK initialization when Step 2 is active
+  // NOTE: Does NOT depend on `total`, so total changes do NOT destroy card or wallet instances!
   useEffect(() => {
     if (step !== 2 || !paymentConfig || paymentConfig.provider !== 'square') {
       return;
@@ -183,157 +201,151 @@ export const CustomerCheckout: React.FC = () => {
     const appId = paymentConfig.application_id;
     const locId = paymentConfig.location_id;
     const isSandbox = paymentConfig.environment === 'sandbox' || appId.startsWith('sandbox-');
-    const sdkSrc = isSandbox
-      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
-      : 'https://web.squarecdn.com/v1/square.js';
 
-    const loadSquareSDK = async () => {
+    const initSquare = async () => {
       setSquareLoading(true);
-      if (!(window as any).Square) {
-        const existingScript = document.querySelector(`script[src="${sdkSrc}"]`);
-        if (!existingScript) {
-          const script = document.createElement('script');
-          script.src = sdkSrc;
-          script.type = 'text/javascript';
-          script.async = true;
-          document.head.appendChild(script);
-          await new Promise<void>((resolve, reject) => {
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'));
-          });
-        } else {
-          await new Promise<void>((resolve) => {
-            existingScript.addEventListener('load', () => resolve());
-            setTimeout(resolve, 500);
-          });
-        }
-      }
-
-      if (!isMounted || !(window as any).Square) {
-        if (isMounted) setSquareLoading(false);
-        return;
-      }
-
       try {
-        const payments = (window as any).Square.payments(appId, locId);
+        const Square = await loadSquareSdk(isSandbox);
+        if (!isMounted || !Square) {
+          if (isMounted) setSquareLoading(false);
+          return;
+        }
+
+        const payments = Square.payments(appId, locId);
         paymentsRef.current = payments;
 
-        // 1. Build PaymentRequest for digital wallets
-        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
-        let paymentRequest = null;
+        // 1. INDEPENDENT CARD INITIALIZATION
         try {
-          paymentRequest = payments.paymentRequest({
-            countryCode: 'GB',
-            currencyCode: 'GBP',
-            total: {
-              amount: formattedTotal,
-              label: 'Patty Project'
-            }
-          });
-        } catch (reqErr) {
-          console.warn('Square paymentRequest initialization:', reqErr);
-        }
-
-        // 2. Initialize Square Card Component
-        try {
-          const card = await payments.card({
-            style: {
-              '.input-container': {
-                borderColor: '#242424',
-                borderRadius: '8px',
-                backgroundColor: '#151515'
-              },
-              'input': {
-                color: '#F5F5F5',
-                fontSize: '14px',
-                fontFamily: 'inherit'
-              },
-              'input::placeholder': {
-                color: '#71717A'
-              },
-              '.input-container.is-focus': {
-                borderColor: '#FF5A00'
-              },
-              '.input-container.is-error': {
-                borderColor: '#EF4444'
-              }
-            }
-          });
-
-          const container = document.getElementById('square-card-container');
-          if (container && isMounted) {
-            container.innerHTML = '';
-            await card.attach('#square-card-container');
+          if (!cardInstanceRef.current) {
+            const card = await payments.card({
+              style: SQUARE_CARD_STYLE,
+            });
             if (isMounted) {
               cardInstanceRef.current = card;
-              setSquareCardReady(true);
+              const container = cardContainerRef.current || document.getElementById('square-card-container');
+              if (container) {
+                container.innerHTML = '';
+                await card.attach(container);
+                if (isMounted) {
+                  setSquareCardReady(true);
+                }
+              }
             }
           }
         } catch (cardErr) {
           console.error('Square Card initialization error:', cardErr);
+          if (isMounted) {
+            setSquareCardReady(false);
+          }
         }
 
-        // 3. Initialize Google Pay (if supported)
-        if (paymentRequest) {
+        // 2. INDEPENDENT DIGITAL WALLETS INITIALIZATION
+        let req = null;
+        try {
+          req = buildPaymentRequest(payments, total);
+          paymentRequestRef.current = req;
+        } catch (reqErr) {
+          console.warn('Square paymentRequest creation notice:', reqErr);
+        }
+
+        if (req) {
+          // Google Pay Availability Check
           try {
-            const googlePay = await payments.googlePay(paymentRequest);
-            const gpayContainer = document.getElementById('google-pay-button');
-            if (gpayContainer && isMounted) {
-              gpayContainer.innerHTML = '';
-              await googlePay.attach('#google-pay-button', {
-                buttonSizeMode: 'fill',
-                buttonColor: 'black',
-                buttonType: 'buy'
-              });
-              if (isMounted) {
-                googlePayInstanceRef.current = googlePay;
-                setGooglePayAvailable(true);
-              }
+            const googlePay = await payments.googlePay(req);
+            if (googlePay && isMounted) {
+              googlePayInstanceRef.current = googlePay;
+              setGooglePayAvailable(true);
             }
-          } catch (gpayErr) {
-            if (isMounted) setGooglePayAvailable(false);
+          } catch {
+            // Google Pay is unavailable on this device/browser
+            if (isMounted) {
+              googlePayInstanceRef.current = null;
+              setGooglePayAvailable(false);
+            }
           }
 
-          // 4. Initialize Apple Pay (if supported)
+          // Apple Pay Availability Check
           try {
-            const applePay = await payments.applePay(paymentRequest);
+            const applePay = await payments.applePay(req);
             if (applePay && isMounted) {
               applePayInstanceRef.current = applePay;
               setApplePayAvailable(true);
             }
-          } catch (appleErr) {
-            if (isMounted) setApplePayAvailable(false);
+          } catch {
+            // Apple Pay is unavailable on this device/browser
+            if (isMounted) {
+              applePayInstanceRef.current = null;
+              setApplePayAvailable(false);
+            }
           }
         }
-      } catch (err: any) {
-        console.error('Square initialization error:', err);
+      } catch (sdkErr) {
+        console.error('Square SDK initialization error:', sdkErr);
       } finally {
-        if (isMounted) setSquareLoading(false);
+        if (isMounted) {
+          setSquareLoading(false);
+        }
       }
     };
 
-    loadSquareSDK();
+    initSquare();
 
     return () => {
       isMounted = false;
-      if (cardInstanceRef.current && typeof cardInstanceRef.current.destroy === 'function') {
+      if (cardInstanceRef.current) {
         try {
           cardInstanceRef.current.destroy();
         } catch {}
         cardInstanceRef.current = null;
       }
-      if (googlePayInstanceRef.current && typeof googlePayInstanceRef.current.destroy === 'function') {
+      if (googlePayInstanceRef.current) {
         try {
           googlePayInstanceRef.current.destroy();
         } catch {}
         googlePayInstanceRef.current = null;
       }
       applePayInstanceRef.current = null;
+      paymentRequestRef.current = null;
+      paymentsRef.current = null;
       setSquareCardReady(false);
       setGooglePayAvailable(false);
       setApplePayAvailable(false);
     };
-  }, [step, paymentConfig, total]);
+  }, [step, paymentConfig?.application_id, paymentConfig?.location_id, paymentConfig?.provider, paymentConfig?.environment]);
+
+  // Update PaymentRequest when total changes without destroying Card
+  useEffect(() => {
+    if (paymentRequestRef.current) {
+      try {
+        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
+        if (typeof paymentRequestRef.current.update === 'function') {
+          paymentRequestRef.current.update({
+            total: {
+              amount: formattedTotal,
+              label: 'Patty Project',
+            },
+          });
+        }
+      } catch {}
+    }
+  }, [total]);
+
+  // Mount Google Pay button when googlePayAvailable becomes true
+  useEffect(() => {
+    if (googlePayAvailable && googlePayInstanceRef.current) {
+      const container = googlePayContainerRef.current || document.getElementById('square-google-pay-button');
+      if (container) {
+        container.innerHTML = '';
+        googlePayInstanceRef.current.attach(container, {
+          buttonSizeMode: 'fill',
+          buttonColor: 'black',
+          buttonType: 'buy',
+        }).catch((attachErr: any) => {
+          console.warn('Google Pay button attach error:', attachErr);
+        });
+      }
+    }
+  }, [googlePayAvailable]);
 
   const handleContinueToPayment = () => {
     setError('');
@@ -474,7 +486,7 @@ export const CustomerCheckout: React.FC = () => {
     setError('');
 
     if (paymentConfig?.provider === 'square') {
-      if (!cardInstanceRef.current) {
+      if (!cardInstanceRef.current || !squareCardReady) {
         setError('Card payment inputs are still loading. Please wait a moment.');
         return;
       }
@@ -483,7 +495,7 @@ export const CustomerCheckout: React.FC = () => {
       try {
         const tokenResult = await cardInstanceRef.current.tokenize();
         if (tokenResult.status !== 'OK') {
-          const firstErr = tokenResult.errors?.[0]?.message || 'Card verification failed. Please check your card details and try again.';
+          const firstErr = tokenResult.errors?.[0]?.message || 'Card payment could not be completed. Please check your card details and try again.';
           setError(firstErr);
           setPaymentLoading(false);
           setActivePaymentMethod(null);
@@ -491,7 +503,7 @@ export const CustomerCheckout: React.FC = () => {
         }
         await submitOrderAndCharge('CARD', tokenResult.token);
       } catch (err: any) {
-        setError(err?.message || 'Card tokenization failed. Please try again.');
+        setError(err?.message || 'Card payment could not be completed. Please check your card details and try again.');
         setPaymentLoading(false);
         setActivePaymentMethod(null);
       }
@@ -513,7 +525,7 @@ export const CustomerCheckout: React.FC = () => {
     try {
       const tokenResult = await googlePayInstanceRef.current.tokenize();
       if (tokenResult.status !== 'OK') {
-        const firstErr = tokenResult.errors?.[0]?.message || 'Google Pay authorization was cancelled or failed.';
+        const firstErr = tokenResult.errors?.[0]?.message || 'Google Pay payment could not be completed. Please try again.';
         setError(firstErr);
         setPaymentLoading(false);
         setActivePaymentMethod(null);
@@ -521,7 +533,7 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('GOOGLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Google Pay processing failed.');
+      setError(err?.message || 'Google Pay payment could not be completed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
@@ -540,7 +552,7 @@ export const CustomerCheckout: React.FC = () => {
     try {
       const tokenResult = await applePayInstanceRef.current.tokenize();
       if (tokenResult.status !== 'OK') {
-        const firstErr = tokenResult.errors?.[0]?.message || 'Apple Pay authorization was cancelled or failed.';
+        const firstErr = tokenResult.errors?.[0]?.message || 'Apple Pay payment could not be completed. Please try again.';
         setError(firstErr);
         setPaymentLoading(false);
         setActivePaymentMethod(null);
@@ -548,7 +560,7 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('APPLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Apple Pay processing failed.');
+      setError(err?.message || 'Apple Pay payment could not be completed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
@@ -1052,6 +1064,7 @@ export const CustomerCheckout: React.FC = () => {
                             onClick={handleApplePayPayment}
                             disabled={loading || paymentLoading}
                             className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label="Pay with Apple Pay"
                           >
                             {activePaymentMethod === 'APPLE_PAY' && paymentLoading ? (
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1070,9 +1083,10 @@ export const CustomerCheckout: React.FC = () => {
                         {/* Google Pay Button Mounted Target */}
                         {googlePayAvailable && (
                           <div
-                            id="google-pay-button"
+                            id="square-google-pay-button"
+                            ref={googlePayContainerRef}
                             onClick={handleGooglePayPayment}
-                            className="w-full h-11 cursor-pointer"
+                            className="w-full h-11 cursor-pointer overflow-hidden rounded-lg"
                           />
                         )}
                       </div>
@@ -1103,12 +1117,16 @@ export const CustomerCheckout: React.FC = () => {
                     {/* Square Card Component Mounted Target */}
                     <div className="relative min-h-[90px] w-full">
                       {squareLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#151515] rounded-lg text-xs text-[#A1A1AA] gap-2">
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#151515] rounded-lg text-xs text-[#A1A1AA] gap-2 z-10">
                           <div className="w-4 h-4 border-2 border-[#FF5A00] border-t-transparent rounded-full animate-spin" />
                           <span>Loading secure card inputs...</span>
                         </div>
                       )}
-                      <div id="square-card-container" className="w-full" />
+                      <div
+                        id="square-card-container"
+                        ref={cardContainerRef}
+                        className="w-full"
+                      />
                     </div>
                   </div>
                 </div>
