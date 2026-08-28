@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminSidebar } from './components/admin/AdminSidebar';
@@ -12,6 +12,52 @@ import { Menu } from 'lucide-react';
 
 import { CustomerFooter } from './components/customer/CustomerFooter';
 import { useAuthStore } from './store/authStore';
+
+// Dynamic Browser Title Manager for Admin and Customer routes
+const DynamicTitleManager: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/admin/login') {
+      document.title = 'Patty Project Admin | Login';
+    } else if (path === '/admin/dashboard' || path === '/admin') {
+      document.title = 'Patty Project Admin | Dashboard';
+    } else if (path === '/admin/orders') {
+      document.title = 'Patty Project Admin | Orders Management';
+    } else if (path === '/admin/products') {
+      document.title = 'Patty Project Admin | Menu & Inventory';
+    } else if (path === '/admin/customers') {
+      document.title = 'Patty Project Admin | Customers Management';
+    } else if (path === '/admin/loyalty') {
+      document.title = 'Patty Project Admin | Loyalty Points System';
+    } else if (path === '/admin/coupons') {
+      document.title = 'Patty Project Admin | Coupons & Promo Codes';
+    } else if (path === '/admin/offers') {
+      document.title = 'Patty Project Admin | Offers & Banner Settings';
+    } else if (path === '/admin/settings') {
+      document.title = 'Patty Project Admin | Branch & Profile Settings';
+    } else if (path.startsWith('/admin')) {
+      document.title = 'Patty Project Admin | Management Portal';
+    } else if (path === '/order' || path === '/menu') {
+      document.title = 'Menu & Order Online | Patty Project';
+    } else if (path === '/offers') {
+      document.title = 'Special Offers & Deals | Patty Project';
+    } else if (path === '/about') {
+      document.title = 'About Us | Patty Project';
+    } else if (path === '/contact') {
+      document.title = 'Contact & Locations | Patty Project';
+    } else if (path === '/cart') {
+      document.title = 'Your Cart | Patty Project';
+    } else if (path === '/checkout') {
+      document.title = 'Checkout | Patty Project';
+    } else {
+      document.title = 'Patty Project | Gourmet Smashed Burgers & Shakes in London';
+    }
+  }, [location.pathname]);
+
+  return null;
+};
 
 // Code-splitting lazy loaders for all routes to make initial home page open instantly
 const AdminLogin = React.lazy(() => import('./pages/admin/AdminLogin').then(m => ({ default: m.AdminLogin })));
@@ -208,6 +254,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
+        <DynamicTitleManager />
         <React.Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
             {/* Admin Routes */}
