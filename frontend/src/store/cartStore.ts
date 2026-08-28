@@ -46,9 +46,11 @@ interface CartState {
   getDeliveryShortfall: () => number;
 }
 
+import { getSafeStorage, setSafeStorage, removeSafeStorage } from '../api/client';
+
 const safeGetStorage = <T>(key: string, fallback: T): T => {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = getSafeStorage(key);
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -58,9 +60,9 @@ const safeGetStorage = <T>(key: string, fallback: T): T => {
 const safeSetStorage = (key: string, value: any) => {
   try {
     if (value === null || value === undefined) {
-      localStorage.removeItem(key);
+      removeSafeStorage(key);
     } else {
-      localStorage.setItem(key, JSON.stringify(value));
+      setSafeStorage(key, JSON.stringify(value));
     }
   } catch {}
 };

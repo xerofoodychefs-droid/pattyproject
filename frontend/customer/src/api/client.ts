@@ -1,10 +1,45 @@
-const RAW_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://pattyproject.co.uk' : '');
-export const API_BASE = `${RAW_BASE ? RAW_BASE.replace(/\/$/, '') : ''}/api/v1`;
+// Safe Storage Access Helpers for In-App Browsers (Instagram/Facebook WebView, Safari Private Mode)
+export function getSafeStorage(key: string): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function setSafeStorage(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {}
+}
+
+export function removeSafeStorage(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+const getApiBase = (): string => {
+  if (import.meta.env.VITE_API_URL) {
+    return `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api/v1`;
+  }
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin}/api/v1`;
+  }
+  return 'https://pattyproject.co.uk/api/v1';
+};
+
+export const API_BASE = getApiBase();
 
 let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem('patty_refresh_token');
+  const refreshToken = getSafeStorage('patty_refresh_token');
   if (!refreshToken) return null;
 
   try {
@@ -15,9 +50,9 @@ async function refreshAccessToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-      localStorage.removeItem('patty_token');
-      localStorage.removeItem('patty_refresh_token');
-      localStorage.removeItem('patty_user');
+      removeSafeStorage('patty_token');
+      removeSafeStorage('patty_refresh_token');
+      removeSafeStorage('patty_user');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('patty:auth_session_expired'));
       }
@@ -26,9 +61,9 @@ async function refreshAccessToken(): Promise<string | null> {
 
     const data = await res.json();
     if (data.access_token) {
-      localStorage.setItem('patty_token', data.access_token);
+      setSafeStorage('patty_token', data.access_token);
       if (data.refresh_token) {
-        localStorage.setItem('patty_refresh_token', data.refresh_token);
+        setSafeStorage('patty_refresh_token', data.refresh_token);
       }
       return data.access_token;
     }
@@ -47,7 +82,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
     endpoint.includes('/auth/google') ||
     endpoint.includes('/auth/refresh');
 
-  const token = !isAuthEndpoint ? localStorage.getItem('patty_token') : null;
+  const token = !isAuthEndpoint ? getSafeStorage('patty_token') : null;
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -59,14 +94,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
   }
 
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    const response = await fetch(url, {
       ...options,
       headers,
     });
 
     // If 401 and we have a refresh token and this is not already a retry or an auth endpoint
     if (response.status === 401 && !isRetry && !isAuthEndpoint) {
-      const refreshToken = localStorage.getItem('patty_refresh_token');
+      const refreshToken = getSafeStorage('patty_refresh_token');
       if (refreshToken) {
         if (!refreshPromise) {
           refreshPromise = refreshAccessToken();

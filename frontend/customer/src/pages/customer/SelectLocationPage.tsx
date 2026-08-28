@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Search, Navigation, ChevronRight, Store, X, LocateFixed, AlertTriangle, Truck, ShoppingBag, RotateCcw, Loader2 } from 'lucide-react';
+import { MapPin, Search, Navigation, ChevronRight, Store, X, LocateFixed, AlertTriangle, ShoppingBag, RotateCcw, Loader2, Truck } from 'lucide-react';
 import { Branch } from '../../types';
 import { useCartStore } from '../../store/cartStore';
-import { api } from '../../api/client';
+import { api, setSafeStorage } from '../../api/client';
 
 export type LocationResolutionState =
   | 'IDLE'
@@ -25,6 +25,8 @@ export const SelectLocationPage: React.FC = () => {
   } = useCartStore();
 
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState<boolean>(true);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
   
   // Tripartite branch state: recommended, manual override, and active
   const [recommendedBranch, setRecommendedBranch] = useState<Branch | null>(null);
@@ -43,10 +45,6 @@ export const SelectLocationPage: React.FC = () => {
   // Request cancellation and race condition tracking (latest request wins)
   const requestIdRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Client-side in-memory geocode cache (normalized postcode -> { lat, lng })
-  // Process/Session optimization, zero customer PII
-  const clientGeocodeCache = useRef<Map<string, { lat: number; lng: number }>>(new Map());
 
   // Location Toggle & Error States
   const [locationToggle, setLocationToggle] = useState<boolean>(Boolean(storeCoords));
@@ -70,7 +68,6 @@ export const SelectLocationPage: React.FC = () => {
   };
 
   // Active branch derived strictly from explicit customer choice or system recommendation.
-  // NO arbitrary branches[0] fallback!
   const activeBranch: Branch | null = manualOverrideBranch ?? recommendedBranch ?? null;
 
   // Calculate distance for the currently active branch
@@ -154,25 +151,24 @@ export const SelectLocationPage: React.FC = () => {
       if (currentRequestId !== requestIdRef.current) return;
       if (err?.name === 'AbortError' || err?.name === 'CanceledError') return;
 
-      // Fail closed: No arbitrary branch fallback
       setIsDeliveryEligible(false);
       setRecommendedBranch(null);
       setNearestBranch(null);
       setDistanceMiles(null);
-      setResolutionState('OUTLET_ERROR');
       setLocationErrorTitle('Unable to verify delivery availability.');
       setLocationErrorDetails('Our server could not resolve your nearest outlet. Please select a store from the list or try again.');
+      // If a branch is already loaded, keep user on IDLE so they can pick manually
+      setResolutionState(manualOverrideBranch ? 'OUTLET_RESOLVED' : 'IDLE');
     }
-  }, [fulfillmentType]);
+  }, [fulfillmentType, manualOverrideBranch]);
 
   const requestBrowserLocation = useCallback((branchList?: Branch[]) => {
     const list = branchList || branches;
 
     if (!('geolocation' in navigator)) {
       setLocationToggle(false);
-      setResolutionState('LOCATION_ERROR');
       setLocationErrorTitle('Geolocation is not supported by your browser.');
-      setLocationErrorDetails('Please enter your UK postcode below or select Collection.');
+      setLocationErrorDetails('Please enter your UK postcode below or select an outlet from the list.');
       setIsDeliveryEligible(false);
       setFulfillmentType('COLLECTION');
       return;
@@ -201,23 +197,23 @@ export const SelectLocationPage: React.FC = () => {
           userLng < -180 || userLng > 180
         ) {
           setLocationToggle(false);
-          setResolutionState('LOCATION_ERROR');
           setLocationErrorTitle('Invalid coordinates received from device.');
-          setLocationErrorDetails('Please search with your UK postcode below or select Collection.');
+          setLocationErrorDetails('Please search with your UK postcode below or select an outlet from the list.');
           setIsDeliveryEligible(false);
           setFulfillmentType('COLLECTION');
+          setResolutionState(manualOverrideBranch ? 'OUTLET_RESOLVED' : 'IDLE');
           return;
         }
 
         if (accuracy && accuracy > 5000) {
           setLocationToggle(false);
-          setResolutionState('LOCATION_ERROR');
           setLocationErrorTitle('Location accuracy is too low to verify 2-mile delivery eligibility.');
           setLocationErrorDetails(
             `Device accuracy is approximately ±${Math.round(accuracy / 1000)} km. Please enter your exact UK postcode for delivery verification.`
           );
           setIsDeliveryEligible(false);
           setFulfillmentType('COLLECTION');
+          setResolutionState(manualOverrideBranch ? 'OUTLET_RESOLVED' : 'IDLE');
           return;
         }
 
@@ -229,51 +225,76 @@ export const SelectLocationPage: React.FC = () => {
         setLocationToggle(false);
         setIsDeliveryEligible(false);
         setFulfillmentType('COLLECTION');
-        setResolutionState('LOCATION_ERROR');
+        setResolutionState(manualOverrideBranch ? 'OUTLET_RESOLVED' : 'IDLE');
 
         switch (error.code) {
           case 1:
             setLocationErrorTitle('Location access is required to check delivery availability.');
             setLocationErrorDetails(
-              'Please enable location access in your browser settings, or choose Collection from your nearest store.'
+              'Location permission was denied. You can choose Collection from your nearest store or enter a UK postcode below.'
             );
             break;
           case 2:
             setLocationErrorTitle('Unable to determine your device location.');
             setLocationErrorDetails(
-              'Your browser or device could not retrieve GPS coordinates. Please search with your UK postcode below or choose Collection.'
+              'Your browser or device could not retrieve GPS coordinates. Please search with your UK postcode below or choose an outlet from the list.'
             );
             break;
           case 3:
             setLocationErrorTitle('Location request timed out.');
             setLocationErrorDetails(
-              'The location check took too long to respond. Please tap Retry or enter your postcode manually.'
+              'The location check took too long to respond. You can select an outlet manually from the list or enter your postcode.'
             );
             break;
           default:
             setLocationErrorTitle('Location access error.');
-            setLocationErrorDetails('Please enter your UK postcode below or select Collection.');
+            setLocationErrorDetails('Please enter your UK postcode below or select an outlet from the list.');
             break;
         }
       },
       geoOptions
     );
-  }, [branches, checkEligibilityWithBackend]);
+  }, [branches, checkEligibilityWithBackend, manualOverrideBranch]);
 
+  // Primary branch loader: independent of geolocation and resilient across all WebViews
   const fetchBranches = useCallback(async () => {
+    setBranchesLoading(true);
+    setBranchesError(null);
     try {
-      const data = await api.get<Branch[]>('/branches');
-      if (data && data.length > 0) {
-        setBranches(data);
+      const rawData = await api.get<any>('/branches');
+      const list: Branch[] = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.branches)
+        ? rawData.branches
+        : Array.isArray(rawData?.data)
+        ? rawData.data
+        : Array.isArray(rawData?.value)
+        ? rawData.value
+        : [];
+
+      const activeList = list.filter(
+        (b) => b && typeof b === 'object' && b.id && (b.is_active === undefined || b.is_active === true)
+      );
+
+      if (activeList.length > 0) {
+        setBranches(activeList);
+        setBranchesLoading(false);
+        setBranchesError(null);
+
+        // If user already had coordinates stored, check distance in background
         if (storeCoords) {
-          checkEligibilityWithBackend(storeCoords.lat, storeCoords.lng, undefined, data);
+          checkEligibilityWithBackend(storeCoords.lat, storeCoords.lng, undefined, activeList);
         }
       } else {
         setBranches([]);
+        setBranchesLoading(false);
         setResolutionState('NO_ELIGIBLE_OUTLET');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[SelectLocationPage] Error loading branches:', err);
       setBranches([]);
+      setBranchesLoading(false);
+      setBranchesError('Unable to load outlets. Please try again.');
       setResolutionState('OUTLET_ERROR');
     }
   }, [storeCoords, checkEligibilityWithBackend]);
@@ -350,9 +371,7 @@ export const SelectLocationPage: React.FC = () => {
 
     setOrderType(finalOrderType);
 
-    try {
-      localStorage.setItem('patty_selected_branch', JSON.stringify(activeBranch));
-    } catch {}
+    setSafeStorage('patty_selected_branch', JSON.stringify(activeBranch));
 
     navigate('/order');
   };
@@ -372,6 +391,25 @@ export const SelectLocationPage: React.FC = () => {
         </p>
       </div>
 
+      {/* STATE: OUTLET LOADING ERROR */}
+      {resolutionState === 'OUTLET_ERROR' && (
+        <div className="bg-[#2A1215] border border-[#EF4444]/30 rounded-xl p-6 text-center space-y-3 mb-8">
+          <AlertTriangle className="w-8 h-8 text-[#EF4444] mx-auto" />
+          <h2 className="text-lg font-bold text-white">Unable to Load Outlets</h2>
+          <p className="text-xs text-[#D1D5DB]">
+            We could not connect to the store service. Please tap Retry to reload.
+          </p>
+          <button
+            type="button"
+            onClick={fetchBranches}
+            className="px-5 py-2.5 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-md"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
       {/* STATE: NO ACTIVE BRANCHES */}
       {resolutionState === 'NO_ELIGIBLE_OUTLET' && (
         <div className="bg-[#1C0E07] border border-[#6B2A0D] rounded-xl p-6 text-center space-y-3 mb-8">
@@ -380,11 +418,19 @@ export const SelectLocationPage: React.FC = () => {
           <p className="text-xs text-[#D1D5DB]">
             Our outlets are currently unavailable for online ordering. Please check back shortly.
           </p>
+          <button
+            type="button"
+            onClick={fetchBranches}
+            className="px-4 py-2 bg-[#242424] hover:bg-[#333333] text-[#F5F5F5] rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Refresh</span>
+          </button>
         </div>
       )}
 
       {/* 2-Column Desktop Grid Layout */}
-      {resolutionState !== 'NO_ELIGIBLE_OUTLET' && (
+      {resolutionState !== 'NO_ELIGIBLE_OUTLET' && resolutionState !== 'OUTLET_ERROR' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-8">
           
           {/* LEFT COLUMN: Current Location Action, Postcode Search & Fulfillment Selector */}
@@ -448,154 +494,84 @@ export const SelectLocationPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="pt-1 flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => requestBrowserLocation(branches)}
-                    disabled={isResolving}
-                    className="px-3 py-1.5 bg-[#EF4444]/20 hover:bg-[#EF4444]/30 border border-[#EF4444]/40 text-[#FCA5A5] rounded-md text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{isResolving ? 'Checking...' : 'Retry Location Check'}</span>
-                  </button>
-                </div>
               </div>
             )}
 
-            {/* OR Divider */}
-            <div className="flex items-center gap-4 py-1">
-              <div className="h-[1px] bg-[#242424] flex-1" />
-              <span className="text-xs font-medium text-[#71717A] uppercase tracking-wider">OR</span>
-              <div className="h-[1px] bg-[#242424] flex-1" />
-            </div>
-
-            {/* Location Search Input & Action Button */}
-            <div className="flex items-center gap-2.5">
-              <div className="flex-1 h-11 bg-[#151515] border border-[#242424] focus-within:border-[#FF5500] rounded-lg px-3.5 flex items-center gap-2.5 transition-colors">
-                <Search className="w-4 h-4 text-[#71717A] shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Enter your location or postcode..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSearchSubmit();
-                  }}
-                  className="bg-transparent text-sm text-[#F5F5F5] placeholder-[#71717A] focus:outline-none w-full font-normal"
-                />
-              </div>
-
-              <button
-                onClick={handleSearchSubmit}
-                disabled={isResolving}
-                title="Search location"
-                aria-label="Search location"
-                className="h-11 w-11 bg-[#151515] border border-[#242424] hover:border-[#FF5500] hover:bg-[#FF5500]/10 rounded-lg flex items-center justify-center text-[#FF5500] shrink-0 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF5500]/50 disabled:opacity-50"
-              >
-                {isResolving ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
-                ) : (
-                  <Navigation className="w-4 h-4 transform rotate-45" />
-                )}
-              </button>
-            </div>
-
-            {/* Fulfillment Method Selection Cards (Delivery vs Collection) */}
-            <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 space-y-4">
-              <h3 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider">
-                Choose Fulfillment Method
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. DELIVERY OPTION */}
-                <div
-                  onClick={handleSelectDelivery}
-                  aria-disabled={!isDeliveryEligible && !isManualOverrideDeliveryEligible}
-                  className={`p-4 rounded-lg border transition-all select-none ${
-                    (isDeliveryEligible || isManualOverrideDeliveryEligible)
-                      ? fulfillmentType === 'DELIVERY'
-                        ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5] cursor-pointer ring-1 ring-[#FF5500]/40'
-                        : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333] cursor-pointer'
-                      : 'bg-[#121212]/60 border-[#222222] opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                        (isDeliveryEligible || isManualOverrideDeliveryEligible)
-                          ? 'bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500]'
-                          : 'bg-[#1A1A1A] text-[#71717A]'
-                      }`}>
-                        <Truck className="w-4.5 h-4.5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-[#F5F5F5]">Delivery</p>
-                        <p className="text-[11px] text-[#A1A1AA]">
-                          {(isDeliveryEligible || isManualOverrideDeliveryEligible) ? 'Available' : 'Unavailable'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      fulfillmentType === 'DELIVERY' && (isDeliveryEligible || isManualOverrideDeliveryEligible)
-                        ? 'border-[#FF5500]'
-                        : 'border-[#242424]'
-                    }`}>
-                      {fulfillmentType === 'DELIVERY' && (isDeliveryEligible || isManualOverrideDeliveryEligible) && (
-                        <div className="w-2 h-2 rounded-full bg-[#FF5500]" />
-                      )}
-                    </div>
-                  </div>
-
-                  {!isDeliveryEligible && !isManualOverrideDeliveryEligible && (
-                    <div className="mt-2.5 pt-2 border-t border-[#222222]">
-                      <span className="text-[10px] font-extrabold text-[#FF5500] uppercase tracking-wider block">
-                        WE PROVIDE DELIVERY UP TO 2 MILES ONLY
-                      </span>
-                    </div>
-                  )}
+            {/* Search UK Postcode Input */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                Or enter UK postcode
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSearchSubmit();
+                    }}
+                    placeholder="e.g. N9 9HF"
+                    disabled={isResolving}
+                    className="w-full bg-[#151515] border border-[#242424] focus:border-[#FF5500] rounded-lg pl-10 pr-3.5 py-2.5 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={handleSearchSubmit}
+                  disabled={isResolving || !searchQuery.trim()}
+                  className="px-4 py-2.5 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 shadow-md"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Check</span>
+                </button>
+              </div>
+            </div>
 
-                {/* 2. COLLECTION OPTION */}
-                <div
+            {/* Fulfillment Selector: Delivery vs Collection */}
+            <div className="space-y-2 pt-2">
+              <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                Fulfillment method
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleSelectDelivery}
+                  disabled={
+                    manualOverrideBranch
+                      ? !isManualOverrideDeliveryEligible
+                      : !isDeliveryEligible || (distanceMiles !== null && distanceMiles > 2.0)
+                  }
+                  className={`py-3 px-4 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    fulfillmentType === 'DELIVERY'
+                      ? 'bg-[#FF5500] border-[#FF5500] text-white shadow-md'
+                      : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>Delivery (≤2 mi)</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => handleSelectCollection()}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                  className={`py-3 px-4 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     fulfillmentType === 'COLLECTION'
-                      ? 'bg-[#241209] border-[#6B2A0D] text-[#F5F5F5] ring-1 ring-[#FF5500]/40'
+                      ? 'bg-[#FF5500] border-[#FF5500] text-white shadow-md'
                       : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:border-[#333333]'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center text-[#FF5500] shrink-0">
-                        <ShoppingBag className="w-4.5 h-4.5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-[#F5F5F5]">Collection</p>
-                        <p className="text-[11px] text-[#22C55E] font-medium">Available</p>
-                      </div>
-                    </div>
-
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      fulfillmentType === 'COLLECTION' ? 'border-[#FF5500]' : 'border-[#242424]'
-                    }`}>
-                      {fulfillmentType === 'COLLECTION' && <div className="w-2 h-2 rounded-full bg-[#FF5500]" />}
-                    </div>
-                  </div>
-
-                  <div className="mt-2.5 pt-2 border-t border-[#222222]">
-                    <span className="text-[10px] text-[#A1A1AA] block">
-                      Store pickup from outlet
-                    </span>
-                  </div>
-                </div>
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>Collection</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Nearest Outlet Card & Outside 2-Mile Recommendation */}
+          {/* RIGHT COLUMN: Outlet Details & Selection Status */}
           <div className="lg:col-span-7 space-y-4">
-            
-            {/* Outside 2-Mile Delivery Radius Notice Banner */}
+            {/* Delivery Outside Radius Banner */}
             {resolutionState === 'OUTSIDE_RADIUS' && nearestBranch && (
               <div className="bg-[#1C0E07] border border-[#6B2A0D] rounded-xl p-5 space-y-3 shadow-lg">
                 <div className="flex items-center gap-2 text-[#FF5500] font-black text-xs uppercase tracking-wider">
@@ -639,6 +615,7 @@ export const SelectLocationPage: React.FC = () => {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setShowModal(true)}
                   className="text-xs font-medium text-[#FF5500] hover:text-[#E84F00] flex items-center gap-1 cursor-pointer transition-colors"
                 >
@@ -705,13 +682,23 @@ export const SelectLocationPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                /* IDLE / NO SELECTION STATE - No arbitrary branches[0] */
-                <div className="p-8 bg-[#121212] border border-[#242424] rounded-lg text-center space-y-2 text-[#A1A1AA]">
-                  <MapPin className="w-6 h-6 text-[#71717A] mx-auto mb-1" />
+                /* IDLE / NO SELECTION STATE */
+                <div className="p-8 bg-[#121212] border border-[#242424] rounded-lg text-center space-y-3 text-[#A1A1AA]">
+                  <MapPin className="w-6 h-6 text-[#71717A] mx-auto" />
                   <p className="text-sm font-semibold text-[#F5F5F5]">No Outlet Selected</p>
                   <p className="text-xs">
-                    Please allow location access above, search your UK postcode, or select an outlet from the list.
+                    Please allow location access above, enter a UK postcode, or select an outlet from the list.
                   </p>
+                  {hasActiveBranches && (
+                    <button
+                      type="button"
+                      onClick={() => setShowModal(true)}
+                      className="px-4 py-2 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      <span>Choose Outlet from List</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -720,7 +707,7 @@ export const SelectLocationPage: React.FC = () => {
       )}
 
       {/* CONFIRM LOCATION Full-Width Primary CTA Button */}
-      {resolutionState !== 'NO_ELIGIBLE_OUTLET' && (
+      {resolutionState !== 'NO_ELIGIBLE_OUTLET' && resolutionState !== 'OUTLET_ERROR' && (
         <button
           onClick={handleConfirmLocation}
           disabled={!activeBranch || isResolving}
@@ -729,7 +716,7 @@ export const SelectLocationPage: React.FC = () => {
           <MapPin className="w-4 h-4" />
           <span>
             {!activeBranch
-              ? 'Please Select a Location or Store to Continue'
+              ? 'Please Select an Outlet to Continue'
               : fulfillmentType === 'DELIVERY' && (isDeliveryEligible || isManualOverrideDeliveryEligible)
                 ? 'Confirm Delivery Location & View Menu'
                 : 'Confirm Store for Collection & View Menu'}
@@ -753,45 +740,84 @@ export const SelectLocationPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-              {branches.map((b) => {
-                const isSelected = activeBranch?.id === b.id;
+            {branchesLoading ? (
+              <div className="p-8 text-center space-y-2">
+                <Loader2 className="w-6 h-6 animate-spin text-[#FF5500] mx-auto" />
+                <p className="text-xs text-[#A1A1AA]">Loading outlets...</p>
+              </div>
+            ) : branchesError ? (
+              <div className="p-6 bg-[#2A1215] border border-[#EF4444]/30 rounded-lg text-center space-y-3">
+                <AlertTriangle className="w-6 h-6 text-[#EF4444] mx-auto" />
+                <p className="text-xs text-[#FCA5A5] font-semibold">{branchesError}</p>
+                <button
+                  type="button"
+                  onClick={fetchBranches}
+                  className="px-4 py-2 bg-[#EF4444]/20 hover:bg-[#EF4444]/30 border border-[#EF4444]/40 text-[#FCA5A5] rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
+                </button>
+              </div>
+            ) : branches.length === 0 ? (
+              <div className="p-6 bg-[#151515] border border-[#242424] rounded-lg text-center space-y-3">
+                <Store className="w-6 h-6 text-[#71717A] mx-auto" />
+                <p className="text-xs text-[#A1A1AA]">No outlets are currently available.</p>
+                <button
+                  type="button"
+                  onClick={fetchBranches}
+                  className="px-4 py-2 bg-[#242424] hover:bg-[#333333] text-[#F5F5F5] rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                {branches.map((b) => {
+                  const isSelected = activeBranch?.id === b.id;
 
-                return (
-                  <div
-                    key={b.id}
-                    onClick={() => {
-                      setManualOverrideBranch(b);
-                      setResolutionState('OUTLET_RESOLVED');
-                      setShowModal(false);
-                    }}
-                    className={`p-3.5 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${
-                      isSelected
-                        ? 'bg-[#140B06] border-[#6B2A0D] text-[#F5F5F5]'
-                        : 'bg-[#121212] border-[#242424] text-[#A1A1AA] hover:border-[#333333] hover:text-[#F5F5F5]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        isSelected ? 'bg-[#FF5A00] text-white' : 'bg-[#151515] border border-[#242424] text-[#A1A1AA]'
-                      }`}>
-                        <Store className="w-4 h-4" />
+                  return (
+                    <div
+                      key={b.id}
+                      onClick={() => {
+                        setManualOverrideBranch(b);
+                        setResolutionState('OUTLET_RESOLVED');
+                        setShowModal(false);
+                      }}
+                      className={`p-3.5 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${
+                        isSelected
+                          ? 'bg-[#140B06] border-[#6B2A0D] text-[#F5F5F5]'
+                          : 'bg-[#121212] border-[#242424] text-[#A1A1AA] hover:border-[#333333] hover:text-[#F5F5F5]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? 'bg-[#FF5A00] text-white'
+                              : 'bg-[#151515] border border-[#242424] text-[#A1A1AA]'
+                          }`}
+                        >
+                          <Store className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm text-[#F5F5F5]">{b.name}</p>
+                          <p className="text-xs text-[#A1A1AA]">
+                            {b.address_line1}, {b.city} ({b.postcode})
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-sm text-[#F5F5F5]">{b.name}</p>
-                        <p className="text-xs text-[#A1A1AA]">{b.address_line1}, {b.city} ({b.postcode})</p>
-                      </div>
+
+                      {isSelected && (
+                        <span className="text-xs font-semibold text-[#FF5A00] bg-[#FF5A00]/10 border border-[#6B2A0D] px-2.5 py-0.5 rounded">
+                          Selected
+                        </span>
+                      )}
                     </div>
-
-                    {isSelected && (
-                      <span className="text-xs font-semibold text-[#FF5A00] bg-[#FF5A00]/10 border border-[#6B2A0D] px-2.5 py-0.5 rounded">
-                        Selected
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

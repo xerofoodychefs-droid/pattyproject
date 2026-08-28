@@ -7,6 +7,7 @@ import { api } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
 import { loadSquareSdk } from '../../utils/squarePayments';
+import { getSafeStorage } from '../../api/client';
 
 // ==========================================
 // 1. ISOLATED SQUARE CARD PAYMENT COMPONENT
@@ -393,7 +394,7 @@ export const CustomerCheckout: React.FC = () => {
         if (cleanPhone) setPhoneDigits((prev) => prev || cleanPhone.slice(-11));
       }
     } else {
-      const rawUser = localStorage.getItem('patty_user');
+      const rawUser = getSafeStorage('patty_user');
       if (rawUser) {
         try {
           const parsed = JSON.parse(rawUser);
@@ -407,7 +408,7 @@ export const CustomerCheckout: React.FC = () => {
       }
     }
 
-    const token = localStorage.getItem('patty_token');
+    const token = getSafeStorage('patty_token');
     if (token || user) {
       api.get<any>('/auth/me')
         .then((userData) => {

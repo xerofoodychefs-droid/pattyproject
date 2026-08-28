@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { API_BASE } from '../api/client';
+import { API_BASE, getSafeStorage, setSafeStorage, removeSafeStorage } from '../api/client';
 
 interface AuthState {
   token: string | null;
@@ -11,6 +11,16 @@ interface AuthState {
   logout: () => void;
 }
 
+const getInitialUser = (): User | null => {
+  const raw = getSafeStorage('patty_user');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 export const useAuthStore = create<AuthState>((set) => {
   // Synchronize state when session expires in API client
   if (typeof window !== 'undefined') {
@@ -20,26 +30,26 @@ export const useAuthStore = create<AuthState>((set) => {
   }
 
   return {
-    token: localStorage.getItem('patty_token'),
-    refreshToken: localStorage.getItem('patty_refresh_token'),
-    user: localStorage.getItem('patty_user') ? JSON.parse(localStorage.getItem('patty_user')!) : null,
+    token: getSafeStorage('patty_token'),
+    refreshToken: getSafeStorage('patty_refresh_token'),
+    user: getInitialUser(),
     setAuth: (token, user, refreshToken) => {
-      localStorage.setItem('patty_token', token);
-      localStorage.setItem('patty_user', JSON.stringify(user));
+      setSafeStorage('patty_token', token);
+      setSafeStorage('patty_user', JSON.stringify(user));
       if (refreshToken) {
-        localStorage.setItem('patty_refresh_token', refreshToken);
+        setSafeStorage('patty_refresh_token', refreshToken);
       }
-      set({ token, user, refreshToken: refreshToken || localStorage.getItem('patty_refresh_token') });
+      set({ token, user, refreshToken: refreshToken || getSafeStorage('patty_refresh_token') });
     },
     setToken: (token, refreshToken) => {
-      localStorage.setItem('patty_token', token);
+      setSafeStorage('patty_token', token);
       if (refreshToken) {
-        localStorage.setItem('patty_refresh_token', refreshToken);
+        setSafeStorage('patty_refresh_token', refreshToken);
       }
-      set({ token, refreshToken: refreshToken || localStorage.getItem('patty_refresh_token') });
+      set({ token, refreshToken: refreshToken || getSafeStorage('patty_refresh_token') });
     },
     logout: () => {
-      const activeRefreshToken = localStorage.getItem('patty_refresh_token');
+      const activeRefreshToken = getSafeStorage('patty_refresh_token');
       if (activeRefreshToken) {
         try {
           fetch(`${API_BASE}/auth/logout`, {
@@ -49,9 +59,9 @@ export const useAuthStore = create<AuthState>((set) => {
           }).catch(() => {});
         } catch {}
       }
-      localStorage.removeItem('patty_token');
-      localStorage.removeItem('patty_refresh_token');
-      localStorage.removeItem('patty_user');
+      removeSafeStorage('patty_token');
+      removeSafeStorage('patty_refresh_token');
+      removeSafeStorage('patty_user');
       set({ token: null, refreshToken: null, user: null });
     },
   };
