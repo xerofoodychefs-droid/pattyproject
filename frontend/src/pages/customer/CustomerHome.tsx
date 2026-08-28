@@ -251,6 +251,8 @@ export const CustomerHome: React.FC = () => {
                   src={mcProduct?.image_url || '/product_the_mc_project.png'}
                   alt="MC Project"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="space-y-2.5">
@@ -277,6 +279,8 @@ export const CustomerHome: React.FC = () => {
                   src={outlawProduct?.image_url || '/product_the_outlaw_project_.png'}
                   alt="Outlaw Project"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="space-y-2.5">
@@ -303,6 +307,8 @@ export const CustomerHome: React.FC = () => {
                   src={pastramiProduct?.image_url || '/product_pastrami_burger_.png'}
                   alt="Pastrami Burger"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="space-y-2.5">
@@ -332,6 +338,8 @@ export const CustomerHome: React.FC = () => {
                   src={chickenProduct?.image_url || '/product_buffalo_chicken_sando_.png'}
                   alt="Fried Chicken Sando"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="space-y-2.5">
@@ -358,6 +366,8 @@ export const CustomerHome: React.FC = () => {
                   src={halloumiProduct?.image_url || '/product_the_halloumi_project_veg.png'}
                   alt="Halloumi Burger"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="space-y-2.5">
