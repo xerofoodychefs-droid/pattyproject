@@ -107,6 +107,17 @@ const RefundCancellationPolicy = React.lazy(() => import('./pages/customer/Refun
 const TermsOfService = React.lazy(() => import('./pages/customer/TermsOfService').then(m => ({ default: m.TermsOfService })));
 const MockCheckoutPage = React.lazy(() => import('./pages/customer/MockCheckoutPage').then(m => ({ default: m.MockCheckoutPage })));
 
+// Scroll restoration component for smooth page transitions
+const ScrollToTop: React.FC = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+
+  return null;
+};
+
 const RouteLoadingSpinner = () => (
   <div className="min-h-[50vh] flex items-center justify-center">
     <div className="w-8 h-8 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin"></div>
@@ -118,6 +129,7 @@ const queryClient = new QueryClient();
 // Admin Layout Shell with Protection Guard & Sidebar Collapse Toggle
 const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, user } = useAuthStore();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return localStorage.getItem('admin_sidebar_collapsed') === 'true';
   });
@@ -143,7 +155,8 @@ const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children })
 
       {/* Main Content Area */}
       <main
-        className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
+        key={location.pathname}
+        className={`page-enter flex-1 min-w-0 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'ml-0' : 'ml-64'
         }`}
       >
@@ -242,7 +255,9 @@ const CustomerLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children
               onOpenMobileDrawer={() => setShowMobileDrawer(true)}
             />
           )}
-          <main className={showBottomNav ? 'pb-16 md:pb-0' : ''}>{children}</main>
+          <main key={location.pathname} className={`page-enter ${showBottomNav ? 'pb-16 md:pb-0' : ''}`}>
+            {children}
+          </main>
         </div>
 
         {/* Footer only on public customer pages */}
@@ -271,6 +286,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <DynamicTitleManager />
+        <ScrollToTop />
         <React.Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
             {/* Admin Routes */}

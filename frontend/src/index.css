@@ -13,6 +13,13 @@
     --text-secondary: #9CA3AF;
   }
 
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   html, body, #root {
     background-color: #000000 !important;
     background: #000000 !important;
@@ -34,6 +41,23 @@
     font-weight: 900;
     letter-spacing: -0.03em;
   }
+}
+
+/* Fluid Page Entry Animations */
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }
 
 /* Custom Scrollbar */
