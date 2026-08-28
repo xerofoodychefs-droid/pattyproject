@@ -85,10 +85,10 @@ export const CustomerHome: React.FC = () => {
   return (
     <div className="pb-0 space-y-6 sm:space-y-16">
       {/* Hero Section matching exact reference image */}
-      <section id="hero" className="relative bg-black min-h-[calc(100vh-65px)] lg:min-h-[580px] lg:max-h-[740px] flex flex-col justify-between overflow-hidden px-6 sm:px-10 lg:px-12 xl:px-16 pt-6 lg:pt-8 pb-6 lg:pb-8">
+      <section id="hero" className="relative bg-black min-h-[calc(100vh-68px)] lg:h-[calc(100vh-68px)] flex flex-col justify-between overflow-hidden px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 pt-6 lg:pt-8 pb-6 lg:pb-8">
         
         {/* Full-bleed right side burger background image overlay */}
-        <div className="absolute inset-y-0 right-0 w-full lg:w-[58%] xl:w-[60%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
+        <div className="absolute inset-y-0 right-0 w-full lg:w-[62%] xl:w-[66%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
           <img
             src="/herobackground.png"
             alt="Hero Smash Burger"
@@ -99,21 +99,21 @@ export const CustomerHome: React.FC = () => {
         </div>
 
         {/* Top/Middle Hero Content (Headline + Description + Buttons) */}
-        <div className="relative z-10 my-auto max-w-[540px]">
+        <div className="relative z-10 my-auto max-w-[560px]">
           {/* Orange Location Tag */}
           <span className="text-xs lg:text-sm text-[#FF5500] tracking-[0.25em] font-extrabold uppercase block mb-3 sm:mb-4">
             LONDON
           </span>
 
           {/* Giant Headline matching exact reference screenshot */}
-          <h1 className="text-5xl sm:text-7xl lg:text-6xl xl:text-7xl font-black leading-[0.92] tracking-tight font-hero uppercase">
+          <h1 className="text-5xl sm:text-7xl lg:text-[4.5rem] xl:text-[5.5rem] 2xl:text-[6.2rem] font-black leading-[0.9] tracking-tight font-hero uppercase">
             <span className="text-white">SMASH.</span><br />
             <span className="text-[#FF5500]">STACK.</span><br />
             <span className="text-white">SATISFY.</span>
           </h1>
 
           {/* Supporting Paragraph */}
-          <p className="text-[#9CA3AF] text-sm sm:text-base font-medium leading-relaxed max-w-[420px] mt-4 lg:mt-5 mb-6 lg:mb-7">
+          <p className="text-[#9CA3AF] text-sm sm:text-base font-medium leading-relaxed max-w-[440px] mt-4 lg:mt-6 mb-6 lg:mb-8">
             London-made burgers. Fresh ingredients.<br className="hidden sm:inline" />
             Bold flavours.
           </p>
