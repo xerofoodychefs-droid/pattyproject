@@ -66,6 +66,8 @@ export const CustomerCheckout: React.FC = () => {
   const [squareCardInstance, setSquareCardInstance] = useState<any>(null);
   const [squareReady, setSquareReady] = useState<boolean>(false);
   const [squareLoading, setSquareLoading] = useState<boolean>(false);
+  const [applePayInstance, setApplePayInstance] = useState<any>(null);
+  const [googlePayInstance, setGooglePayInstance] = useState<any>(null);
 
   React.useEffect(() => {
     // Fetch public payment configuration
@@ -208,6 +210,103 @@ export const CustomerCheckout: React.FC = () => {
           }
         });
 
+               // Initialize Apple Pay and Google Pay
+        try {
+          const paymentRequest = payments.paymentRequest({
+            countryCode: 'GB',
+            currencyCode: 'GBP',
+            total: {
+              amount: total.toFixed(2),
+              label: 'Patty Project'
+            }
+          });
+
+          try {
+            const applePay = await payments.applePay(paymentRequest);
+            const appleButton = document.getElementById('apple-pay-button');
+
+            if (appleButton && isMounted) {
+              setApplePayInstance(applePay);
+
+              appleButton.onclick = async () => {
+                if (!isMounted) return;
+
+                setError('');
+                setLoading(true);
+
+                try {
+                  const result = await applePay.tokenize();
+
+                  if (result.status !== 'OK' || !result.token) {
+                    setError(
+                      result.errors?.[0]?.message ||
+                      'Apple Pay payment failed. Please try again.'
+                    );
+                    setLoading(false);
+                    return;
+                  }
+
+                  await handleCreateOrderAndPay(result.token, 'APPLE_PAY');
+                } catch (err: any) {
+                  console.error('Apple Pay error:', err);
+                  setError(
+                    err?.message ||
+                    'Apple Pay payment could not be completed. Please try again.'
+                  );
+                  setLoading(false);
+                }
+              };
+            }
+          } catch (err) {
+            console.log('Apple Pay is not available.');
+          }
+
+          try {
+            const googlePay = await payments.googlePay(paymentRequest);
+
+            if (isMounted) {
+              setGooglePayInstance(googlePay);
+              await googlePay.attach('#google-pay-button');
+
+              const googleButton = document.getElementById('google-pay-button');
+
+              if (googleButton) {
+                googleButton.addEventListener('click', async () => {
+                  if (!isMounted) return;
+
+                  setError('');
+                  setLoading(true);
+
+                  try {
+                    const result = await googlePay.tokenize();
+
+                    if (result.status !== 'OK' || !result.token) {
+                      setError(
+                        result.errors?.[0]?.message ||
+                        'Google Pay payment failed. Please try again.'
+                      );
+                      setLoading(false);
+                      return;
+                    }
+
+                    await handleCreateOrderAndPay(result.token, 'GOOGLE_PAY');
+                  } catch (err: any) {
+                    console.error('Google Pay error:', err);
+                    setError(
+                      err?.message ||
+                      'Google Pay payment could not be completed. Please try again.'
+                    );
+                    setLoading(false);
+                  }
+                });
+              }
+            }
+          } catch (err) {
+            console.log('Google Pay is not available.');
+          }
+        } catch (err) {
+          console.error('Digital wallet initialization error:', err);
+        }
         const container = document.getElementById('square-card-container');
         if (container && isMounted) {
           container.innerHTML = '';
@@ -283,7 +382,8 @@ export const CustomerCheckout: React.FC = () => {
     setStep(2);
   };
 
-  const handleCreateOrderAndPay = async () => {
+  const handleCreateOrderAndPay = async (walletSourceId?: string,
+  walletPaymentMethod?: 'APPLE_PAY' | 'GOOGLE_PAY') => {
     setError('');
     if (items.length === 0) {
       setError('Your cart is empty. Please add items before checking out.');
@@ -302,18 +402,39 @@ export const CustomerCheckout: React.FC = () => {
 
     setLoading(true);
     try {
-      let sourceId: string | undefined = undefined;
+      const paymentMethodType: 'CARD' | 'APPLE_PAY' | 'GOOGLE_PAY' =
+        walletPaymentMethod || 'CARD';
 
-      // Tokenize card via Square Web Payments SDK if Square is active
-      if (paymentConfig?.provider === 'square' && squareCardInstance) {
+      let sourceId: string | undefined = walletSourceId;
+
+      // Card payments: tokenize the card only when this is a CARD payment.
+      // Wallet payments already provide their own Square source token.
+      if (
+        paymentMethodType === 'CARD' &&
+        paymentConfig?.provider === 'square' &&
+        squareCardInstance
+      ) {
         const tokenResult = await squareCardInstance.tokenize();
+
         if (tokenResult.status !== 'OK') {
-          const firstErr = tokenResult.errors?.[0]?.message || 'Card verification failed. Please check your card details and try again.';
+          const firstErr =
+            tokenResult.errors?.[0]?.message ||
+            'Card verification failed. Please check your card details and try again.';
           setError(firstErr);
           setLoading(false);
           return;
         }
+
         sourceId = tokenResult.token;
+      }
+
+      if (
+        paymentConfig?.provider === 'square' &&
+        !sourceId
+      ) {
+        setError('Please enter your card details or choose an available payment method.');
+        setLoading(false);
+        return;
       }
 
       // Step 1: Create Order
@@ -354,7 +475,7 @@ export const CustomerCheckout: React.FC = () => {
         '/payments/create-session',
         {
           order_id: newOrder.id,
-          payment_method_type: 'CARD',
+          payment_method_type: paymentMethodType,
           source_id: sourceId
         },
         {
@@ -446,7 +567,7 @@ export const CustomerCheckout: React.FC = () => {
 
       {/* 2-Column Desktop Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
+
         {/* LEFT COLUMN: Form Controls & Details */}
         <div className="lg:col-span-7 space-y-5">
           {step === 1 ? (
@@ -897,6 +1018,10 @@ export const CustomerCheckout: React.FC = () => {
                         </div>
                       )}
                       <div id="square-card-container" className="w-full" />
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                     <div id="apple-pay-button" className="min-h-[48px]" />
+                    <div id="google-pay-button" className="min-h-[48px]" />
+                       </div>
                     </div>
                   </div>
                 </div>
@@ -1005,7 +1130,7 @@ export const CustomerCheckout: React.FC = () => {
               </div>
 
               <button
-                onClick={handleCreateOrderAndPay}
+                onClick={() => handleCreateOrderAndPay()}
                 disabled={loading}
                 className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50"
               >
