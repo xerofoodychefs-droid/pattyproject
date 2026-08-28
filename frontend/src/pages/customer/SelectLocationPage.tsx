@@ -356,6 +356,25 @@ export const SelectLocationPage: React.FC = () => {
     }
   };
 
+  const handleConfirmCollectionDirectly = (branchToUse: Branch) => {
+    const targetBranch = branchToUse || nearestBranch || activeBranch;
+    if (!targetBranch) return;
+
+    setSelectedBranch(
+      targetBranch,
+      distanceMiles,
+      false,
+      targetBranch,
+      'WE PROVIDE DELIVERY UP TO 2 MILES ONLY',
+      userCoords,
+      searchQuery || undefined
+    );
+
+    setOrderType('COLLECTION');
+    setSafeStorage('patty_selected_branch', JSON.stringify(targetBranch));
+    navigate('/order');
+  };
+
   const handleConfirmLocation = () => {
     if (!activeBranch) return;
 
@@ -600,7 +619,8 @@ export const SelectLocationPage: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => handleSelectCollection(nearestBranch)}
+                    type="button"
+                    onClick={() => handleConfirmCollectionDirectly(nearestBranch)}
                     className="px-4 py-2.5 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shrink-0 focus:outline-none focus:ring-2 focus:ring-[#FF5500]/50"
                   >
                     <ShoppingBag className="w-3.5 h-3.5" />
