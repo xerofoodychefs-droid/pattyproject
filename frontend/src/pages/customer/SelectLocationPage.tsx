@@ -87,11 +87,15 @@ export const SelectLocationPage: React.FC = () => {
     displayedDistance <= 2.0
   );
 
+  const fulfillmentTypeRef = useRef(fulfillmentType);
+  fulfillmentTypeRef.current = fulfillmentType;
+
   const checkEligibilityWithBackend = useCallback(async (
     lat?: number,
     lng?: number,
     pc?: string,
-    branchList?: Branch[]
+    branchList?: Branch[],
+    method?: 'DELIVERY' | 'COLLECTION'
   ) => {
     const currentRequestId = ++requestIdRef.current;
     
@@ -117,7 +121,7 @@ export const SelectLocationPage: React.FC = () => {
         latitude: lat,
         longitude: lng,
         postcode: cleanPc,
-        fulfillment_method: fulfillmentType
+        fulfillment_method: method || fulfillmentTypeRef.current
       }, {
         signal: abortController.signal
       });
@@ -160,7 +164,7 @@ export const SelectLocationPage: React.FC = () => {
       // If a branch is already loaded, keep user on IDLE so they can pick manually
       setResolutionState(manualOverrideBranch ? 'OUTLET_RESOLVED' : 'IDLE');
     }
-  }, [fulfillmentType, manualOverrideBranch]);
+  }, [manualOverrideBranch]);
 
   const requestBrowserLocation = useCallback((branchList?: Branch[]) => {
     const list = branchList || branches;
@@ -256,7 +260,10 @@ export const SelectLocationPage: React.FC = () => {
     );
   }, [branches, checkEligibilityWithBackend, manualOverrideBranch]);
 
-  // Primary branch loader: independent of geolocation and resilient across all WebViews
+  const checkEligibilityRef = useRef(checkEligibilityWithBackend);
+  checkEligibilityRef.current = checkEligibilityWithBackend;
+
+  // Primary branch loader: runs once on mount and does not re-trigger on user clicks
   const fetchBranches = useCallback(async () => {
     setBranchesLoading(true);
     setBranchesError(null);
@@ -287,7 +294,7 @@ export const SelectLocationPage: React.FC = () => {
 
         // If user already had coordinates stored, check distance in background
         if (storeCoords) {
-          checkEligibilityWithBackend(storeCoords.lat, storeCoords.lng, undefined, activeList);
+          checkEligibilityRef.current(storeCoords.lat, storeCoords.lng, undefined, activeList);
         }
       } else {
         setBranches([]);
@@ -305,7 +312,7 @@ export const SelectLocationPage: React.FC = () => {
       setBranchesError('Unable to load outlets. Please try again.');
       setResolutionState('OUTLET_ERROR');
     }
-  }, [storeCoords, checkEligibilityWithBackend]);
+  }, [storeCoords]);
 
   useEffect(() => {
     fetchBranches();
@@ -354,25 +361,6 @@ export const SelectLocationPage: React.FC = () => {
       setManualOverrideBranch(branchToUse);
       setResolutionState('OUTLET_RESOLVED');
     }
-  };
-
-  const handleConfirmCollectionDirectly = (branchToUse: Branch) => {
-    const targetBranch = branchToUse || nearestBranch || activeBranch;
-    if (!targetBranch) return;
-
-    setSelectedBranch(
-      targetBranch,
-      distanceMiles,
-      false,
-      targetBranch,
-      'WE PROVIDE DELIVERY UP TO 2 MILES ONLY',
-      userCoords,
-      searchQuery || undefined
-    );
-
-    setOrderType('COLLECTION');
-    setSafeStorage('patty_selected_branch', JSON.stringify(targetBranch));
-    navigate('/order');
   };
 
   const handleConfirmLocation = () => {
@@ -620,7 +608,7 @@ export const SelectLocationPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => handleConfirmCollectionDirectly(nearestBranch)}
+                    onClick={() => handleSelectCollection(nearestBranch)}
                     className="px-4 py-2.5 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shrink-0 focus:outline-none focus:ring-2 focus:ring-[#FF5500]/50"
                   >
                     <ShoppingBag className="w-3.5 h-3.5" />
