@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Truck, ShoppingBag, MapPin, Clock, Lock, CheckCircle2, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle } from 'lucide-react';
+import { Truck, ShoppingBag, MapPin, Clock, Lock, CheckCircle2, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
+import { loadSquareSdk, SQUARE_CARD_STYLE } from '../../utils/squarePayments';
 
 export const CustomerCheckout: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
@@ -68,6 +69,9 @@ export const CustomerCheckout: React.FC = () => {
   const cardInstanceRef = useRef<any>(null);
   const googlePayInstanceRef = useRef<any>(null);
   const applePayInstanceRef = useRef<any>(null);
+  const paymentRequestRef = useRef<any>(null);
+  const cardContainerRef = useRef<HTMLDivElement | null>(null);
+  const googlePayContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [squareCardReady, setSquareCardReady] = useState<boolean>(false);
   const [googlePayAvailable, setGooglePayAvailable] = useState<boolean>(false);
@@ -170,7 +174,21 @@ export const CustomerCheckout: React.FC = () => {
   const effectiveDiscount = Math.min(subtotal, discountAmount + loyaltyDiscount);
   const total = Math.max(0, subtotal - effectiveDiscount + delivery + getServiceFee());
 
-  // Load and mount Square Web Payments SDK (Card, Google Pay, Apple Pay) when navigating to Step 2
+  // Helper to build digital wallet payment request
+  const buildPaymentRequest = (payments: any, amountVal: number) => {
+    const formattedTotal = (amountVal > 0 ? amountVal : 0.01).toFixed(2);
+    return payments.paymentRequest({
+      countryCode: 'GB',
+      currencyCode: 'GBP',
+      total: {
+        amount: formattedTotal,
+        label: 'Patty Project',
+      },
+    });
+  };
+
+  // Primary Square Web Payments SDK initialization when Step 2 is active
+  // NOTE: Does NOT depend on `total`, so total changes do NOT destroy card or wallet instances!
   useEffect(() => {
     if (step !== 2 || !paymentConfig || paymentConfig.provider !== 'square') {
       return;
@@ -183,157 +201,167 @@ export const CustomerCheckout: React.FC = () => {
     const appId = paymentConfig.application_id;
     const locId = paymentConfig.location_id;
     const isSandbox = paymentConfig.environment === 'sandbox' || appId.startsWith('sandbox-');
-    const sdkSrc = isSandbox
-      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
-      : 'https://web.squarecdn.com/v1/square.js';
 
-    const loadSquareSDK = async () => {
+    const initSquare = async () => {
       setSquareLoading(true);
-      if (!(window as any).Square) {
-        const existingScript = document.querySelector(`script[src="${sdkSrc}"]`);
-        if (!existingScript) {
-          const script = document.createElement('script');
-          script.src = sdkSrc;
-          script.type = 'text/javascript';
-          script.async = true;
-          document.head.appendChild(script);
-          await new Promise<void>((resolve, reject) => {
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'));
-          });
-        } else {
-          await new Promise<void>((resolve) => {
-            existingScript.addEventListener('load', () => resolve());
-            setTimeout(resolve, 500);
-          });
-        }
-      }
-
-      if (!isMounted || !(window as any).Square) {
-        if (isMounted) setSquareLoading(false);
-        return;
-      }
-
       try {
-        const payments = (window as any).Square.payments(appId, locId);
+        const Square = await loadSquareSdk(isSandbox);
+        if (!isMounted || !Square) {
+          if (isMounted) setSquareLoading(false);
+          return;
+        }
+
+        const payments = Square.payments(appId, locId);
         paymentsRef.current = payments;
 
-        // 1. Build PaymentRequest for digital wallets
-        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
-        let paymentRequest = null;
+        // 1. INDEPENDENT CARD INITIALIZATION
         try {
-          paymentRequest = payments.paymentRequest({
-            countryCode: 'GB',
-            currencyCode: 'GBP',
-            total: {
-              amount: formattedTotal,
-              label: 'Patty Project'
-            }
-          });
-        } catch (reqErr) {
-          console.warn('Square paymentRequest initialization:', reqErr);
-        }
+          if (cardInstanceRef.current) {
+            try {
+              cardInstanceRef.current.destroy();
+            } catch {}
+            cardInstanceRef.current = null;
+          }
 
-        // 2. Initialize Square Card Component
-        try {
-          const card = await payments.card({
-            style: {
-              '.input-container': {
-                borderColor: '#242424',
-                borderRadius: '8px',
-                backgroundColor: '#151515'
-              },
-              'input': {
-                color: '#F5F5F5',
-                fontSize: '14px',
-                fontFamily: 'inherit'
-              },
-              'input::placeholder': {
-                color: '#71717A'
-              },
-              '.input-container.is-focus': {
-                borderColor: '#FF5A00'
-              },
-              '.input-container.is-error': {
-                borderColor: '#EF4444'
+          let card;
+          try {
+            card = await payments.card({
+              style: SQUARE_CARD_STYLE,
+            });
+          } catch (styleErr) {
+            console.warn('Square styled card fallback:', styleErr);
+            card = await payments.card();
+          }
+
+          if (isMounted && card) {
+            let container = cardContainerRef.current || document.getElementById('square-card-container');
+            if (!container) {
+              await new Promise((r) => setTimeout(r, 60));
+              container = cardContainerRef.current || document.getElementById('square-card-container');
+            }
+            if (container && isMounted) {
+              container.innerHTML = '';
+              await card.attach(container);
+              if (isMounted) {
+                cardInstanceRef.current = card;
+                setSquareCardReady(true);
               }
-            }
-          });
-
-          const container = document.getElementById('square-card-container');
-          if (container && isMounted) {
-            container.innerHTML = '';
-            await card.attach('#square-card-container');
-            if (isMounted) {
-              cardInstanceRef.current = card;
-              setSquareCardReady(true);
             }
           }
         } catch (cardErr) {
           console.error('Square Card initialization error:', cardErr);
+          if (isMounted) {
+            setSquareCardReady(false);
+          }
         }
 
-        // 3. Initialize Google Pay (if supported)
-        if (paymentRequest) {
+        // 2. INDEPENDENT DIGITAL WALLETS INITIALIZATION
+        let req = null;
+        try {
+          req = buildPaymentRequest(payments, total);
+          paymentRequestRef.current = req;
+        } catch (reqErr) {
+          console.warn('Square paymentRequest creation notice:', reqErr);
+        }
+
+        if (req) {
+          // Google Pay Availability Check
           try {
-            const googlePay = await payments.googlePay(paymentRequest);
-            const gpayContainer = document.getElementById('google-pay-button');
-            if (gpayContainer && isMounted) {
-              gpayContainer.innerHTML = '';
-              await googlePay.attach('#google-pay-button', {
-                buttonSizeMode: 'fill',
-                buttonColor: 'black',
-                buttonType: 'buy'
-              });
-              if (isMounted) {
-                googlePayInstanceRef.current = googlePay;
-                setGooglePayAvailable(true);
-              }
+            const googlePay = await payments.googlePay(req);
+            if (googlePay && isMounted) {
+              googlePayInstanceRef.current = googlePay;
+              setGooglePayAvailable(true);
             }
-          } catch (gpayErr) {
-            if (isMounted) setGooglePayAvailable(false);
+          } catch {
+            // Google Pay is unavailable on this device/browser
+            if (isMounted) {
+              googlePayInstanceRef.current = null;
+              setGooglePayAvailable(false);
+            }
           }
 
-          // 4. Initialize Apple Pay (if supported)
+          // Apple Pay Availability Check
           try {
-            const applePay = await payments.applePay(paymentRequest);
+            const applePay = await payments.applePay(req);
             if (applePay && isMounted) {
               applePayInstanceRef.current = applePay;
               setApplePayAvailable(true);
             }
-          } catch (appleErr) {
-            if (isMounted) setApplePayAvailable(false);
+          } catch {
+            // Apple Pay is unavailable on this device/browser
+            if (isMounted) {
+              applePayInstanceRef.current = null;
+              setApplePayAvailable(false);
+            }
           }
         }
-      } catch (err: any) {
-        console.error('Square initialization error:', err);
+      } catch (sdkErr) {
+        console.error('Square SDK initialization error:', sdkErr);
       } finally {
-        if (isMounted) setSquareLoading(false);
+        if (isMounted) {
+          setSquareLoading(false);
+        }
       }
     };
 
-    loadSquareSDK();
+    initSquare();
 
     return () => {
       isMounted = false;
-      if (cardInstanceRef.current && typeof cardInstanceRef.current.destroy === 'function') {
+      if (cardInstanceRef.current) {
         try {
           cardInstanceRef.current.destroy();
         } catch {}
         cardInstanceRef.current = null;
       }
-      if (googlePayInstanceRef.current && typeof googlePayInstanceRef.current.destroy === 'function') {
+      if (googlePayInstanceRef.current) {
         try {
           googlePayInstanceRef.current.destroy();
         } catch {}
         googlePayInstanceRef.current = null;
       }
       applePayInstanceRef.current = null;
+      paymentRequestRef.current = null;
+      paymentsRef.current = null;
       setSquareCardReady(false);
       setGooglePayAvailable(false);
       setApplePayAvailable(false);
     };
-  }, [step, paymentConfig, total]);
+  }, [step, paymentConfig?.application_id, paymentConfig?.location_id, paymentConfig?.provider, paymentConfig?.environment]);
+
+  // Update PaymentRequest when total changes without destroying Card
+  useEffect(() => {
+    if (paymentRequestRef.current) {
+      try {
+        const formattedTotal = (total > 0 ? total : 0.01).toFixed(2);
+        if (typeof paymentRequestRef.current.update === 'function') {
+          paymentRequestRef.current.update({
+            total: {
+              amount: formattedTotal,
+              label: 'Patty Project',
+            },
+          });
+        }
+      } catch {}
+    }
+  }, [total]);
+
+  // Mount Google Pay button when googlePayAvailable becomes true
+  useEffect(() => {
+    if (googlePayAvailable && googlePayInstanceRef.current) {
+      const container = googlePayContainerRef.current || document.getElementById('square-google-pay-button');
+      if (container) {
+        container.innerHTML = '';
+        googlePayInstanceRef.current.attach(container, {
+          buttonSizeMode: 'fill',
+          buttonColor: 'black',
+          buttonType: 'buy',
+        }).catch((attachErr: any) => {
+          console.warn('Google Pay button attach error:', attachErr);
+        });
+      }
+    }
+  }, [googlePayAvailable]);
 
   const handleContinueToPayment = () => {
     setError('');
@@ -474,7 +502,7 @@ export const CustomerCheckout: React.FC = () => {
     setError('');
 
     if (paymentConfig?.provider === 'square') {
-      if (!cardInstanceRef.current) {
+      if (!cardInstanceRef.current || !squareCardReady) {
         setError('Card payment inputs are still loading. Please wait a moment.');
         return;
       }
@@ -483,7 +511,7 @@ export const CustomerCheckout: React.FC = () => {
       try {
         const tokenResult = await cardInstanceRef.current.tokenize();
         if (tokenResult.status !== 'OK') {
-          const firstErr = tokenResult.errors?.[0]?.message || 'Card verification failed. Please check your card details and try again.';
+          const firstErr = tokenResult.errors?.[0]?.message || 'Card payment could not be completed. Please check your card details and try again.';
           setError(firstErr);
           setPaymentLoading(false);
           setActivePaymentMethod(null);
@@ -491,7 +519,7 @@ export const CustomerCheckout: React.FC = () => {
         }
         await submitOrderAndCharge('CARD', tokenResult.token);
       } catch (err: any) {
-        setError(err?.message || 'Card tokenization failed. Please try again.');
+        setError(err?.message || 'Card payment could not be completed. Please check your card details and try again.');
         setPaymentLoading(false);
         setActivePaymentMethod(null);
       }
@@ -513,7 +541,7 @@ export const CustomerCheckout: React.FC = () => {
     try {
       const tokenResult = await googlePayInstanceRef.current.tokenize();
       if (tokenResult.status !== 'OK') {
-        const firstErr = tokenResult.errors?.[0]?.message || 'Google Pay authorization was cancelled or failed.';
+        const firstErr = tokenResult.errors?.[0]?.message || 'Google Pay payment could not be completed. Please try again.';
         setError(firstErr);
         setPaymentLoading(false);
         setActivePaymentMethod(null);
@@ -521,7 +549,7 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('GOOGLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Google Pay processing failed.');
+      setError(err?.message || 'Google Pay payment could not be completed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
@@ -540,7 +568,7 @@ export const CustomerCheckout: React.FC = () => {
     try {
       const tokenResult = await applePayInstanceRef.current.tokenize();
       if (tokenResult.status !== 'OK') {
-        const firstErr = tokenResult.errors?.[0]?.message || 'Apple Pay authorization was cancelled or failed.';
+        const firstErr = tokenResult.errors?.[0]?.message || 'Apple Pay payment could not be completed. Please try again.';
         setError(firstErr);
         setPaymentLoading(false);
         setActivePaymentMethod(null);
@@ -548,7 +576,7 @@ export const CustomerCheckout: React.FC = () => {
       }
       await submitOrderAndCharge('APPLE_PAY', tokenResult.token);
     } catch (err: any) {
-      setError(err?.message || 'Apple Pay processing failed.');
+      setError(err?.message || 'Apple Pay payment could not be completed. Please try again.');
       setPaymentLoading(false);
       setActivePaymentMethod(null);
     }
@@ -1025,12 +1053,12 @@ export const CustomerCheckout: React.FC = () => {
             /* STEP 2: PAYMENT METHOD */
             <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]">
-                <h2 className="text-xs font-semibold text-[#F5F5F5] uppercase tracking-wider flex items-center gap-2">
+                <h2 className="text-xs font-bold text-[#F5F5F5] uppercase tracking-wider flex items-center gap-2">
                   <Lock className="w-4 h-4 text-[#FF5A00]" />
                   <span>Payment Details</span>
                 </h2>
-                <span className="bg-[#22C55E]/10 border border-[#166534] text-[#22C55E] text-[10px] font-semibold uppercase px-2 py-0.5 rounded flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
+                <span className="bg-[#0D2818] border border-[#22C55E]/40 text-[#22C55E] text-[10px] font-semibold uppercase px-2.5 py-1 rounded flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#22C55E]" />
                   256-Bit SSL Encrypted
                 </span>
               </div>
@@ -1039,19 +1067,17 @@ export const CustomerCheckout: React.FC = () => {
                 <div className="space-y-4">
                   {/* 1. DIGITAL WALLETS (Apple Pay & Google Pay Express Checkout) */}
                   {(googlePayAvailable || applePayAvailable) && (
-                    <div className="space-y-2.5">
-                      <div className="text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider">
-                        Express Checkout
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="space-y-3">
+                      <div className="w-full">
                         {/* Apple Pay Button */}
                         {applePayAvailable && (
-                           <button
+                          <button
                             type="button"
                             id="apple-pay-button"
                             onClick={handleApplePayPayment}
                             disabled={loading || paymentLoading}
-                            className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
+                            aria-label="Pay with Apple Pay"
                           >
                             {activePaymentMethod === 'APPLE_PAY' && paymentLoading ? (
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1070,16 +1096,17 @@ export const CustomerCheckout: React.FC = () => {
                         {/* Google Pay Button Mounted Target */}
                         {googlePayAvailable && (
                           <div
-                            id="google-pay-button"
+                            id="square-google-pay-button"
+                            ref={googlePayContainerRef}
                             onClick={handleGooglePayPayment}
-                            className="w-full h-11 cursor-pointer"
+                            className="w-full h-11 cursor-pointer overflow-hidden rounded-lg shadow-sm"
                           />
                         )}
                       </div>
 
-                      <div className="relative flex py-2 items-center">
+                      <div className="relative flex py-1.5 items-center">
                         <div className="flex-grow border-t border-[#242424]" />
-                        <span className="flex-shrink mx-3 text-[10px] uppercase font-semibold text-[#71717A]">
+                        <span className="flex-shrink mx-3 text-[11px] uppercase tracking-wider font-semibold text-[#71717A]">
                           Or Pay with Card
                         </span>
                         <div className="flex-grow border-t border-[#242424]" />
@@ -1088,27 +1115,41 @@ export const CustomerCheckout: React.FC = () => {
                   )}
 
                   {/* 2. SQUARE CARD PAYMENT FORM */}
-                  <div className="p-3.5 rounded-lg border border-[#242424] bg-[#151515] space-y-3">
-                    <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
-                      <span className="font-medium text-[#F5F5F5]">Credit / Debit Card</span>
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-[#71717A]">
-                        <span>VISA</span>
-                        <span>•</span>
-                        <span>MC</span>
-                        <span>•</span>
-                        <span>AMEX</span>
+                  <div className="p-4 rounded-xl border border-[#242424] bg-[#121212] space-y-3.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-xs text-[#F5F5F5]">Credit / Debit Card</span>
+                      <div className="flex items-center gap-1.5">
+                        {/* VISA Badge */}
+                        <div className="h-5 px-1.5 bg-[#1A1F71] rounded flex items-center justify-center shadow-xs">
+                          <span className="text-[10px] font-black italic tracking-tighter text-white">VISA</span>
+                        </div>
+                        {/* Mastercard Badge */}
+                        <div className="h-5 px-1.5 bg-[#222222] border border-[#333333] rounded flex items-center justify-center shadow-xs">
+                          <div className="flex -space-x-1 items-center">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#EB001B]" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#F79E1B] opacity-90" />
+                          </div>
+                        </div>
+                        {/* AMEX Badge */}
+                        <div className="h-5 px-1.5 bg-[#006FCF] rounded flex items-center justify-center shadow-xs">
+                          <span className="text-[9px] font-bold text-white tracking-tight">AMEX</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Square Card Component Mounted Target */}
                     <div className="relative min-h-[90px] w-full">
                       {squareLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#151515] rounded-lg text-xs text-[#A1A1AA] gap-2">
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#121212] rounded-lg text-xs text-[#A1A1AA] gap-2 z-10">
                           <div className="w-4 h-4 border-2 border-[#FF5A00] border-t-transparent rounded-full animate-spin" />
                           <span>Loading secure card inputs...</span>
                         </div>
                       )}
-                      <div id="square-card-container" className="w-full" />
+                      <div
+                        id="square-card-container"
+                        ref={cardContainerRef}
+                        className="w-full"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1181,33 +1222,36 @@ export const CustomerCheckout: React.FC = () => {
 
               {/* Loyalty Points Redemption Selector for Logged-In Customers */}
               {user && loyaltyData && loyaltyData.available_points >= 4000 && (
-                <div className="p-4 rounded-lg border border-[#FF5A00]/30 bg-[#241209]/40 space-y-2.5">
+                <div className="p-4 rounded-xl border border-[#B44810]/30 bg-[#160B04]/50 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Star className="w-4 h-4 text-[#FF5A00] fill-[#FF5A00]" />
-                      <span className="text-xs font-bold text-white">Redeem Patty Points</span>
+                      <span className="text-xs font-semibold text-white">Redeem Patty Points</span>
                     </div>
-                    <span className="text-xs font-extrabold text-[#FF5A00]">
+                    <span className="text-xs font-bold text-[#FF5A00]">
                       {loyaltyData.available_points.toLocaleString()} PTS Available
                     </span>
                   </div>
                   <p className="text-[11px] text-[#A1A1AA]">
                     Redeem your rewards in whole £1 increments (1,000 pts = £1 discount).
                   </p>
-                  <select
-                    value={redeemPoints}
-                    onChange={(e) => setRedeemPoints(Number(e.target.value))}
-                    className="w-full h-10 bg-[#151515] border border-[#333333] focus:border-[#FF5A00] rounded-lg px-3 text-xs text-[#F5F5F5] focus:outline-none cursor-pointer"
-                  >
-                    <option value={0}>Do not use points (£0.00)</option>
-                    {(loyaltyData.redeemable_increments || [4000])
-                      .filter((pts: number) => pts / 1000 <= subtotal)
-                      .map((pts: number) => (
-                        <option key={pts} value={pts}>
-                          Redeem {pts.toLocaleString()} Points (-£{(pts / 1000).toFixed(2)})
-                        </option>
-                      ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={redeemPoints}
+                      onChange={(e) => setRedeemPoints(Number(e.target.value))}
+                      className="w-full h-11 bg-[#121212] border border-[#2E2E2E] focus:border-[#FF5A00] rounded-lg px-3.5 text-xs text-[#F5F5F5] focus:outline-none appearance-none cursor-pointer pr-10"
+                    >
+                      <option value={0}>Do not use points (£0.00)</option>
+                      {(loyaltyData.redeemable_increments || [4000])
+                        .filter((pts: number) => pts / 1000 <= subtotal)
+                        .map((pts: number) => (
+                          <option key={pts} value={pts}>
+                            Redeem {pts.toLocaleString()} Points (-£{(pts / 1000).toFixed(2)})
+                          </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-[#71717A] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               )}
 
@@ -1221,7 +1265,7 @@ export const CustomerCheckout: React.FC = () => {
                 type="button"
                 onClick={handleCardPayment}
                 disabled={loading || paymentLoading || (paymentConfig?.provider === 'square' && (!squareCardReady || squareLoading))}
-                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50"
+                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-bold rounded-xl shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50 active:scale-[0.99]"
               >
                 <Lock className="w-4 h-4" />
                 <span>
@@ -1231,11 +1275,17 @@ export const CustomerCheckout: React.FC = () => {
                 </span>
               </button>
 
+              {/* Security Footer Note matching Reference Image */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#71717A] pt-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#71717A]" />
+                <span>Your payment details are never stored on our servers.</span>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setStep(1)}
                 disabled={loading || paymentLoading}
-                className="w-full text-xs text-[#A1A1AA] hover:text-[#F5F5F5] text-center pt-1 cursor-pointer transition-colors disabled:opacity-50"
+                className="w-full text-xs text-[#71717A] hover:text-[#A1A1AA] text-center pt-0.5 cursor-pointer transition-colors disabled:opacity-50"
               >
                 ← Back to Delivery
               </button>
