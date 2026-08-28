@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -36,6 +36,7 @@ def list_public_branches(db: Session = Depends(get_db)):
 @router.get("/stats", response_model=List[BranchStatsResponse])
 @router.get("/stats/", response_model=List[BranchStatsResponse])
 def get_branch_order_stats(
+    response: Response,
     current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
     db: Session = Depends(get_db)
 ):
@@ -43,6 +44,9 @@ def get_branch_order_stats(
     Authoritative real-time order statistics calculated from PostgreSQL for each branch.
     Guaranteed route ordering before parameterized /{branch_id} endpoints to avoid path collisions.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     branches_query = db.query(Branch).filter(Branch.is_active == True)
     if current_user.role == UserRole.BRANCH_ADMIN:
         assigned_ids = [bu.branch_id for bu in current_user.branch_assignments]

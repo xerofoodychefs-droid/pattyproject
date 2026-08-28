@@ -51,9 +51,10 @@ export const AdminDashboard: React.FC = () => {
   const fetchBranches = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
+      const timestamp = Date.now();
       const [branchData, statsData] = await Promise.all([
-        api.get<Branch[]>('/branches'),
-        api.get<BranchStats[]>('/branches/stats').catch((err) => {
+        api.get<Branch[]>(`/branches?_t=${timestamp}`),
+        api.get<BranchStats[]>(`/branches/stats?_t=${timestamp}`).catch((err) => {
           console.warn('[AdminDashboard] /branches/stats fetch failed:', err?.message || err);
           return [];
         })
@@ -81,7 +82,7 @@ export const AdminDashboard: React.FC = () => {
   const fetchBranchOrders = async (branchId: string) => {
     setOrdersLoading(true);
     try {
-      const branchOrders: Order[] = await api.get(`/orders?branch_id=${branchId}`);
+      const branchOrders: Order[] = await api.get(`/orders?branch_id=${branchId}&_t=${Date.now()}`);
       setOrders(branchOrders || []);
     } catch (err) {
       console.error('Failed to fetch branch orders:', err);
@@ -194,9 +195,18 @@ export const AdminDashboard: React.FC = () => {
               <h2 className="text-base font-semibold text-[#F5F5F5]">All Branches Overview</h2>
               <p className="text-xs text-[#71717A] mt-0.5">Click any branch to view detailed orders and order management</p>
             </div>
-            <span className="text-xs text-[#A1A1AA] bg-[#171717] px-3 py-1 rounded-full border border-[#242424] font-medium">
-              {branches.length} {branches.length === 1 ? 'Location' : 'Locations'} Total
-            </span>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => fetchBranches(false)}
+                className="h-8 px-3 bg-[#151515] border border-[#242424] hover:border-[#333333] text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <TrendingUp className={`w-3.5 h-3.5 text-[#FF5A00] ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh Stats</span>
+              </button>
+              <span className="text-xs text-[#A1A1AA] bg-[#171717] px-3 py-1.5 rounded-lg border border-[#242424] font-medium">
+                {branches.length} {branches.length === 1 ? 'Location' : 'Locations'} Total
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">

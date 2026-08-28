@@ -1,6 +1,6 @@
 import random, uuid, logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.order import Order, OrderItem, OrderStatusHistory, OrderStatus, OrderType, PaymentStatus
@@ -366,6 +366,7 @@ def get_order_by_number(
 @router.get("", response_model=List[OrderResponse])
 @router.get("/", response_model=List[OrderResponse])
 def list_admin_orders(
+    response: Response,
     branch_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
@@ -376,6 +377,9 @@ def list_admin_orders(
     Super Admin can view orders from all branches or a specific branch.
     Branch Admins view orders ONLY for their assigned branch.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     query = db.query(Order)
 
     if current_user.role == UserRole.BRANCH_ADMIN:
