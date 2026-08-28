@@ -94,20 +94,26 @@ export function loadSquareSdk(isSandbox: boolean): Promise<any> {
  */
 export const SQUARE_CARD_STYLE = {
   '.input-container': {
-    borderColor: '#242424',
+    borderColor: '#2E2E2E',
     borderRadius: '8px',
-  },
-  'input': {
-    color: '#F5F5F5',
-    fontSize: '14px',
-  },
-  'input::placeholder': {
-    color: '#71717A',
+    backgroundColor: '#141414',
   },
   '.input-container.is-focus': {
     borderColor: '#FF5A00',
   },
   '.input-container.is-error': {
     borderColor: '#EF4444',
+  },
+  'input': {
+    backgroundColor: '#141414',
+    color: '#F5F5F5',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    fontSize: '14px',
+  },
+  'input::placeholder': {
+    color: '#71717A',
+  },
+  'input.is-error': {
+    color: '#EF4444',
   },
 };
