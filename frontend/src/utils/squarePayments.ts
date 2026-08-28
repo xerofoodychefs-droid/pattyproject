@@ -1,6 +1,6 @@
 /**
  * Square Web Payments SDK Utility
- * Provides singleton script loading, payments initialization, and theme styling.
+ * Provides singleton script loading and payments initialization.
  */
 
 declare global {
@@ -87,33 +87,3 @@ export function loadSquareSdk(isSandbox: boolean): Promise<any> {
 
   return sdkLoadingPromise;
 }
-
-/**
- * Standard dark theme styling for the Square Card payment component matching Patty Project UI.
- * Only uses strictly supported properties to avoid invalid style errors.
- */
-export const SQUARE_CARD_STYLE = {
-  '.input-container': {
-    borderColor: '#2E2E2E',
-    borderRadius: '8px',
-    backgroundColor: '#141414',
-  },
-  '.input-container.is-focus': {
-    borderColor: '#FF5A00',
-  },
-  '.input-container.is-error': {
-    borderColor: '#EF4444',
-  },
-  'input': {
-    backgroundColor: '#141414',
-    color: '#F5F5F5',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    fontSize: '14px',
-  },
-  'input::placeholder': {
-    color: '#71717A',
-  },
-  'input.is-error': {
-    color: '#EF4444',
-  },
-};

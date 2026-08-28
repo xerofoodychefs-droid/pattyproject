@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 import { api } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
-import { loadSquareSdk, SQUARE_CARD_STYLE } from '../../utils/squarePayments';
+import { loadSquareSdk } from '../../utils/squarePayments';
 
 // ==========================================
 // 1. ISOLATED SQUARE CARD PAYMENT COMPONENT
@@ -46,21 +46,18 @@ const SquareCardSection: React.FC<SquareCardSectionProps> = ({
       }
 
       try {
-        let cardInstance: any;
-        try {
-          cardInstance = await payments.card({
-            style: SQUARE_CARD_STYLE,
-          });
-        } catch (styleErr) {
-          console.warn('[Square Card] Styled card fallback:', styleErr);
-          cardInstance = await payments.card();
-        }
+        console.info('[Square Card] Initializing Card component...');
+        const cardInstance = await payments.card();
+        console.info('[Square Card] Card component created successfully');
 
         if (!isMounted || !cardInstance) return;
 
         if (containerRef.current) {
+          console.info('[Square Card] Attaching Card to DOM container...');
           containerRef.current.innerHTML = '';
           await cardInstance.attach(containerRef.current);
+          console.info('[Square Card] Card successfully attached to DOM');
+
           if (isMounted) {
             cardRef.current = cardInstance;
             onCardInstance(cardInstance);
@@ -69,7 +66,7 @@ const SquareCardSection: React.FC<SquareCardSectionProps> = ({
           }
         }
       } catch (err: any) {
-        console.error('[Square Card] Attachment error:', err);
+        console.error('[Square Card] Initialization/Attachment error:', err);
         if (isMounted) {
           setError(err?.message || 'Failed to initialize secure card input.');
           onCardReady(false);
