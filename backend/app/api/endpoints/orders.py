@@ -416,6 +416,24 @@ def update_order_status(
     old_status = order.status
     new_status = request.status.upper()
 
+    # Concurrency / Idempotency protection: if status is already at the target state, return early
+    if new_status == old_status:
+        return order
+
+    # Terminal state transition protection: terminal orders cannot be reopened
+    terminal_statuses = [
+        OrderStatus.CANCELLED,
+        OrderStatus.REJECTED,
+        OrderStatus.REFUNDED,
+        OrderStatus.DELIVERED,
+        OrderStatus.COLLECTED
+    ]
+    if old_status in terminal_statuses and new_status not in terminal_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition order from terminal status '{old_status}' to '{new_status}'."
+        )
+
     order.status = new_status
     if new_status in [OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COLLECTED, OrderStatus.PAID]:
         order.payment_status = PaymentStatus.PAID
@@ -443,6 +461,18 @@ def update_order_status(
 
     db.commit()
     db.refresh(order)
+
+    # Real-time WebSocket broadcast to all authorized admin connections
+    try:
+        from app.core.websocket_manager import manager, format_order_payload
+        manager.sync_broadcast_order_event(
+            event_type="ORDER_STATUS_CHANGED",
+            order_data=format_order_payload(order),
+            branch_id=str(order.branch_id)
+        )
+    except Exception as e:
+        logger.warning(f"[WS_BROADCAST_FAILED] Failed to broadcast ORDER_STATUS_CHANGED for order {order.order_number}: {e}")
+
     return order
 
 

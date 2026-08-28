@@ -1,12 +1,29 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Search, RefreshCw, Eye, Truck, ShoppingBag, ChefHat, ClipboardCheck, CheckCircle, ArrowRight, Inbox } from 'lucide-react';
+import {
+  Search, RefreshCw, Eye, Truck, ShoppingBag, ChefHat, ClipboardCheck,
+  CheckCircle, ArrowRight, Inbox, Volume2, VolumeX, AlertCircle, Radio, Bell
+} from 'lucide-react';
 import { api } from '../../api/client';
 import { Order, Branch } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { useOrderAlertStore } from '../../store/orderAlertStore';
+import { useAdminOrderWebSocket } from '../../hooks/useAdminOrderWebSocket';
+import { audioAlert } from '../../utils/audioAlert';
 import { AdminOrderDetailsModal } from './AdminOrderDetailsModal';
 
 export const AdminOrderBoard: React.FC = () => {
   const { user } = useAuthStore();
+  const {
+    alertingOrderIds,
+    audioState,
+    wsConnected,
+    lastAnnouncement,
+    syncAlerts,
+    toggleMute,
+    removeAlert,
+    enableAudioPermission,
+  } = useOrderAlertStore();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,13 +64,70 @@ export const AdminOrderBoard: React.FC = () => {
       const data: Order[] = await api.get(url);
       if (Array.isArray(data)) {
         setOrders(data);
+        syncAlerts(data);
       }
     } catch (err) {
       console.error('Failed to load orders', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [filterBranch, filterStatus, user]);
+  }, [filterBranch, filterStatus, user, syncAlerts]);
+
+  // Realtime WebSocket integration
+  useAdminOrderWebSocket({
+    onIncomingOrder: (incomingData) => {
+      setOrders((prev) => {
+        const existingIdx = prev.findIndex((o) => o.id === incomingData.id);
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            ...incomingData,
+            status: incomingData.status || updated[existingIdx].status,
+          } as Order;
+          return updated;
+        } else {
+          // Construct full order record from WebSocket payload
+          const newOrder: Order = {
+            id: incomingData.id,
+            order_number: incomingData.order_number || `#PP${incomingData.id.slice(0, 4)}`,
+            customer_name: incomingData.customer_name || 'Customer',
+            customer_email: (incomingData as any).customer_email || '',
+            customer_phone: incomingData.customer_phone || '',
+            branch_id: incomingData.branch_id,
+            order_type: (incomingData.order_type as any) || 'COLLECTION',
+            status: incomingData.status || 'INCOMING',
+            subtotal: incomingData.total_amount || 0,
+            delivery_fee: 0,
+            service_fee: 0,
+            discount_amount: 0,
+            vat_amount: 0,
+            total_amount: incomingData.total_amount || 0,
+            payment_method: (incomingData as any).payment_method || 'CARD',
+            payment_status: (incomingData.payment_status as any) || 'PAID',
+            points_earned: 0,
+            points_redeemed: 0,
+            created_at: incomingData.created_at || new Date().toISOString(),
+            items: (incomingData as any).items || [],
+            status_history: [],
+          };
+          return [newOrder, ...prev];
+        }
+      });
+    },
+    onOrderStatusChanged: (updatedData) => {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === updatedData.id
+            ? ({ ...o, ...updatedData, status: updatedData.status || o.status } as Order)
+            : o
+        )
+      );
+    },
+    onReconnect: () => {
+      fetchOrders(true);
+    },
+  });
 
   useEffect(() => {
     fetchBranches();
@@ -61,7 +135,7 @@ export const AdminOrderBoard: React.FC = () => {
 
   useEffect(() => {
     fetchOrders(false);
-    // Realtime authoritative polling synchronization every 5 seconds
+    // Realtime authoritative polling fallback every 5 seconds
     const interval = setInterval(() => {
       fetchOrders(true);
     }, 5000);
@@ -79,6 +153,10 @@ export const AdminOrderBoard: React.FC = () => {
 
   const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId);
+    if (newStatus === 'ACCEPTED' || ['CANCELLED', 'REJECTED'].includes(newStatus)) {
+      removeAlert(orderId);
+    }
+
     try {
       await api.patch(`/orders/${orderId}/status`, { status: newStatus });
       setOrders((prev) =>
@@ -102,14 +180,14 @@ export const AdminOrderBoard: React.FC = () => {
       case 'INCOMING':
       case 'PENDING_PAYMENT':
       case 'PAID':
-        return { label: 'Accept', status: 'ACCEPTED', color: 'bg-[#06B6D4] hover:bg-[#0891B2] text-white' };
+        return { label: 'Accept Order', status: 'ACCEPTED', color: 'bg-[#06B6D4] hover:bg-[#0891B2] text-black font-bold' };
       case 'ACCEPTED':
         return { label: 'Prepare', status: 'PREPARING', color: 'bg-[#F59E0B] hover:bg-[#D97706] text-black font-bold' };
       case 'PREPARING':
-        return { label: 'Ready', status: 'READY', color: 'bg-[#10B981] hover:bg-[#059669] text-white' };
+        return { label: 'Ready', status: 'READY', color: 'bg-[#10B981] hover:bg-[#059669] text-white font-semibold' };
       case 'READY':
       case 'OUT_FOR_DELIVERY':
-        return { label: 'Delivered', status: 'DELIVERED', color: 'bg-[#22C55E] hover:bg-[#16A34A] text-white' };
+        return { label: 'Delivered', status: 'DELIVERED', color: 'bg-[#22C55E] hover:bg-[#16A34A] text-white font-semibold' };
       default:
         return null;
     }
@@ -156,10 +234,88 @@ export const AdminOrderBoard: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1260px] mx-auto px-6 sm:px-8 py-8 space-y-6 text-[#F5F5F5]">
+      {/* Screen Reader Accessible Live Region */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {lastAnnouncement}
+      </div>
+
+      {/* Browser Autoplay Blocked Banner */}
+      {audioState.isBlockedByBrowser && (
+        <div className="bg-[#FF5A00]/15 border border-[#FF5A00]/50 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-pulse">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-[#FF5A00] shrink-0" />
+            <div>
+              <p className="font-bold text-white">Order Alert Audio Waiting for Permission</p>
+              <p className="text-xs text-[#D4D4D8]">
+                Your browser requires a user click to play high-volume sound alerts when new orders arrive.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => enableAudioPermission()}
+            className="px-4 py-2 bg-[#FF5A00] hover:bg-[#E04F00] text-black font-bold text-xs rounded-lg transition-colors cursor-pointer shrink-0 shadow-md flex items-center gap-2"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>Enable Audio Alerts</span>
+          </button>
+        </div>
+      )}
+
+      {/* Active Unaccepted Incoming Orders Alert Banner */}
+      {alertingOrderIds.length > 0 && (
+        <div className="bg-[#06B6D4]/10 border-2 border-[#06B6D4] rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-[#06B6D4]/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-[#06B6D4]/20 border border-[#06B6D4] flex items-center justify-center text-[#06B6D4] shrink-0 animate-pulse">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#06B6D4] animate-ping" />
+                <h2 className="text-base font-bold text-white tracking-wide">
+                  {alertingOrderIds.length} NEW INCOMING ORDER{alertingOrderIds.length > 1 ? 'S' : ''} AWAITING ACCEPTANCE
+                </h2>
+              </div>
+              <p className="text-xs text-[#A1A1AA] mt-0.5">
+                Continuous alert sound active until each order is accepted by kitchen staff.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => toggleMute()}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                audioState.isMuted
+                  ? 'bg-[#EF4444]/15 border-[#EF4444]/40 text-[#EF4444] hover:bg-[#EF4444]/25'
+                  : 'bg-[#242424] border-[#333333] text-[#A1A1AA] hover:text-white'
+              }`}
+              title={audioState.isMuted ? 'Unmute alert sound' : 'Mute alert sound'}
+            >
+              {audioState.isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              <span>{audioState.isMuted ? 'Muted' : 'Mute'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar & Top Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-[#F5F5F5] tracking-tight">Order Management</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-[#F5F5F5] tracking-tight">Order Management</h1>
+            {/* Realtime WebSocket Connection Badge */}
+            <div
+              className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 border transition-colors ${
+                wsConnected
+                  ? 'bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30'
+                  : 'bg-[#F59E0B]/15 text-[#F59E0B] border-[#F59E0B]/30'
+              }`}
+              title={wsConnected ? 'Connected to Realtime WebSocket' : 'Using Polling Fallback (Reconnecting...)'}
+            >
+              <Radio className={`w-3 h-3 ${wsConnected ? 'animate-pulse' : ''}`} />
+              <span>{wsConnected ? 'Live Real-time' : 'Polling Sync'}</span>
+            </div>
+          </div>
           <p className="text-sm text-[#A1A1AA] font-normal mt-1">
             Track and update orders through Incoming, Accepted, Preparing, Ready, and Delivered stages.
           </p>
@@ -167,11 +323,37 @@ export const AdminOrderBoard: React.FC = () => {
 
         {/* Top Controls Toolbar */}
         <div className="flex items-center gap-2.5">
-          <div className="relative w-64 sm:w-72">
+          {/* Audio Alert Status Toggle */}
+          <button
+            onClick={() => toggleMute()}
+            className={`h-10 px-3 border rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
+              audioState.isMuted
+                ? 'bg-[#EF4444]/10 border-[#EF4444]/30 text-[#EF4444]'
+                : 'bg-[#151515] border-[#242424] text-[#A1A1AA] hover:text-[#F5F5F5] hover:border-[#333333]'
+            }`}
+            title={audioState.isMuted ? 'Audio alerts muted' : 'Audio alerts active'}
+          >
+            {audioState.isMuted ? <VolumeX className="w-4 h-4 text-[#EF4444]" /> : <Volume2 className="w-4 h-4 text-[#10B981]" />}
+            <span className="hidden sm:inline">{audioState.isMuted ? 'Alerts Muted' : 'Alerts Active'}</span>
+          </button>
+
+          {/* Test Beep */}
+          <button
+            onClick={() => {
+              audioAlert.initAudio();
+              audioAlert.playBeepPair();
+            }}
+            className="h-10 px-3 bg-[#151515] border border-[#242424] hover:border-[#333333] rounded-lg text-xs font-medium text-[#A1A1AA] hover:text-[#F5F5F5] flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Test alert chime"
+          >
+            <span>Test Sound</span>
+          </button>
+
+          <div className="relative w-56 sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-3 text-[#71717A]" />
             <input
               type="text"
-              placeholder="Search by order ID, customer..."
+              placeholder="Search orders..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-10 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg py-2 pl-9 pr-3.5 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
@@ -183,12 +365,12 @@ export const AdminOrderBoard: React.FC = () => {
             className="h-10 px-3.5 bg-[#151515] border border-[#242424] hover:border-[#333333] rounded-lg text-xs font-medium text-[#A1A1AA] hover:text-[#F5F5F5] flex items-center gap-2 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#FF5A00]' : 'text-[#FF5A00]'}`} />
-            <span>Refresh</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* Operational Status Summary Cards (5 lifecycle stages) */}
+      {/* Operational Status Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Incoming Card */}
         <div
@@ -349,10 +531,25 @@ export const AdminOrderBoard: React.FC = () => {
                 filteredOrders.map((o) => {
                   const nextAction = getNextStatus(o.status);
                   const isUpdating = updatingOrderId === o.id;
+                  const isAlerting = alertingOrderIds.includes(o.id) || o.status === 'INCOMING';
 
                   return (
-                    <tr key={o.id} className="hover:bg-[#121212] transition-colors h-14">
-                      <td className="px-4 py-3 font-bold text-[#FF5A00]">{o.order_number}</td>
+                    <tr
+                      key={o.id}
+                      className={`transition-colors h-14 ${
+                        isAlerting
+                          ? 'bg-[#06B6D4]/5 hover:bg-[#06B6D4]/10 border-l-4 border-l-[#06B6D4]'
+                          : 'hover:bg-[#121212]'
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-bold text-[#FF5A00]">
+                        <div className="flex items-center gap-1.5">
+                          {isAlerting && (
+                            <span className="w-2 h-2 rounded-full bg-[#06B6D4] animate-ping shrink-0" />
+                          )}
+                          <span>{o.order_number}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         <p className="font-semibold text-[#F5F5F5]">{o.customer_name}</p>
                         <p className="text-[11px] text-[#71717A]">{o.customer_phone}</p>
@@ -364,7 +561,7 @@ export const AdminOrderBoard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-[#A1A1AA]">
-                        {o.items.length > 0 ? `${o.items.length} items` : '1 item'}
+                        {o.items && o.items.length > 0 ? `${o.items.length} items` : '1 item'}
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-[#F5F5F5]">£{o.total_amount.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
@@ -375,7 +572,7 @@ export const AdminOrderBoard: React.FC = () => {
                       <td className="px-4 py-3 text-[#A1A1AA]">
                         {o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                       </td>
-                      
+
                       {/* Direct Inline Status Dropdown */}
                       <td className="px-4 py-3 text-center">
                         <select
@@ -383,6 +580,7 @@ export const AdminOrderBoard: React.FC = () => {
                           disabled={isUpdating}
                           onChange={(e) => handleQuickStatusChange(o.id, e.target.value)}
                           className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer focus:outline-none transition-all ${getStatusBadgeClass(o.status)}`}
+                          aria-label={`Change status for order ${o.order_number}`}
                         >
                           <option value="INCOMING" className="bg-[#151515] text-[#FF5A00]">Incoming</option>
                           <option value="ACCEPTED" className="bg-[#151515] text-[#06B6D4]">Accepted</option>
@@ -401,11 +599,14 @@ export const AdminOrderBoard: React.FC = () => {
                             <button
                               onClick={() => handleQuickStatusChange(o.id, nextAction.status)}
                               disabled={isUpdating}
-                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-sm ${nextAction.color}`}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${nextAction.color} ${
+                                o.status === 'INCOMING' ? 'ring-2 ring-[#06B6D4]/50 animate-pulse' : ''
+                              }`}
                               title={`Advance status to ${nextAction.status}`}
+                              aria-label={`Advance order ${o.order_number} to ${nextAction.label}`}
                             >
                               <span>{nextAction.label}</span>
-                              <ArrowRight className="w-3 h-3" />
+                              <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -413,7 +614,7 @@ export const AdminOrderBoard: React.FC = () => {
                             onClick={() => setSelectedOrder(o)}
                             className="w-8 h-8 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#F5F5F5] hover:border-[#333333] inline-flex items-center justify-center transition-colors cursor-pointer"
                             title="View Full Order Details"
-                            aria-label="View order details"
+                            aria-label={`View order ${o.order_number} details`}
                           >
                             <Eye className="w-4 h-4" />
                           </button>

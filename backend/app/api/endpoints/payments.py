@@ -206,16 +206,30 @@ async def create_payment_session(
         payment.transaction_id = session_data.get("transaction_id")
         order.payment_transaction_id = session_data.get("transaction_id")
 
+    became_incoming = False
     if session_data.get("status") == PaymentStatus.PAID:
         payment.status = PaymentStatus.PAID
         payment.raw_response = session_data.get("raw_response")
         order.payment_status = PaymentStatus.PAID
         if order.status == OrderStatus.PENDING_PAYMENT:
             order.status = OrderStatus.INCOMING
+            became_incoming = True
         award_order_loyalty_points(db, order)
 
     db.commit()
     db.refresh(payment)
+    db.refresh(order)
+
+    if became_incoming:
+        try:
+            from app.core.websocket_manager import manager, format_order_payload
+            manager.sync_broadcast_order_event(
+                event_type="ORDER_INCOMING",
+                order_data=format_order_payload(order),
+                branch_id=str(order.branch_id)
+            )
+        except Exception as e:
+            logger.warning(f"[WS_BROADCAST_FAILED] Failed to broadcast ORDER_INCOMING for order {order.order_number}: {e}")
 
     final_tx_id = payment.transaction_id or session_data.get("transaction_id", "")
     client_sec = session_data.get("client_secret") or (f"sec_mock_{final_tx_id}" if target_provider_name == PaymentProvider.MOCK else None)

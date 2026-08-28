@@ -42,7 +42,20 @@ export const getApiBase = (): string => {
   return 'https://pattyproject.co.uk/api/v1';
 };
 
-export const API_BASE = getApiBase();
+const RAW_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://pattyproject.co.uk' : '');
+export const API_BASE = `${RAW_BASE ? RAW_BASE.replace(/\/$/, '') : ''}/api/v1`;
+
+export function getAdminWebSocketUrl(token: string): string {
+  let wsHost = '';
+  if (RAW_BASE) {
+    wsHost = RAW_BASE.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+  } else if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsHost = `${protocol}//${window.location.host}`;
+  }
+  const cleanBase = wsHost.replace(/\/+$/, '');
+  return `${cleanBase}/api/v1/admin/ws/orders?token=${encodeURIComponent(token)}`;
+}
 
 let refreshPromise: Promise<string | null> | null = null;
 

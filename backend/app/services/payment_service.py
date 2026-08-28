@@ -400,6 +400,7 @@ def process_payment_event(db: Session, event: NormalizedPaymentEvent) -> Dict[st
     if event.error_message:
         payment.error_message = event.error_message
 
+    became_incoming = False
     if target_status in [PaymentStatus.PAID, PaymentStatus.CAPTURED]:
         order.payment_status = PaymentStatus.PAID
         if payment.transaction_id:
@@ -407,6 +408,7 @@ def process_payment_event(db: Session, event: NormalizedPaymentEvent) -> Dict[st
 
         if order.status in [OrderStatus.PENDING_PAYMENT]:
             order.status = OrderStatus.INCOMING
+            became_incoming = True
             history = OrderStatusHistory(
                 order_id=order.id,
                 from_status=OrderStatus.PENDING_PAYMENT,
@@ -453,6 +455,17 @@ def process_payment_event(db: Session, event: NormalizedPaymentEvent) -> Dict[st
     db.commit()
     db.refresh(payment)
     db.refresh(order)
+
+    if became_incoming:
+        try:
+            from app.core.websocket_manager import manager, format_order_payload
+            manager.sync_broadcast_order_event(
+                event_type="ORDER_INCOMING",
+                order_data=format_order_payload(order),
+                branch_id=str(order.branch_id)
+            )
+        except Exception as e:
+            logger.warning(f"[WS_BROADCAST_FAILED] Webhook failed to broadcast ORDER_INCOMING: {e}")
 
     # Sanitized Security Logging (Zero Secrets/Tokens)
     logger.info(
