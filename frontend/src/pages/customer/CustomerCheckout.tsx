@@ -327,8 +327,7 @@ export const CustomerCheckout: React.FC = () => {
     userCoords,
     getTotal,
     getSubtotal,
-    getDeliveryFee,
-    getServiceFee,
+    getVatAmount,
     couponCode,
     discountAmount,
     clearCart
@@ -466,10 +465,11 @@ export const CustomerCheckout: React.FC = () => {
   };
 
   const subtotal = getSubtotal();
-  const delivery = getDeliveryFee();
   const loyaltyDiscount = redeemPoints > 0 ? redeemPoints / 1000 : 0;
   const effectiveDiscount = Math.min(subtotal, discountAmount + loyaltyDiscount);
-  const total = Math.max(0, subtotal - effectiveDiscount + delivery + getServiceFee());
+  const taxableSubtotal = Math.max(0, subtotal - effectiveDiscount);
+  const vat = Math.round(taxableSubtotal * 0.20 * 100) / 100;
+  const total = Math.round((taxableSubtotal + vat) * 100) / 100;
 
   // Initialize Square payments client singleton when in Step 2
   useEffect(() => {
@@ -1244,20 +1244,9 @@ export const CustomerCheckout: React.FC = () => {
                 <span className="font-mono text-[#F5F5F5]">£{subtotal.toFixed(2)}</span>
               </div>
 
-              {orderType === 'DELIVERY' && (
-                <div className="flex justify-between text-[#A1A1AA]">
-                  <span>Delivery fee</span>
-                  <span className="font-mono text-[#F5F5F5]">
-                    {delivery === 0 ? 'FREE' : `£${delivery.toFixed(2)}`}
-                  </span>
-                </div>
-              )}
-
               <div className="flex justify-between text-[#A1A1AA]">
-                <span>Service fee</span>
-                <span className="font-mono text-[#F5F5F5]">
-                  £{getServiceFee().toFixed(2)}
-                </span>
+                <span>VAT (20%)</span>
+                <span className="font-mono text-[#F5F5F5]">£{vat.toFixed(2)}</span>
               </div>
 
               {discountAmount > 0 && (

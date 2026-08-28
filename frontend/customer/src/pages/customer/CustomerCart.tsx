@@ -94,12 +94,8 @@ export const CustomerCart: React.FC = () => {
     couponCode,
     discountAmount,
     getSubtotal,
-    getDeliveryFee,
-    getServiceFee,
-    getTotal,
-    orderType,
-    isDeliverySubtotalEligible,
-    getDeliveryShortfall
+    getVatAmount,
+    getTotal
   } = useCartStore();
 
   const [promoInput, setPromoInput] = useState('');
@@ -170,8 +166,7 @@ export const CustomerCart: React.FC = () => {
   };
 
   const subtotal = getSubtotal();
-  const delivery = getDeliveryFee();
-  const service = getServiceFee();
+  const vat = getVatAmount();
   const total = getTotal();
 
   const hasOutOfStockItems = items.some(
@@ -547,12 +542,8 @@ export const CustomerCart: React.FC = () => {
                   <span className="text-[#F5F5F5] font-medium">£{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Delivery fee</span>
-                  <span className="text-[#F5F5F5] font-medium">£{delivery.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Service fee</span>
-                  <span className="text-[#F5F5F5] font-medium">£{service.toFixed(2)}</span>
+                  <span>VAT (20%)</span>
+                  <span className="text-[#F5F5F5] font-medium">£{vat.toFixed(2)}</span>
                 </div>
 
                 {discountAmount > 0 && (
@@ -584,11 +575,11 @@ export const CustomerCart: React.FC = () => {
                   <AlertCircle className="w-4 h-4 text-[#EF4444] shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-bold text-[#EF4444] leading-snug">
-                      Disclaimer: For the delivery service you must cart at least €15.
+                      Disclaimer: For the delivery service you must cart at least £15.
                     </p>
                     {subtotal > 0 && (
                       <p className="text-[11px] text-[#F87171] font-normal">
-                        Add €{(15.00 - subtotal).toFixed(2)} more to reach the delivery minimum.
+                        Add £{(15.00 - subtotal).toFixed(2)} more to reach the delivery minimum.
                       </p>
                     )}
                   </div>

@@ -41,6 +41,7 @@ interface CartState {
   getSubtotal: () => number;
   getDeliveryFee: () => number;
   getServiceFee: () => number;
+  getVatAmount: () => number;
   getTotal: () => number;
   isDeliverySubtotalEligible: () => boolean;
   getDeliveryShortfall: () => number;
@@ -95,13 +96,13 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({ orderType: 'COLLECTION', locationErrorMsg: 'WE PROVIDE DELIVERY UP TO 2 MILES ONLY' });
       return;
     }
-    // Non-negotiable rule 2: Minimum cart subtotal >= €15.00 OR valid promotion applied
+    // Non-negotiable rule 2: Minimum cart subtotal >= £15.00 OR valid promotion applied
     if (type === 'DELIVERY' && !isDeliverySubtotalEligible()) {
       const shortfall = getDeliveryShortfall();
       safeSetStorage('patty_order_type', 'COLLECTION');
       set({
         orderType: 'COLLECTION',
-        locationErrorMsg: `Add €${shortfall.toFixed(2)} more to unlock delivery.`
+        locationErrorMsg: `Add £${shortfall.toFixed(2)} more to unlock delivery.`
       });
       return;
     }
@@ -227,24 +228,30 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   getSubtotal: () => {
-    return get().items.reduce((acc, item) => acc + item.lineTotal, 0);
+    return Math.round(get().items.reduce((acc, item) => acc + item.lineTotal, 0) * 100) / 100;
   },
 
   getDeliveryFee: () => {
-    // Patty Project delivery is FREE (£0.00 / €0.00). Radius and subtotal are eligibility checks.
     return 0.0;
   },
 
   getServiceFee: () => {
-    return get().items.length > 0 ? 0.99 : 0.0;
+    return 0.0;
+  },
+
+  getVatAmount: () => {
+    const subtotal = get().getSubtotal();
+    const discount = get().discountAmount;
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    return Math.round(taxableSubtotal * 0.20 * 100) / 100;
   },
 
   getTotal: () => {
     const subtotal = get().getSubtotal();
-    const delivery = get().getDeliveryFee();
-    const service = get().getServiceFee();
     const discount = get().discountAmount;
-    return Math.max(0, subtotal - discount + delivery + service);
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const vat = Math.round(taxableSubtotal * 0.20 * 100) / 100;
+    return Math.round((taxableSubtotal + vat) * 100) / 100;
   },
 
   isDeliverySubtotalEligible: () => {

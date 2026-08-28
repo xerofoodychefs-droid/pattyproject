@@ -92,9 +92,9 @@ def calculate_order_totals(
     is_reward_applied = False
     loyalty_points_redeemed = 0
 
-    # Patty Project delivery is FREE (£0.00 / €0.00). Radius & subtotal are eligibility checks.
+    # Patty Project delivery is FREE (£0.00). Radius & subtotal are eligibility checks.
     delivery_fee = 0.0
-    service_fee = 0.99 if subtotal > 0 else 0.0
+    service_fee = 0.0
 
     # 1. Apply Coupon Discount if valid
     if coupon_code:
@@ -139,9 +139,9 @@ def calculate_order_totals(
     has_valid_promotion = is_coupon_applied or is_reward_applied or (discount_amount > 0)
     discount_amount = min(subtotal, round(discount_amount, 2))
     taxable_amount = max(0.0, subtotal - discount_amount)
-    vat_amount = round(taxable_amount * 0.20, 2)  # Standard 20% VAT included calculation reference
+    vat_amount = round(taxable_amount * 0.20, 2)  # Standard 20% UK VAT
 
-    total_amount = round(max(0.0, subtotal - discount_amount + delivery_fee + service_fee), 2)
+    total_amount = round(taxable_amount + vat_amount, 2)
 
     # 4. Authoritative server-side points calculation (1p = 1 pt with campaign multipliers)
     spend_calc = calculate_eligible_spend_and_points(
