@@ -21,13 +21,13 @@ export const CustomerAbout: React.FC = () => {
         </div>
 
         {/* Hero Text Content using exact Offers page font & typography scale */}
-        <div className="relative z-10 w-full max-w-[1720px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24">
+        <div className="relative z-10 w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12">
           <div className="max-w-xl space-y-2 sm:space-y-2.5">
             <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.1em] block mb-1.5 sm:mb-2">
               ABOUT US
             </span>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-[48px] xl:text-[56px] 2xl:text-[62px] font-black uppercase tracking-tight leading-[0.94]">
+            <h1 className="text-3xl sm:text-4xl lg:text-[44px] xl:text-[50px] font-black uppercase tracking-tight leading-[0.94]">
               <span className="text-white block">FOUR MATES.</span>
               <span className="text-white block">ONE PROJECT.</span>
               <span className="text-[#FF5A00] block">PROPER BURGERS.</span>
@@ -39,7 +39,7 @@ export const CustomerAbout: React.FC = () => {
       {/* ========================================================================= */}
       {/* MAIN CONTENT: Full Desktop Container */}
       {/* ========================================================================= */}
-      <div className="w-full max-w-[1720px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 pt-10 sm:pt-14">
+      <div className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-10 sm:pt-14">
         
         {/* Two-Column Grid: Left Story (7 cols) / Right Brand Principles (5 cols) */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 xl:gap-24 items-start">

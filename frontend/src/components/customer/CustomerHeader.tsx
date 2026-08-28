@@ -25,8 +25,8 @@ export const CustomerHeader: React.FC<Props> = ({ onOpenLocationModal, onOpenMob
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-md">
-      <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-16 py-2.5 flex items-center justify-between gap-2">
+    <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-md border-b border-white/[0.06]">
+      <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-8 lg:px-12 py-2.5 sm:py-3 md:py-3.5 flex items-center justify-between gap-2">
         {/* Left Logo Section matching navbar.png */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
