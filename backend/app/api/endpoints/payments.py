@@ -136,7 +136,22 @@ async def create_payment_session(
                 order_number=order.order_number
             )
 
-    method_type = request_data.payment_method_type if request_data and request_data.payment_method_type else "CARD"
+    # Validate payment method type
+    raw_method = request_data.payment_method_type if request_data and request_data.payment_method_type else "CARD"
+    method_type = str(raw_method).strip().upper()
+    valid_methods = ["CARD", "APPLE_PAY", "GOOGLE_PAY"]
+    if method_type not in valid_methods:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid payment_method_type: '{method_type}'. Supported methods are: {', '.join(valid_methods)}"
+        )
+
+    # For Square payments, source_id (token from SDK) is strictly required
+    if target_provider_name == PaymentProvider.SQUARE and not request_data.source_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing payment token (source_id) required for {method_type}."
+        )
 
     # Fetch or initialize the provider-independent payment ledger entry
     payment = get_or_create_payment_for_order(
@@ -146,6 +161,8 @@ async def create_payment_session(
         idempotency_key=effective_idempotency_key,
         payment_method_type=method_type
     )
+    payment.payment_method_type = method_type
+    order.payment_method = method_type
 
     # Idempotent re-request check for existing uncharged mock session
     if payment.transaction_id and not request_data.source_id and target_provider_name == PaymentProvider.MOCK:
@@ -171,7 +188,8 @@ async def create_payment_session(
             customer_info={"name": order.customer_name, "email": order.customer_email},
             idempotency_key=effective_idempotency_key,
             source_id=request_data.source_id,
-            order_number=order.order_number
+            order_number=order.order_number,
+            payment_method_type=method_type
         )
     except SquarePaymentError as exc:
         payment.status = PaymentStatus.FAILED

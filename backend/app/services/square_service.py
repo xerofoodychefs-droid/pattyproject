@@ -54,7 +54,9 @@ class SquarePaymentProvider(BasePaymentProvider):
         customer_info: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
         source_id: Optional[str] = None,
-        order_number: Optional[str] = None
+        order_number: Optional[str] = None,
+        payment_method_type: Optional[str] = "CARD",
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Creates and processes a Square payment when source_id is provided,
@@ -71,7 +73,8 @@ class SquarePaymentProvider(BasePaymentProvider):
                 currency=currency,
                 customer_info=customer_info,
                 idempotency_key=effective_idemp,
-                order_number=order_number
+                order_number=order_number,
+                payment_method_type=payment_method_type
             )
 
         # Pre-tokenization session initialization
@@ -97,7 +100,9 @@ class SquarePaymentProvider(BasePaymentProvider):
         currency: str = "GBP",
         customer_info: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
-        order_number: Optional[str] = None
+        order_number: Optional[str] = None,
+        payment_method_type: Optional[str] = "CARD",
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Executes server-to-server payment charging via Square Payments API v2.
@@ -111,7 +116,8 @@ class SquarePaymentProvider(BasePaymentProvider):
 
         amount_pence = int(round(float(amount) * 100))
         effective_idemp = idempotency_key or f"sq_idemp_{order_id}"
-        note_text = f"Patty Project Order {order_number or order_id[:8]}"
+        method_label = (payment_method_type or "CARD").upper()
+        note_text = f"Patty Project Order {order_number or order_id[:8]} [{method_label}]"
 
         payload: Dict[str, Any] = {
             "source_id": source_id,

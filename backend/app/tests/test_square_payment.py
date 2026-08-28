@@ -286,7 +286,7 @@ def test_same_payment_attempt_uses_same_idempotency_key(setup_db):
 
     sent_idempotency_keys = []
 
-    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None, *args, **kwargs):
         sent_idempotency_keys.append(idempotency_key)
         return {
             "provider": PaymentProvider.SQUARE,
@@ -332,7 +332,7 @@ def test_retry_does_not_create_duplicate_square_charge(setup_db):
 
     charge_call_count = [0]
 
-    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None, *args, **kwargs):
         charge_call_count[0] += 1
         return {
             "provider": PaymentProvider.SQUARE,
@@ -389,7 +389,7 @@ def test_legitimate_new_payment_attempt_uses_new_key(setup_db):
 
     captured_keys = []
 
-    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None):
+    async def fake_charge_source(self, order_id, amount, source_id, currency="GBP", customer_info=None, idempotency_key=None, order_number=None, *args, **kwargs):
         captured_keys.append(idempotency_key)
         return {
             "provider": PaymentProvider.SQUARE,
@@ -524,3 +524,156 @@ def test_protected_endpoints_still_require_bearer_authentication(setup_db):
     res3 = client.post("/api/v1/payments/any-payment-id/refund", json={"amount": 10.0})
     assert res3.status_code == 401
     assert "Not authenticated" in res3.json().get("detail", "") or "Could not validate credentials" in res3.json().get("detail", "")
+
+
+def test_google_pay_payment_flow(setup_db):
+    """Verifies that payment_method_type=GOOGLE_PAY is recorded and processed via Square."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=28.00)
+
+    mock_square_response = {
+        "payment": {
+            "id": f"sq_gpay_{uuid.uuid4().hex[:10]}",
+            "status": "COMPLETED",
+            "amount_money": {"amount": 2800, "currency": "GBP"},
+            "reference_id": order.id,
+            "receipt_url": "https://squareup.com/receipt/preview/gpay"
+        }
+    }
+
+    mock_client = AsyncMock()
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json.return_value = mock_square_response
+    mock_client.post.return_value = mock_post_resp
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+                with patch.object(settings, "SQUARE_ACCESS_TOKEN", "sq_access_token_123"):
+                    res = client.post(
+                        "/api/v1/payments/create-session",
+                        json={
+                            "order_id": order.id,
+                            "payment_method_type": "GOOGLE_PAY",
+                            "source_id": "cnon:gpay-wallet-token-123"
+                        },
+                        headers={"Idempotency-Key": f"idemp_gpay_{order.id}"}
+                    )
+                    assert res.status_code == 200
+                    data = res.json()
+                    assert data["status"] == PaymentStatus.PAID
+                    assert data["provider"] == PaymentProvider.SQUARE
+
+                    db_session.refresh(order)
+                    assert order.payment_status == OrderPaymentStatus.PAID
+                    assert order.payment_method == "GOOGLE_PAY"
+
+                    payment = db_session.query(Payment).filter(Payment.order_id == order.id).first()
+                    assert payment is not None
+                    assert payment.payment_method_type == "GOOGLE_PAY"
+
+
+def test_apple_pay_payment_flow(setup_db):
+    """Verifies that payment_method_type=APPLE_PAY is recorded and processed via Square."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=45.50)
+
+    mock_square_response = {
+        "payment": {
+            "id": f"sq_apay_{uuid.uuid4().hex[:10]}",
+            "status": "COMPLETED",
+            "amount_money": {"amount": 4550, "currency": "GBP"},
+            "reference_id": order.id,
+            "receipt_url": "https://squareup.com/receipt/preview/apay"
+        }
+    }
+
+    mock_client = AsyncMock()
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json.return_value = mock_square_response
+    mock_client.post.return_value = mock_post_resp
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+            with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+                with patch.object(settings, "SQUARE_ACCESS_TOKEN", "sq_access_token_123"):
+                    res = client.post(
+                        "/api/v1/payments/create-session",
+                        json={
+                            "order_id": order.id,
+                            "payment_method_type": "APPLE_PAY",
+                            "source_id": "cnon:apay-wallet-token-456"
+                        },
+                        headers={"Idempotency-Key": f"idemp_apay_{order.id}"}
+                    )
+                    assert res.status_code == 200
+                    data = res.json()
+                    assert data["status"] == PaymentStatus.PAID
+                    assert data["provider"] == PaymentProvider.SQUARE
+
+                    db_session.refresh(order)
+                    assert order.payment_status == OrderPaymentStatus.PAID
+                    assert order.payment_method == "APPLE_PAY"
+
+                    payment = db_session.query(Payment).filter(Payment.order_id == order.id).first()
+                    assert payment is not None
+                    assert payment.payment_method_type == "APPLE_PAY"
+
+
+def test_square_missing_source_id_rejected(setup_db):
+    """Verifies that requests without source_id are strictly rejected for Square."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=20.00)
+
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "sq_access_token_123"):
+                # CARD without source_id
+                res1 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "CARD"}
+                )
+                assert res1.status_code == 400
+                assert "Missing payment token (source_id)" in res1.json()["detail"]
+
+                # GOOGLE_PAY without source_id
+                res2 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "GOOGLE_PAY"}
+                )
+                assert res2.status_code == 400
+                assert "Missing payment token (source_id)" in res2.json()["detail"]
+
+                # APPLE_PAY without source_id
+                res3 = client.post(
+                    "/api/v1/payments/create-session",
+                    json={"order_id": order.id, "payment_method_type": "APPLE_PAY"}
+                )
+                assert res3.status_code == 400
+                assert "Missing payment token (source_id)" in res3.json()["detail"]
+
+
+def test_invalid_payment_method_type_rejected(setup_db):
+    """Verifies that unknown or unsupported payment methods are rejected."""
+    db_session = setup_db
+    order = create_test_order(db_session, total_amount=15.00)
+
+    with patch.object(settings, "PAYMENT_PROVIDER", "square"):
+        with patch.object(settings, "SQUARE_LOCATION_ID", "TEST_LOC_123"):
+            with patch.object(settings, "SQUARE_ACCESS_TOKEN", "sq_access_token_123"):
+                res = client.post(
+                    "/api/v1/payments/create-session",
+                    json={
+                        "order_id": order.id,
+                        "payment_method_type": "CRYPTO_TOKEN",
+                        "source_id": "cnon:some-token"
+                    }
+                )
+                assert res.status_code == 400
+                assert "Invalid payment_method_type" in res.json()["detail"]
