@@ -11,12 +11,14 @@ DEFAULT_PROD_CORS_ORIGINS: List[str] = [
     "https://order.pattyproject.co.uk",
     "https://admin.pattyproject.co.uk",
     "https://pattyproject.co.uk",
+    "https://www.pattyproject.co.uk",
 ]
 
 DEFAULT_DEV_CORS_ORIGINS: List[str] = [
     "https://order.pattyproject.co.uk",
     "https://admin.pattyproject.co.uk",
     "https://pattyproject.co.uk",
+    "https://www.pattyproject.co.uk",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
@@ -72,6 +74,10 @@ class Settings(BaseSettings):
         if env_cors:
             origins = [o.strip() for o in env_cors.split(",") if o.strip()]
             if origins:
+                if "https://pattyproject.co.uk" in origins and "https://www.pattyproject.co.uk" not in origins:
+                    origins.append("https://www.pattyproject.co.uk")
+                if "https://www.pattyproject.co.uk" in origins and "https://pattyproject.co.uk" not in origins:
+                    origins.append("https://pattyproject.co.uk")
                 return origins
         if self.is_production:
             return DEFAULT_PROD_CORS_ORIGINS

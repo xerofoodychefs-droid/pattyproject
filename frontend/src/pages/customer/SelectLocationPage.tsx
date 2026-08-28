@@ -260,8 +260,10 @@ export const SelectLocationPage: React.FC = () => {
   const fetchBranches = useCallback(async () => {
     setBranchesLoading(true);
     setBranchesError(null);
+    console.info('[SelectLocationPage] Initiating branches fetch from API...');
     try {
       const rawData = await api.get<any>('/branches');
+      console.info('[SelectLocationPage] Branches API response received:', Array.isArray(rawData) ? `Array(${rawData.length})` : typeof rawData);
       const list: Branch[] = Array.isArray(rawData)
         ? rawData
         : Array.isArray(rawData?.branches)
@@ -275,6 +277,8 @@ export const SelectLocationPage: React.FC = () => {
       const activeList = list.filter(
         (b) => b && typeof b === 'object' && b.id && (b.is_active === undefined || b.is_active === true)
       );
+
+      console.info(`[SelectLocationPage] Processed ${activeList.length} active branches.`);
 
       if (activeList.length > 0) {
         setBranches(activeList);
@@ -291,7 +295,11 @@ export const SelectLocationPage: React.FC = () => {
         setResolutionState('NO_ELIGIBLE_OUTLET');
       }
     } catch (err: any) {
-      console.error('[SelectLocationPage] Error loading branches:', err);
+      console.error('[SelectLocationPage] Error loading branches:', {
+        message: err?.message,
+        status: err?.status,
+        name: err?.name
+      });
       setBranches([]);
       setBranchesLoading(false);
       setBranchesError('Unable to load outlets. Please try again.');

@@ -24,12 +24,20 @@ export function removeSafeStorage(key: string): void {
   } catch {}
 }
 
-const getApiBase = (): string => {
+export const getApiBase = (): string => {
+  // If running in browser, prioritize current window.location.origin
+  // This guarantees same-origin API calls on both www.pattyproject.co.uk and pattyproject.co.uk
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (import.meta.env.VITE_API_URL) {
+        return `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api/v1`;
+      }
+      return `${window.location.origin}/api/v1`;
+    }
+    return `${window.location.origin}/api/v1`;
+  }
   if (import.meta.env.VITE_API_URL) {
     return `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api/v1`;
-  }
-  if (typeof window !== 'undefined' && window.location && window.location.origin) {
-    return `${window.location.origin}/api/v1`;
   }
   return 'https://pattyproject.co.uk/api/v1';
 };
@@ -93,8 +101,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
   try {
-    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
     const response = await fetch(url, {
       ...options,
       headers,
@@ -142,6 +151,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
         }
       }
 
+      console.warn(`[API] HTTP ${response.status} response from ${url}:`, detailMsg);
+
       const customErr: any = new Error(detailMsg);
       customErr.detail = data.detail;
       customErr.data = data;
@@ -151,7 +162,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
 
     return data as T;
   } catch (err: any) {
-    if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('NetworkError'))) {
+    console.error(`[API] Error during fetch to ${url}:`, {
+      name: err?.name,
+      message: err?.message,
+      status: err?.status,
+    });
+    if (err.name === 'TypeError' && (err.message?.includes('fetch') || err.message?.includes('NetworkError'))) {
       throw new Error('Unable to connect to backend server. Please make sure the backend is running.');
     }
     throw err;
