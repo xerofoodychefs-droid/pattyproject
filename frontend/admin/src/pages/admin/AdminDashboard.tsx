@@ -1,24 +1,17 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
   ArrowLeft,
   Download,
-  Calendar,
   Plus,
   Trash2,
   AlertTriangle,
-  ExternalLink,
   Search,
-  Filter,
+  Truck,
   ShoppingBag,
-  Bike,
   Eye,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  TrendingUp,
-  RefreshCw
+  TrendingUp
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { Branch, Order, BranchStats } from '../../types';
@@ -38,13 +31,11 @@ export const AdminDashboard: React.FC = () => {
   const [showCreateBranchModal, setShowCreateBranchModal] = useState(false);
   const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [selectedOrderForModal, setSelectedOrderForModal] = useState<Order | null>(null);
 
-  // Filters for selected branch orders
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'>('ALL');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'DELIVERY' | 'COLLECTION'>('ALL');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'WEEK'>('ALL');
+  // Order Details Modal & Filters
+  const [selectedOrderForModal, setSelectedOrderForModal] = useState<Order | null>(null);
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
 
   useEffect(() => {
     fetchBranches(false);
@@ -84,37 +75,23 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleSelectBranch = async (branch: Branch) => {
-    setSelectedBranch(branch);
+  const fetchBranchOrders = async (branchId: string) => {
     setOrdersLoading(true);
-    setSearchTerm('');
-    setStatusFilter('ALL');
-    setTypeFilter('ALL');
-    setDateFilter('ALL');
     try {
-      const branchOrders: Order[] = await api.get(`/orders?branch_id=${branch.id}`);
+      const branchOrders: Order[] = await api.get(`/orders?branch_id=${branchId}`);
       setOrders(branchOrders || []);
     } catch (err) {
-      console.error(err);
-      setOrders([]);
+      console.error('Failed to fetch branch orders:', err);
     } finally {
       setOrdersLoading(false);
     }
   };
 
-  const refreshBranchOrders = async () => {
-    if (!selectedBranch) return;
-    setOrdersLoading(true);
-    try {
-      const branchOrders: Order[] = await api.get(`/orders?branch_id=${selectedBranch.id}`);
-      setOrders(branchOrders || []);
-      // also refresh stats in background
-      fetchBranches(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setOrdersLoading(false);
-    }
+  const handleSelectBranch = async (branch: Branch) => {
+    setSelectedBranch(branch);
+    setOrderSearchQuery('');
+    setOrderStatusFilter('ALL');
+    await fetchBranchOrders(branch.id);
   };
 
   const handleConfirmDeleteBranch = async () => {
@@ -145,141 +122,45 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Branch detailed stats calculations
-  const branchMetrics = useMemo(() => {
-    const totalOrders = orders.length;
-    let completedCount = 0;
-    let activeCount = 0;
-    let cancelledCount = 0;
-    let totalRevenue = 0;
-
-    orders.forEach((o) => {
-      const status = (o.status || '').toUpperCase();
-      if (['DELIVERED', 'COMPLETED'].includes(status)) {
-        completedCount++;
-        totalRevenue += Number(o.total_amount || 0);
-      } else if (['CANCELLED', 'REFUNDED', 'REJECTED', 'REFUND_PENDING'].includes(status)) {
-        cancelledCount++;
-      } else {
-        activeCount++;
-        if (o.payment_status === 'PAID') {
-          totalRevenue += Number(o.total_amount || 0);
-        }
-      }
-    });
-
-    return {
-      totalOrders,
-      completedCount,
-      activeCount,
-      cancelledCount,
-      totalRevenue
-    };
-  }, [orders]);
-
-  // Filtered orders list
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      // Search term
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchNumber = (o.order_number || '').toLowerCase().includes(query);
-        const matchCustomer = (o.customer_name || '').toLowerCase().includes(query);
-        const matchPhone = (o.customer_phone || '').toLowerCase().includes(query);
-        const matchItems = (o.items || []).some((item) =>
-          (item.product_name || '').toLowerCase().includes(query)
-        );
-        if (!matchNumber && !matchCustomer && !matchPhone && !matchItems) {
-          return false;
-        }
-      }
-
-      // Status filter
-      const status = (o.status || '').toUpperCase();
-      if (statusFilter === 'ACTIVE') {
-        if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'REJECTED'].includes(status)) {
-          return false;
-        }
-      } else if (statusFilter === 'COMPLETED') {
-        if (!['DELIVERED', 'COMPLETED'].includes(status)) {
-          return false;
-        }
-      } else if (statusFilter === 'CANCELLED') {
-        if (!['CANCELLED', 'REFUNDED', 'REJECTED', 'REFUND_PENDING'].includes(status)) {
-          return false;
-        }
-      }
-
-      // Order type filter
-      if (typeFilter !== 'ALL') {
-        if (o.order_type !== typeFilter) {
-          return false;
-        }
-      }
-
-      // Date filter
-      if (dateFilter !== 'ALL' && o.created_at) {
-        const orderDate = new Date(o.created_at);
-        const now = new Date();
-        if (dateFilter === 'TODAY') {
-          const isToday =
-            orderDate.getDate() === now.getDate() &&
-            orderDate.getMonth() === now.getMonth() &&
-            orderDate.getFullYear() === now.getFullYear();
-          if (!isToday) return false;
-        } else if (dateFilter === 'WEEK') {
-          const oneWeekAgo = new Date();
-          oneWeekAgo.setDate(now.getDate() - 7);
-          if (orderDate < oneWeekAgo) return false;
-        }
-      }
-
-      return true;
-    });
-  }, [orders, searchTerm, statusFilter, typeFilter, dateFilter]);
-
-  // CSV Export handler
+  // Export branch orders to CSV
   const handleExportCSV = () => {
-    if (!selectedBranch || filteredOrders.length === 0) {
-      alert('No orders available to export.');
-      return;
-    }
+    if (!selectedBranch || orders.length === 0) return;
 
-    const headers = [
-      'Order Number',
-      'Customer Name',
-      'Phone',
-      'Email',
-      'Order Type',
-      'Status',
-      'Payment Status',
-      'Total Amount (£)',
-      'Created At',
-      'Items Summary'
-    ];
-
-    const rows = filteredOrders.map((o) => [
-      `"${o.order_number || ''}"`,
+    const headers = ['Order Number', 'Date', 'Customer Name', 'Phone', 'Type', 'Status', 'Payment Status', 'Total Amount (£)', 'Items'];
+    const rows = orders.map((o) => [
+      o.order_number,
+      o.created_at ? new Date(o.created_at).toLocaleString() : '',
       `"${o.customer_name || ''}"`,
       `"${o.customer_phone || ''}"`,
-      `"${o.customer_email || ''}"`,
-      `"${o.order_type || ''}"`,
-      `"${o.status || ''}"`,
-      `"${o.payment_status || ''}"`,
-      `"${Number(o.total_amount || 0).toFixed(2)}"`,
-      `"${o.created_at ? new Date(o.created_at).toLocaleString('en-GB') : ''}"`,
-      `"${(o.items || []).map((i) => `${i.product_name} (x${i.quantity})`).join('; ')}"`
+      o.order_type,
+      o.status,
+      o.payment_status || 'PENDING',
+      o.total_amount.toFixed(2),
+      `"${(o.items || []).map((i) => `${i.product_name} x${i.quantity}`).join('; ')}"`
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `orders_${selectedBranch.code}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${selectedBranch.name.replace(/\s+/g, '_')}_Orders_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
+  // Filtered orders for the selected branch
+  const filteredOrders = orders.filter((o) => {
+    const matchesSearch =
+      !orderSearchQuery ||
+      o.order_number.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+      o.customer_name.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+      (o.customer_phone && o.customer_phone.includes(orderSearchQuery));
+
+    const matchesStatus = orderStatusFilter === 'ALL' || o.status === orderStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 text-[#F5F5F5]">
@@ -288,9 +169,7 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#F5F5F5] tracking-tight">Dashboard</h1>
           <p className="text-xs sm:text-sm text-[#A1A1AA] font-normal mt-1">
-            {user?.role === 'BRANCH_ADMIN'
-              ? 'View and manage orders for your assigned branch.'
-              : 'View branch operational statistics and live order logs.'}
+            {user?.role === 'BRANCH_ADMIN' ? 'View and manage live orders for your assigned branch.' : 'Overview performance and manage orders across all branch locations.'}
           </p>
         </div>
         {user?.role === 'SUPER_ADMIN' && !selectedBranch && (
@@ -310,23 +189,23 @@ export const AdminDashboard: React.FC = () => {
           <div className="p-5 border-b border-[#1C1C1C] flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-[#F5F5F5]">All Branches Overview</h2>
-              <p className="text-xs text-[#71717A] mt-0.5">Click on any branch to view full order history and live details</p>
+              <p className="text-xs text-[#71717A] mt-0.5">Click any branch to view detailed orders and order management</p>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-[#181818] border border-[#262626] text-xs text-[#A1A1AA] font-medium">
+            <span className="text-xs text-[#A1A1AA] bg-[#171717] px-3 py-1 rounded-full border border-[#242424] font-medium">
               {branches.length} {branches.length === 1 ? 'Location' : 'Locations'} Total
             </span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-[#141414] text-[#A1A1AA] uppercase text-[11px] font-semibold border-b border-[#1C1C1C]">
+            <table className="w-full text-left text-xs border-collapse table-fixed min-w-[760px]">
+              <thead className="bg-[#171717] text-[#A1A1AA] uppercase text-[11px] font-semibold border-b border-[#1C1C1C]">
                 <tr>
-                  <th className="px-5 py-3.5">Branch Name</th>
-                  <th className="px-5 py-3.5 text-center">Total Orders</th>
-                  <th className="px-5 py-3.5 text-center">Completed Orders</th>
-                  <th className="px-5 py-3.5 text-center">Cancelled Orders</th>
-                  <th className="px-5 py-3.5 text-center">Pending Orders</th>
-                  <th className="px-5 py-3.5 text-right">Actions</th>
+                  <th className="w-[30%] px-5 py-3.5">Branch Name</th>
+                  <th className="w-[14%] px-5 py-3.5 text-center">Total Orders</th>
+                  <th className="w-[14%] px-5 py-3.5 text-center">Completed Orders</th>
+                  <th className="w-[14%] px-5 py-3.5 text-center">Cancelled Orders</th>
+                  <th className="w-[14%] px-5 py-3.5 text-center">Pending Orders</th>
+                  <th className="w-[14%] px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1C1C1C] bg-[#0D0D0D]">
@@ -334,11 +213,11 @@ export const AdminDashboard: React.FC = () => {
                   [...Array(3)].map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-36" /></td>
-                      <td className="px-5 py-4 text-center"><div className="h-4 bg-[#151515] rounded w-12 mx-auto" /></td>
-                      <td className="px-5 py-4 text-center"><div className="h-4 bg-[#151515] rounded w-12 mx-auto" /></td>
-                      <td className="px-5 py-4 text-center"><div className="h-4 bg-[#151515] rounded w-12 mx-auto" /></td>
-                      <td className="px-5 py-4 text-center"><div className="h-4 bg-[#151515] rounded w-12 mx-auto" /></td>
-                      <td className="px-5 py-4 text-right"><div className="h-4 bg-[#151515] rounded w-16 ml-auto" /></td>
+                      <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded-full w-14 mx-auto" /></td>
+                      <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded-full w-14 mx-auto" /></td>
+                      <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded-full w-14 mx-auto" /></td>
+                      <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded-full w-14 mx-auto" /></td>
+                      <td className="px-5 py-4 text-right"><div className="h-7 bg-[#151515] rounded w-16 ml-auto" /></td>
                     </tr>
                   ))
                 ) : branches.length === 0 ? (
@@ -359,11 +238,11 @@ export const AdminDashboard: React.FC = () => {
                       <tr
                         key={b.id}
                         onClick={() => handleSelectBranch(b)}
-                        className="hover:bg-[#151515] cursor-pointer transition-colors group"
+                        className="hover:bg-[#141414] cursor-pointer transition-colors group"
                       >
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <span className="w-9 h-9 rounded-lg bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-bold text-xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <span className="w-9 h-9 rounded-lg bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
                               {b.code}
                             </span>
                             <div className="min-w-0">
@@ -376,26 +255,28 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-center font-bold text-sm text-[#F5F5F5]">
-                          {stats.total_orders}
+                        <td className="px-5 py-4 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold bg-[#1C1C1C] text-[#F5F5F5] border border-[#2A2A2A] min-w-[48px]">
+                            {stats.total_orders}
+                          </span>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20">
+                        <td className="px-5 py-4 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 min-w-[48px]">
                             {stats.completed_orders}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold text-[#EF4444] bg-[#EF4444]/10 border border-[#EF4444]/20">
+                        <td className="px-5 py-4 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/30 min-w-[48px]">
                             {stats.cancelled_orders}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold text-[#F59E0B] bg-[#F59E0B]/10 border border-[#F59E0B]/20">
+                        <td className="px-5 py-4 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/30 min-w-[48px]">
                             {stats.pending_orders}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
                             {user?.role === 'SUPER_ADMIN' && (
                               <button
                                 onClick={() => setBranchToDelete(b)}
@@ -410,10 +291,10 @@ export const AdminDashboard: React.FC = () => {
                               onClick={() => handleSelectBranch(b)}
                               title="View Branch Orders"
                               aria-label="View branch orders"
-                              className="h-8 px-2.5 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#F5F5F5] hover:border-[#FF5A00]/50 hover:bg-[#FF5A00]/10 flex items-center gap-1 text-xs font-medium transition-all cursor-pointer"
+                              className="h-8 px-2.5 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#FF5A00] hover:border-[#FF5A00]/40 flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer"
                             >
                               <span>View</span>
-                              <ChevronRight className="w-3.5 h-3.5 text-[#FF5A00]" />
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -426,207 +307,126 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       ) : (
-        /* Detailed Branch Order View */
-        <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top Bar with Navigation & Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0D0D0D] border border-[#242424] rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSelectedBranch(null)}
-                className="w-9 h-9 rounded-lg bg-[#181818] border border-[#2B2B2B] hover:border-[#FF5A00]/50 hover:text-[#FF5A00] text-[#A1A1AA] flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                title="Back to All Branches"
-                aria-label="Back to All Branches"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
+        /* Branch Detail Order View */
+        <div className="space-y-6">
+          {/* Back Navigation & Branch Info Card */}
+          <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-5 space-y-4">
+            <button
+              onClick={() => setSelectedBranch(null)}
+              className="inline-flex items-center gap-1.5 text-[#A1A1AA] hover:text-[#F5F5F5] transition-colors text-xs font-semibold cursor-pointer pb-2 border-b border-[#1C1C1C] w-full"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#FF5A00]" />
+              <span>Back to All Branches</span>
+            </button>
 
-              <div className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-lg bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-bold text-sm flex items-center justify-center shrink-0">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+              <div className="flex items-center gap-3.5">
+                <span className="w-12 h-12 rounded-xl bg-[#241209] border border-[#6B2A0D] text-[#FF5A00] font-bold text-base flex items-center justify-center shrink-0 shadow-sm">
                   {selectedBranch.code}
                 </span>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg sm:text-xl font-bold text-[#F5F5F5]">{selectedBranch.name}</h2>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#181818] text-[#A1A1AA] border border-[#262626]">
+                  <h2 className="text-xl font-bold text-[#F5F5F5] flex items-center gap-2">
+                    <span>{selectedBranch.name}</span>
+                    <span className="text-xs font-normal text-[#A1A1AA] px-2 py-0.5 bg-[#171717] border border-[#242424] rounded-full">
                       {selectedBranch.postcode}
                     </span>
-                  </div>
+                  </h2>
                   <p className="text-[#71717A] text-xs mt-0.5">
-                    {orders.length} {orders.length === 1 ? 'order' : 'orders'} total in branch records
+                    {selectedBranch.address_line1}, {selectedBranch.city || 'London'} • Phone: {selectedBranch.phone || '020 7946 0000'}
                   </p>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2.5 self-end sm:self-auto">
-              <button
-                onClick={refreshBranchOrders}
-                disabled={ordersLoading}
-                title="Refresh Orders"
-                className="h-9 px-3 bg-[#151515] border border-[#242424] hover:border-[#383838] text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-[#FF5A00] ${ordersLoading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </button>
-
-              <button
-                onClick={() => navigate('/admin/orders')}
-                className="h-9 px-3.5 bg-[#FF5A00]/10 border border-[#FF5A00]/30 hover:bg-[#FF5A00]/20 text-[#FF5A00] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Live Kitchen Board</span>
-              </button>
-
-              <button
-                onClick={handleExportCSV}
-                className="h-9 px-3.5 bg-[#151515] border border-[#242424] hover:border-[#383838] text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-[#FF5A00]" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Metric Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-            <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-4 space-y-1">
-              <p className="text-xs text-[#71717A] font-medium">Total Orders</p>
-              <p className="text-xl sm:text-2xl font-bold text-[#F5F5F5]">{branchMetrics.totalOrders}</p>
-            </div>
-            <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-4 space-y-1">
-              <p className="text-xs text-[#71717A] font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-[#22C55E]" />
-                <span>Completed</span>
-              </p>
-              <p className="text-xl sm:text-2xl font-bold text-[#22C55E]">{branchMetrics.completedCount}</p>
-            </div>
-            <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-4 space-y-1">
-              <p className="text-xs text-[#71717A] font-medium flex items-center gap-1">
-                <Clock className="w-3 h-3 text-[#F59E0B]" />
-                <span>In Progress</span>
-              </p>
-              <p className="text-xl sm:text-2xl font-bold text-[#F59E0B]">{branchMetrics.activeCount}</p>
-            </div>
-            <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-4 space-y-1">
-              <p className="text-xs text-[#71717A] font-medium flex items-center gap-1">
-                <TrendingUp className="w-3 h-3 text-[#FF5A00]" />
-                <span>Branch Revenue</span>
-              </p>
-              <p className="text-xl sm:text-2xl font-bold text-[#FF5A00]">£{branchMetrics.totalRevenue.toFixed(2)}</p>
-            </div>
-          </div>
-
-          {/* Search & Filter Bar */}
-          <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-4 space-y-3">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              {/* Search input */}
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search by order #, customer name, phone, item..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-9 pl-9 pr-4 bg-[#141414] border border-[#242424] rounded-lg text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none focus:border-[#FF5A00] transition-colors"
-                />
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Date Filter */}
-                <div className="flex items-center rounded-lg bg-[#141414] border border-[#242424] p-0.5 text-xs">
-                  <button
-                    onClick={() => setDateFilter('ALL')}
-                    className={`px-2.5 py-1 rounded-md transition-colors ${dateFilter === 'ALL' ? 'bg-[#FF5A00] text-white font-semibold' : 'text-[#A1A1AA] hover:text-[#F5F5F5]'}`}
-                  >
-                    All Time
-                  </button>
-                  <button
-                    onClick={() => setDateFilter('TODAY')}
-                    className={`px-2.5 py-1 rounded-md transition-colors ${dateFilter === 'TODAY' ? 'bg-[#FF5A00] text-white font-semibold' : 'text-[#A1A1AA] hover:text-[#F5F5F5]'}`}
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setDateFilter('WEEK')}
-                    className={`px-2.5 py-1 rounded-md transition-colors ${dateFilter === 'WEEK' ? 'bg-[#FF5A00] text-white font-semibold' : 'text-[#A1A1AA] hover:text-[#F5F5F5]'}`}
-                  >
-                    7 Days
-                  </button>
-                </div>
-
-                {/* Type Filter */}
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value as any)}
-                  className="h-9 px-3 bg-[#141414] border border-[#242424] rounded-lg text-xs text-[#F5F5F5] focus:outline-none focus:border-[#FF5A00] transition-colors cursor-pointer"
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5 self-start md:self-auto">
+                <button
+                  onClick={() => fetchBranchOrders(selectedBranch.id)}
+                  className="h-9 px-3.5 bg-[#151515] border border-[#242424] hover:border-[#333333] text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <option value="ALL">All Types</option>
-                  <option value="DELIVERY">Delivery</option>
-                  <option value="COLLECTION">Collection</option>
-                </select>
+                  <TrendingUp className="w-3.5 h-3.5 text-[#FF5A00]" />
+                  <span>Refresh</span>
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  disabled={orders.length === 0}
+                  className="h-9 px-3.5 bg-[#151515] border border-[#242424] hover:border-[#333333] text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#FF5A00]" />
+                  <span>Export CSV</span>
+                </button>
               </div>
             </div>
 
-            {/* Status Tabs */}
-            <div className="flex items-center gap-1.5 border-t border-[#1C1C1C] pt-3 overflow-x-auto">
-              <button
-                onClick={() => setStatusFilter('ALL')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                  statusFilter === 'ALL'
-                    ? 'bg-[#241209] text-[#FF5A00] border border-[#6B2A0D]'
-                    : 'text-[#71717A] hover:text-[#A1A1AA] bg-[#141414]'
-                }`}
+            {/* Quick Stats Pill Summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="bg-[#141414] border border-[#1F1F1F] rounded-lg p-3">
+                <p className="text-[11px] text-[#71717A] uppercase font-semibold">Total Orders</p>
+                <p className="text-lg font-bold text-[#F5F5F5] mt-0.5">{orders.length}</p>
+              </div>
+              <div className="bg-[#141414] border border-[#1F1F1F] rounded-lg p-3">
+                <p className="text-[11px] text-[#22C55E] uppercase font-semibold">Completed</p>
+                <p className="text-lg font-bold text-[#22C55E] mt-0.5">
+                  {orders.filter((o) => o.status === 'DELIVERED' || o.status === 'READY').length}
+                </p>
+              </div>
+              <div className="bg-[#141414] border border-[#1F1F1F] rounded-lg p-3">
+                <p className="text-[11px] text-[#F59E0B] uppercase font-semibold">In Progress</p>
+                <p className="text-lg font-bold text-[#F59E0B] mt-0.5">
+                  {orders.filter((o) => ['INCOMING', 'ACCEPTED', 'PREPARING'].includes(o.status)).length}
+                </p>
+              </div>
+              <div className="bg-[#141414] border border-[#1F1F1F] rounded-lg p-3">
+                <p className="text-[11px] text-[#EF4444] uppercase font-semibold">Cancelled</p>
+                <p className="text-lg font-bold text-[#EF4444] mt-0.5">
+                  {orders.filter((o) => o.status === 'CANCELLED').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0D0D0D] border border-[#242424] rounded-xl p-3.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+              <input
+                type="text"
+                value={orderSearchQuery}
+                onChange={(e) => setOrderSearchQuery(e.target.value)}
+                placeholder="Search by order #, customer name or phone..."
+                className="w-full bg-[#141414] border border-[#242424] focus:border-[#FF5A00] rounded-lg pl-9 pr-4 py-2 text-xs text-[#F5F5F5] placeholder-[#71717A] outline-none transition-colors"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={orderStatusFilter}
+                onChange={(e) => setOrderStatusFilter(e.target.value)}
+                className="bg-[#141414] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3 py-2 text-xs text-[#F5F5F5] outline-none transition-colors cursor-pointer"
               >
-                All Orders ({orders.length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('ACTIVE')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                  statusFilter === 'ACTIVE'
-                    ? 'bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30'
-                    : 'text-[#71717A] hover:text-[#A1A1AA] bg-[#141414]'
-                }`}
-              >
-                In Progress ({branchMetrics.activeCount})
-              </button>
-              <button
-                onClick={() => setStatusFilter('COMPLETED')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                  statusFilter === 'COMPLETED'
-                    ? 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/30'
-                    : 'text-[#71717A] hover:text-[#A1A1AA] bg-[#141414]'
-                }`}
-              >
-                Completed ({branchMetrics.completedCount})
-              </button>
-              <button
-                onClick={() => setStatusFilter('CANCELLED')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                  statusFilter === 'CANCELLED'
-                    ? 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/30'
-                    : 'text-[#71717A] hover:text-[#A1A1AA] bg-[#141414]'
-                }`}
-              >
-                Cancelled ({branchMetrics.cancelledCount})
-              </button>
+                <option value="ALL">All Statuses ({orders.length})</option>
+                <option value="INCOMING">Incoming</option>
+                <option value="ACCEPTED">Accepted</option>
+                <option value="PREPARING">Preparing</option>
+                <option value="READY">Ready</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
             </div>
           </div>
 
           {/* Orders Table */}
           <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#141414] text-[#A1A1AA] uppercase text-[11px] font-semibold border-b border-[#1C1C1C]">
+              <table className="w-full text-left text-xs border-collapse table-fixed min-w-[840px]">
+                <thead className="bg-[#171717] text-[#A1A1AA] uppercase text-[11px] font-semibold border-b border-[#1C1C1C]">
                   <tr>
-                    <th className="px-5 py-3.5">Order ID</th>
-                    <th className="px-5 py-3.5">Customer</th>
-                    <th className="px-5 py-3.5">Type</th>
-                    <th className="px-5 py-3.5">Items</th>
-                    <th className="px-5 py-3.5">Amount & Payment</th>
-                    <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5">Ordered On</th>
-                    <th className="px-5 py-3.5 text-right">Action</th>
+                    <th className="w-[14%] px-5 py-3.5">Order ID</th>
+                    <th className="w-[18%] px-5 py-3.5">Customer</th>
+                    <th className="w-[12%] px-5 py-3.5 text-center">Type</th>
+                    <th className="w-[24%] px-5 py-3.5">Items Summary</th>
+                    <th className="w-[10%] px-5 py-3.5 text-right">Amount</th>
+                    <th className="w-[12%] px-5 py-3.5 text-center">Status</th>
+                    <th className="w-[10%] px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1C1C1C] bg-[#0D0D0D]">
@@ -635,72 +435,77 @@ export const AdminDashboard: React.FC = () => {
                       <tr key={i} className="animate-pulse">
                         <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-20" /></td>
                         <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-28" /></td>
-                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-16" /></td>
-                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-48" /></td>
-                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-20" /></td>
-                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-20" /></td>
-                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-24" /></td>
+                        <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded w-16 mx-auto" /></td>
+                        <td className="px-5 py-4"><div className="h-4 bg-[#151515] rounded w-44" /></td>
                         <td className="px-5 py-4 text-right"><div className="h-4 bg-[#151515] rounded w-12 ml-auto" /></td>
+                        <td className="px-5 py-4 text-center"><div className="h-5 bg-[#151515] rounded w-20 mx-auto" /></td>
+                        <td className="px-5 py-4 text-right"><div className="h-7 bg-[#151515] rounded w-14 ml-auto" /></td>
                       </tr>
                     ))
                   ) : filteredOrders.length > 0 ? (
                     filteredOrders.map((o) => {
                       const itemsSummary = (o.items || [])
-                        .map((i) => `${i.product_name || 'Item'} (x${i.quantity || 1})`)
+                        .map((i) => `${i.product_name || 'Product'} (x${i.quantity})`)
                         .join(', ');
 
                       return (
                         <tr
                           key={o.id}
                           onClick={() => setSelectedOrderForModal(o)}
-                          className="hover:bg-[#141414] transition-colors cursor-pointer group"
+                          className="hover:bg-[#141414] cursor-pointer transition-colors group"
                         >
-                          <td className="px-5 py-3.5 font-bold text-sm text-[#FF5A00]">
+                          {/* Order Number */}
+                          <td className="px-5 py-4 font-semibold text-[#FF5A00] group-hover:underline">
                             {o.order_number}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p className="font-semibold text-[#F5F5F5]">{o.customer_name || 'Customer'}</p>
-                            <p className="text-[11px] text-[#71717A]">{o.customer_phone || 'No phone'}</p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            {o.order_type === 'DELIVERY' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20">
-                                <Bike className="w-3 h-3" />
-                                <span>DELIVERY</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#A855F7]/10 text-[#A855F7] border border-[#A855F7]/20">
-                                <ShoppingBag className="w-3 h-3" />
-                                <span>COLLECTION</span>
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5 max-w-xs">
-                            <p className="text-[#A1A1AA] text-xs truncate" title={itemsSummary}>
-                              {itemsSummary || 'No items listed'}
+                            <p className="text-[10px] text-[#71717A] font-normal mt-0.5">
+                              {o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </p>
                           </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[#F5F5F5]">
-                                £{Number(o.total_amount || 0).toFixed(2)}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                                  o.payment_status === 'PAID'
-                                    ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/30'
-                                    : o.payment_status === 'FAILED'
-                                    ? 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30'
-                                    : 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30'
-                                }`}
-                              >
-                                {o.payment_status || 'PENDING'}
-                              </span>
-                            </div>
+
+                          {/* Customer */}
+                          <td className="px-5 py-4">
+                            <p className="text-[#F5F5F5] font-medium truncate">{o.customer_name || 'Guest'}</p>
+                            <p className="text-[11px] text-[#71717A] truncate">{o.customer_phone || o.customer_email || 'No contact'}</p>
                           </td>
-                          <td className="px-5 py-3.5">
+
+                          {/* Order Type */}
+                          <td className="px-5 py-4 text-center">
                             <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${
+                                o.order_type === 'DELIVERY'
+                                  ? 'bg-[#3B82F6]/10 text-[#60A5FA] border-[#3B82F6]/30'
+                                  : 'bg-[#F59E0B]/10 text-[#FBBF24] border-[#F59E0B]/30'
+                              }`}
+                            >
+                              {o.order_type === 'DELIVERY' ? <Truck className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+                              <span>{o.order_type}</span>
+                            </span>
+                          </td>
+
+                          {/* Items */}
+                          <td className="px-5 py-4 text-[#A1A1AA]">
+                            <p className="truncate text-xs text-[#D4D4D8]" title={itemsSummary}>
+                              {itemsSummary || 'No items listed'}
+                            </p>
+                            <p className="text-[10px] text-[#71717A]">
+                              {(o.items || []).reduce((acc, curr) => acc + (curr.quantity || 1), 0)} {(o.items || []).reduce((acc, curr) => acc + (curr.quantity || 1), 0) === 1 ? 'item' : 'items'} total
+                            </p>
+                          </td>
+
+                          {/* Amount */}
+                          <td className="px-5 py-4 text-right font-semibold text-[#F5F5F5]">
+                            £{o.total_amount.toFixed(2)}
+                            {o.payment_status && (
+                              <p className={`text-[10px] font-normal ${o.payment_status === 'PAID' ? 'text-[#22C55E]' : 'text-[#F59E0B]'}`}>
+                                {o.payment_status}
+                              </p>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-5 py-4 text-center">
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider border ${
                                 o.status === 'INCOMING'
                                   ? 'bg-[#FF5A00]/15 text-[#FF5A00] border-[#FF5A00]/40'
                                   : o.status === 'ACCEPTED'
@@ -711,31 +516,21 @@ export const AdminDashboard: React.FC = () => {
                                   ? 'bg-[#10B981]/15 text-[#10B981] border-[#10B981]/40'
                                   : o.status === 'DELIVERED'
                                   ? 'bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/40'
-                                  : o.status === 'CANCELLED' || o.status === 'REFUNDED'
-                                  ? 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40'
-                                  : 'bg-[#181818] text-[#A1A1AA] border-[#2B2B2B]'
+                                  : 'bg-[#151515] text-[#A1A1AA] border-[#242424]'
                               }`}
                             >
                               {o.status}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-[#71717A] text-[11px] whitespace-nowrap">
-                            {o.created_at
-                              ? new Date(o.created_at).toLocaleString('en-GB', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
-                              : '—'}
-                          </td>
-                          <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+
+                          {/* Action Button */}
+                          <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => setSelectedOrderForModal(o)}
-                              title="View Order Details"
-                              className="h-7 px-2.5 rounded-md bg-[#181818] hover:bg-[#FF5A00]/15 border border-[#2B2B2B] hover:border-[#FF5A00]/50 text-[#A1A1AA] hover:text-[#FF5A00] inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer"
+                              title="View full order details"
+                              className="h-8 px-2.5 rounded-lg bg-[#151515] border border-[#242424] text-[#A1A1AA] hover:text-[#FF5A00] hover:border-[#FF5A00]/40 inline-flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer"
                             >
-                              <Eye className="w-3 h-3" />
+                              <Eye className="w-3.5 h-3.5" />
                               <span>Details</span>
                             </button>
                           </td>
@@ -744,9 +539,9 @@ export const AdminDashboard: React.FC = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={8} className="px-5 py-12 text-center text-[#71717A]">
-                        {searchTerm || statusFilter !== 'ALL' || typeFilter !== 'ALL' || dateFilter !== 'ALL'
-                          ? 'No orders match your filter criteria.'
+                      <td colSpan={7} className="px-5 py-12 text-center text-[#71717A]">
+                        {orderSearchQuery || orderStatusFilter !== 'ALL'
+                          ? 'No orders match the selected filters.'
                           : 'No orders recorded for this branch yet.'}
                       </td>
                     </tr>
@@ -758,18 +553,6 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Order Details Modal */}
-      {selectedOrderForModal && (
-        <AdminOrderDetailsModal
-          order={selectedOrderForModal}
-          onClose={() => setSelectedOrderForModal(null)}
-          onUpdateStatus={() => {
-            refreshBranchOrders();
-            setSelectedOrderForModal(null);
-          }}
-        />
-      )}
-
       {/* Create Branch Modal */}
       {showCreateBranchModal && (
         <AdminCreateBranchModal
@@ -777,6 +560,21 @@ export const AdminDashboard: React.FC = () => {
           onSuccess={() => {
             fetchBranches();
             setShowCreateBranchModal(false);
+          }}
+        />
+      )}
+
+      {/* Order Details Modal */}
+      {selectedOrderForModal && (
+        <AdminOrderDetailsModal
+          order={selectedOrderForModal}
+          onClose={() => setSelectedOrderForModal(null)}
+          onUpdateStatus={async () => {
+            if (selectedBranch) {
+              await fetchBranchOrders(selectedBranch.id);
+            }
+            fetchBranches(true);
+            setSelectedOrderForModal(null);
           }}
         />
       )}
