@@ -44,10 +44,10 @@ export const OrderingHeader: React.FC<Props> = ({ onOpenLocationModal }) => {
           {/* 2. Select Outlet Switcher */}
           <button
             onClick={() => navigate('/select-location')}
-            className="flex items-center gap-1.5 bg-[#141414] hover:bg-[#1A1A1A] border border-[#222222] px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold text-white transition-all cursor-pointer"
+            className="flex items-center gap-1.5 bg-[#141414] hover:bg-[#1A1A1A] border border-[#222222] px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold text-white transition-all cursor-pointer shrink-0"
           >
             <MapPin className="w-3.5 h-3.5 text-[#FF5500] shrink-0" />
-            <span className="truncate max-w-[100px] sm:max-w-[150px] text-xs font-extrabold">
+            <span className="truncate max-w-[110px] sm:max-w-[160px] text-xs font-extrabold transition-opacity duration-150">
               {selectedBranch ? selectedBranch.name : 'Select Outlet'}
             </span>
           </button>
