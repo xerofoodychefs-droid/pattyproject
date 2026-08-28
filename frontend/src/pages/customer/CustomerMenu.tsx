@@ -276,16 +276,16 @@ export const CustomerMenu: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-black text-[#F5F5F5] pb-36 sm:pb-24">
-      <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-5 sm:space-y-6">
+      <div className="w-full max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 space-y-4 sm:space-y-5">
         {/* Page Heading & Subtitle */}
         <div className="pb-2 border-b border-[#1C1C1C]">
-          <span className="text-xs text-[#FF5A00] tracking-[0.25em] font-extrabold uppercase block mb-1">
+          <span className="text-[11px] text-[#FF5A00] tracking-[0.25em] font-extrabold uppercase block mb-1">
             PATTY PROJECT
           </span>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase font-hero">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase font-hero">
             OUR MENU
           </h1>
-          <p className="text-xs sm:text-sm text-[#A1A1AA] mt-1 font-normal">
+          <p className="text-xs text-[#A1A1AA] mt-0.5 font-normal">
             Burgers, sides and more. Made fresh to order.
           </p>
         </div>
@@ -300,21 +300,21 @@ export const CustomerMenu: React.FC = () => {
             <div className="absolute right-0 top-0 bottom-0 w-8 sm:w-14 bg-gradient-to-l from-black to-transparent z-10 pointer-events-none" />
 
             {/* Continuous Fast Right-to-Left Moving Track */}
-            <div className="animate-slide-right-to-left flex items-center gap-3 sm:gap-3.5 py-1 px-1 select-none">
+            <div className="animate-slide-right-to-left flex items-center gap-2.5 sm:gap-3 py-1 px-1 select-none">
               {[...offerCards, ...offerCards].map((offer, idx) => (
                 <div
                   key={`${offer.id}-${idx}`}
                   onClick={() => handleOfferClick(offer)}
-                  className="shrink-0 min-w-[250px] sm:min-w-[285px] max-w-[320px] h-[78px] sm:h-[86px] rounded-xl bg-gradient-to-r from-[#170E08] via-[#120B06] to-[#0D0D0D] border border-[#2D180E] hover:border-[#FF5A00] p-2.5 sm:p-3 flex items-center justify-between gap-3 relative overflow-hidden group cursor-pointer shadow-md hover:shadow-[#FF5A00]/30 transition-all hover:scale-[1.02]"
+                  className="shrink-0 min-w-[220px] sm:min-w-[250px] max-w-[280px] h-[70px] sm:h-[76px] rounded-xl bg-gradient-to-r from-[#170E08] via-[#120B06] to-[#0D0D0D] border border-[#2D180E] hover:border-[#FF5A00] p-2 sm:p-2.5 flex items-center justify-between gap-2.5 relative overflow-hidden group cursor-pointer shadow-md hover:shadow-[#FF5A00]/30 transition-all hover:scale-[1.02]"
                 >
                   {/* Glowing Background Radial */}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#FF5A00]/10 rounded-full blur-xl pointer-events-none" />
 
                   {/* Text Details */}
-                  <div className="min-w-0 flex-1 space-y-1 relative z-10">
+                  <div className="min-w-0 flex-1 space-y-0.5 relative z-10">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {offer.badge && (
-                        <span className="text-[9px] sm:text-[10px] font-black uppercase bg-[#FF5A00] text-white px-1.5 py-0.5 rounded tracking-wide shadow-sm">
+                        <span className="text-[8px] sm:text-[9px] font-black uppercase bg-[#FF5A00] text-white px-1.5 py-0.5 rounded tracking-wide shadow-sm">
                           {offer.badge}
                         </span>
                       )}
@@ -324,10 +324,10 @@ export const CustomerMenu: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <h4 className="text-xs sm:text-sm font-extrabold uppercase text-white truncate group-hover:text-[#FF5A00] transition-colors leading-tight">
+                    <h4 className="text-[11px] sm:text-xs font-extrabold uppercase text-white truncate group-hover:text-[#FF5A00] transition-colors leading-tight">
                       {offer.title}
                     </h4>
-                    <p className="text-[10px] sm:text-[11px] text-[#A1A1AA] truncate leading-tight">
+                    <p className="text-[10px] text-[#A1A1AA] truncate leading-tight">
                       {offer.subtitle}
                     </p>
                   </div>
@@ -339,14 +339,14 @@ export const CustomerMenu: React.FC = () => {
                       alt={offer.title}
                       loading="lazy"
                       decoding="async"
-                      className="w-13 h-13 sm:w-16 sm:h-16 rounded-lg object-cover bg-black border border-[#2A2A2A] shrink-0 group-hover:scale-105 transition-transform relative z-10"
+                      className="w-11 h-11 sm:w-13 sm:h-13 rounded-lg object-cover bg-black border border-[#2A2A2A] shrink-0 group-hover:scale-105 transition-transform relative z-10"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src = '/placeholder-burger.svg';
                       }}
                     />
                   ) : (
-                    <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-lg bg-[#1C1C1C] border border-[#2A2A2A] flex items-center justify-center text-[#FF5A00] shrink-0 relative z-10">
-                      <Sparkles className="w-5 h-5" />
+                    <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-lg bg-[#1C1C1C] border border-[#2A2A2A] flex items-center justify-center text-[#FF5A00] shrink-0 relative z-10">
+                      <Sparkles className="w-4 h-4" />
                     </div>
                   )}
                 </div>
@@ -356,10 +356,10 @@ export const CustomerMenu: React.FC = () => {
         )}
 
         {/* Horizontal Category Navigation Bar (Center Aligned) */}
-        <div className="w-full flex items-center justify-start sm:justify-center gap-2.5 pb-3 mb-8 overflow-x-auto scrollbar-none scroll-smooth">
+        <div className="w-full flex items-center justify-start sm:justify-center gap-2 pb-2.5 mb-6 overflow-x-auto scrollbar-none scroll-smooth">
           <button
             onClick={() => setSelectedCategory('ALL')}
-            className={`h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0 cursor-pointer border ${
+            className={`h-8 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer border ${
               selectedCategory === 'ALL'
                 ? 'bg-[#FF5A00] text-white border-[#FF5A00] shadow-sm'
                 : 'bg-[#0D0D0D] text-[#A1A1AA] border-[#242424] hover:text-[#F5F5F5] hover:bg-[#151515] hover:border-[#333333]'
@@ -372,19 +372,19 @@ export const CustomerMenu: React.FC = () => {
           {/* Blinking Orange COMBO DEALS Category Button */}
           <button
             onClick={() => setSelectedCategory('COMBO_DEALS')}
-            className={`h-9 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer border ${
+            className={`h-8 px-3.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
               selectedCategory === 'COMBO_DEALS'
                 ? 'bg-[#FF5A00] text-white border-[#FF5A00] shadow-lg shadow-[#FF5A00]/50 ring-2 ring-[#FF5A00]'
                 : 'bg-[#FF5A00]/15 text-[#FF5A00] border-[#FF5A00] hover:bg-[#FF5A00] hover:text-white animate-pulse shadow-[0_0_12px_rgba(255,90,0,0.5)] ring-1 ring-[#FF5A00]/60'
             }`}
           >
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5A00] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF5A00]"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#FF5A00]"></span>
             </span>
-            <Sparkles className={`w-4 h-4 ${selectedCategory === 'COMBO_DEALS' ? 'text-white' : 'text-[#FF5A00]'}`} />
+            <Sparkles className={`w-3.5 h-3.5 ${selectedCategory === 'COMBO_DEALS' ? 'text-white' : 'text-[#FF5A00]'}`} />
             <span className="tracking-wide uppercase">Combo Deals</span>
-            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider ${
+            <span className={`text-[8px] font-black uppercase px-1 py-0.5 rounded tracking-wider ${
               selectedCategory === 'COMBO_DEALS' ? 'bg-white text-[#FF5A00]' : 'bg-[#FF5A00] text-white'
             }`}>
               OFFER
@@ -399,7 +399,7 @@ export const CustomerMenu: React.FC = () => {
                 <button
                   key={c.id}
                   onClick={() => setSelectedCategory(c.id)}
-                  className={`h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0 cursor-pointer border ${
+                  className={`h-8 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer border ${
                     isSelected
                       ? 'bg-[#FF5A00] text-white border-[#FF5A00] shadow-sm'
                       : 'bg-[#0D0D0D] text-[#A1A1AA] border-[#242424] hover:text-[#F5F5F5] hover:bg-[#151515] hover:border-[#333333]'
@@ -414,22 +414,22 @@ export const CustomerMenu: React.FC = () => {
 
         {/* Loading Shimmer Skeletons */}
         {isLoading && products.length === 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5 animate-pulse">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 lg:gap-4 animate-pulse">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-[#0D0D0D] border border-[#1C1C1C] rounded-lg p-3 sm:p-4 space-y-3">
+              <div key={i} className="bg-[#0D0D0D] border border-[#1C1C1C] rounded-lg p-2.5 sm:p-3 space-y-2.5">
                 <div className="aspect-[4/3] bg-[#181818] rounded-md" />
-                <div className="h-4 bg-[#181818] rounded w-3/4" />
-                <div className="h-3 bg-[#141414] rounded w-full" />
-                <div className="flex justify-between items-center pt-2">
-                  <div className="h-4 bg-[#181818] rounded w-1/4" />
-                  <div className="h-7 w-16 bg-[#181818] rounded" />
+                <div className="h-3.5 bg-[#181818] rounded w-3/4" />
+                <div className="h-2.5 bg-[#141414] rounded w-full" />
+                <div className="flex justify-between items-center pt-1.5">
+                  <div className="h-3.5 bg-[#181818] rounded w-1/4" />
+                  <div className="h-6 w-14 bg-[#181818] rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : (
           /* Responsive Product Grid: 4 cols desktop, 3 cols med, 2 cols sm, 2 cols mobile */
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 lg:gap-4">
             {filteredProducts.map((p) => {
               const displayImg = p.image_url || '/placeholder-burger.svg';
               const isOutOfStock = p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
@@ -494,27 +494,27 @@ export const CustomerMenu: React.FC = () => {
                     </div>
 
                     {/* Info Card */}
-                    <div className="p-3 sm:p-4 space-y-1.5 sm:space-y-2">
+                    <div className="p-2.5 sm:p-3 space-y-1 sm:space-y-1.5">
                       <div className="flex items-start justify-between gap-1">
                         <h3 className="font-bold text-xs sm:text-sm text-[#F5F5F5] group-hover:text-[#FF5A00] transition-colors leading-snug line-clamp-1">
                           {cleanName}
                         </h3>
                       </div>
 
-                      <p className="text-[11px] sm:text-xs text-[#71717A] line-clamp-2 leading-relaxed font-normal">
+                      <p className="text-[10px] sm:text-[11px] text-[#71717A] line-clamp-2 leading-relaxed font-normal">
                         {p.description || p.short_description || 'Crafted with premium ingredients, made fresh to order.'}
                       </p>
                     </div>
                   </div>
 
                   {/* Bottom Row: Price & Add Button */}
-                  <div className="p-3 sm:p-4 pt-0 flex items-center justify-between mt-auto">
+                  <div className="p-2.5 sm:p-3 pt-0 flex items-center justify-between mt-auto">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-xs sm:text-sm font-bold text-[#F5F5F5]">
                         £{p.base_price.toFixed(2)}
                       </span>
                       {p.compare_at_price && p.compare_at_price > p.base_price && (
-                        <span className="text-[10px] sm:text-xs text-[#71717A] line-through">
+                        <span className="text-[10px] sm:text-[11px] text-[#71717A] line-through">
                           £{p.compare_at_price.toFixed(2)}
                         </span>
                       )}
@@ -527,7 +527,7 @@ export const CustomerMenu: React.FC = () => {
                         e.stopPropagation();
                         setSelectedProduct(p);
                       }}
-                      className={`h-7 px-2.5 sm:h-8 sm:px-3 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-all ${
+                      className={`h-6.5 px-2.5 sm:h-7 sm:px-2.5 rounded-md sm:rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all ${
                         isOutOfStock
                           ? 'bg-[#1C1C1C] text-[#555] cursor-not-allowed'
                           : 'bg-[#141414] hover:bg-[#FF5A00] text-white border border-[#2B2B2B] hover:border-[#FF5A00] active:scale-95 cursor-pointer'

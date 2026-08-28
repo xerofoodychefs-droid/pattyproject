@@ -723,18 +723,18 @@ export const CustomerCheckout: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+    <div className="max-w-[1080px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* STEPS BREADCRUMBS */}
-      <div className="flex items-center gap-2 text-sm text-[#A1A1AA] mb-8 overflow-x-auto pb-2">
+      <div className="flex items-center gap-2 text-xs sm:text-sm text-[#A1A1AA] mb-6 overflow-x-auto pb-2">
         <button
           type="button"
           onClick={() => setStep(1)}
-          className={`flex items-center gap-2 cursor-pointer font-medium ${
+          className={`flex items-center gap-1.5 cursor-pointer font-medium ${
             step >= 1 ? 'text-[#F5F5F5]' : 'text-[#71717A]'
           }`}
         >
           <div
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold ${
               step > 1
                 ? 'bg-[#22C55E] text-black'
                 : step === 1
@@ -742,20 +742,20 @@ export const CustomerCheckout: React.FC = () => {
                 : 'bg-[#1C1C1C] text-[#71717A]'
             }`}
           >
-            {step > 1 ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '1'}
+            {step > 1 ? <Check className="w-3 h-3 stroke-[3]" /> : '1'}
           </div>
           <span>Delivery</span>
         </button>
 
-        <div className="w-8 h-[1px] bg-[#242424]" />
+        <div className="w-6 h-[1px] bg-[#242424]" />
 
         <div
-          className={`flex items-center gap-2 font-medium ${
+          className={`flex items-center gap-1.5 font-medium ${
             step >= 2 ? 'text-[#F5F5F5]' : 'text-[#71717A]'
           }`}
         >
           <div
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold ${
               step === 2
                 ? 'bg-[#FF5A00] text-white'
                 : 'bg-[#1C1C1C] text-[#71717A]'
@@ -766,35 +766,35 @@ export const CustomerCheckout: React.FC = () => {
           <span>Payment</span>
         </div>
 
-        <div className="w-8 h-[1px] bg-[#242424]" />
+        <div className="w-6 h-[1px] bg-[#242424]" />
 
-        <div className="flex items-center gap-2 text-[#71717A] font-medium">
-          <div className="w-6 h-6 rounded-full bg-[#1C1C1C] flex items-center justify-center text-xs font-semibold">
+        <div className="flex items-center gap-1.5 text-[#71717A] font-medium">
+          <div className="w-5 h-5 rounded-full bg-[#1C1C1C] flex items-center justify-center text-xs font-semibold">
             3
           </div>
           <span>Confirmation</span>
         </div>
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F5F5] tracking-tight mb-8">
+      <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F5F5F5] tracking-tight mb-6">
         Checkout
       </h1>
 
       {error && (
-        <div className="mb-6 p-4 rounded-lg bg-[#241209] border border-[#FF5A00]/40 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-[#FF5A00] shrink-0 mt-0.5" />
-          <div className="text-sm text-[#F5F5F5]">{error}</div>
+        <div className="mb-5 p-3.5 rounded-lg bg-[#241209] border border-[#FF5A00]/40 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-[#FF5A00] shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm text-[#F5F5F5]">{error}</div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* LEFT COLUMN: Steps Form */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="lg:col-span-7 space-y-4">
           {step === 1 ? (
             /* STEP 1: DELIVERY / COLLECTION DETAILS */
             <>
               {/* Order Type Toggle */}
-              <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-5 sm:p-6 space-y-4">
+              <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-4 sm:p-5 space-y-3.5">
                 <h2 className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider">
                   Order Type
                 </h2>

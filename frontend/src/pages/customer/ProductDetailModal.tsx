@@ -101,11 +101,11 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
       <div className="fixed inset-0" onClick={onClose} />
 
       {/* Main Modal Surface */}
-      <div className="bg-[#0D0D0D] text-[#F5F5F5] rounded-t-[12px] sm:rounded-[12px] max-w-3xl xl:max-w-4xl w-full shadow-2xl overflow-hidden relative z-10 border border-[#242424] flex flex-col md:flex-row max-h-[90vh] animate-in zoom-in-95 duration-150">
+      <div className="bg-[#0D0D0D] text-[#F5F5F5] rounded-t-[12px] sm:rounded-[12px] max-w-2xl lg:max-w-3xl w-full shadow-2xl overflow-hidden relative z-10 border border-[#242424] flex flex-col md:flex-row max-h-[90vh] animate-in zoom-in-95 duration-150">
         
         {/* LEFT COLUMN: Product Image & Details */}
         <div className="w-full md:w-1/2 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[#242424] bg-[#0D0D0D] overflow-y-auto">
-          <div className="p-5 sm:p-6 space-y-4">
+          <div className="p-4 sm:p-5 space-y-3.5">
             
             {/* Top Action Header with Share & Close buttons */}
             <div className="flex items-center justify-between pb-1">
@@ -159,7 +159,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
             </div>
 
             {/* Product Image Frame */}
-            <div className="w-full h-52 sm:h-60 rounded-xl overflow-hidden bg-[#151515] border border-[#242424] relative flex items-center justify-center">
+            <div className="w-full h-44 sm:h-52 rounded-xl overflow-hidden bg-[#151515] border border-[#242424] relative flex items-center justify-center">
               <img
                 src={defaultImg}
                 alt={product.name}

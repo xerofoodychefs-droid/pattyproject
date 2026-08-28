@@ -395,9 +395,9 @@ export const SelectLocationPage: React.FC = () => {
   const isResolving = resolutionState === 'RESOLVING';
 
   return (
-    <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-20 text-[#F5F5F5]">
+    <div className="w-full max-w-[1060px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-20 text-[#F5F5F5]">
       {/* Page Heading & Subtitle */}
-      <div className="mb-8 sm:mb-10">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-3xl font-bold text-[#F5F5F5] tracking-tight">
           Select location
         </h1>

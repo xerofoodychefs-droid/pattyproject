@@ -174,21 +174,21 @@ export const CustomerCart: React.FC = () => {
   );
 
   return (
-    <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-20 text-[#F5F5F5]">
+    <div className="w-full max-w-[1060px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-20 text-[#F5F5F5]">
       {/* Header Bar */}
-      <div className="flex items-center justify-between pb-6 mb-8 border-b border-[#1C1C1C]">
+      <div className="flex items-center justify-between pb-4 mb-6 border-b border-[#1C1C1C]">
         <div>
-          <h1 className="text-3xl font-bold text-[#F5F5F5] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#F5F5F5] tracking-tight">
             Your Cart
           </h1>
-          <p className="text-sm text-[#A1A1AA] font-normal mt-1">
+          <p className="text-xs sm:text-sm text-[#A1A1AA] font-normal mt-0.5">
             Review your selected items and options before checkout.
           </p>
         </div>
 
         <Link
           to="/order"
-          className="flex items-center gap-1.5 text-sm text-[#A1A1AA] hover:text-[#F5F5F5] font-medium transition-colors group"
+          className="flex items-center gap-1.5 text-xs sm:text-sm text-[#A1A1AA] hover:text-[#F5F5F5] font-medium transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 text-[#FF5A00] group-hover:-translate-x-1 transition-transform" />
           <span>Continue Shopping</span>
@@ -196,36 +196,36 @@ export const CustomerCart: React.FC = () => {
       </div>
 
       {hasOutOfStockItems && (
-        <div className="mb-6 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg p-3.5 text-xs text-[#EF4444] font-medium flex items-center gap-2">
+        <div className="mb-5 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg p-3 text-xs text-[#EF4444] font-medium flex items-center gap-2">
           <span>Some items in your cart are currently out of stock at this location. Please remove them before proceeding to checkout.</span>
         </div>
       )}
 
       {items.length === 0 ? (
         /* Empty Cart State */
-        <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-10 sm:p-14 text-center space-y-5 max-w-md mx-auto my-12 shadow-xl">
-          <div className="w-14 h-14 rounded-lg bg-[#151515] border border-[#242424] flex items-center justify-center text-[#FF5A00] mx-auto">
-            <ShoppingBag className="w-7 h-7" />
+        <div className="bg-[#0D0D0D] border border-[#242424] rounded-[10px] p-8 sm:p-12 text-center space-y-4 max-w-md mx-auto my-10 shadow-xl">
+          <div className="w-12 h-12 rounded-lg bg-[#151515] border border-[#242424] flex items-center justify-center text-[#FF5A00] mx-auto">
+            <ShoppingBag className="w-6 h-6" />
           </div>
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-semibold text-[#F5F5F5]">Your cart is empty</h2>
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-[#F5F5F5]">Your cart is empty</h2>
             <p className="text-xs text-[#A1A1AA] leading-relaxed">
               Looks like you haven't added any items to your cart yet.
             </p>
           </div>
           <Link
             to="/order"
-            className="inline-flex h-11 items-center justify-center bg-[#FF5A00] hover:bg-[#E84F00] text-white px-6 rounded-lg text-sm font-semibold transition-all shadow-md cursor-pointer"
+            className="inline-flex h-10 items-center justify-center bg-[#FF5A00] hover:bg-[#E84F00] text-white px-5 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-md cursor-pointer"
           >
             Browse Menu
           </Link>
         </div>
       ) : (
         /* 2-Column Main Desktop Layout */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
           {/* LEFT COLUMN: Cart Items List */}
-          <div className="lg:col-span-7 space-y-3.5">
+          <div className="lg:col-span-7 space-y-3">
             {items.map((item, idx) => {
               const displayImg = item.product.image_url || '/placeholder-burger.svg';
               const isItemOutOfStock = item.product.is_available === false || (item.product.stock_quantity !== undefined && item.product.stock_quantity <= 0);
@@ -233,12 +233,12 @@ export const CustomerCart: React.FC = () => {
               return (
                 <div
                   key={idx}
-                  className={`bg-[#0D0D0D] border rounded-[10px] p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+                  className={`bg-[#0D0D0D] border rounded-[10px] p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 transition-colors ${
                     isItemOutOfStock ? 'border-[#EF4444]/40 bg-[#140808]' : 'border-[#242424] hover:border-[#333333]'
                   }`}
                 >
                   {/* Product Image & Info Container */}
-                  <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
                     <div className="relative shrink-0">
                       <img
                         src={displayImg}
@@ -246,7 +246,7 @@ export const CustomerCart: React.FC = () => {
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src = '/placeholder-burger.svg';
                         }}
-                        className={`w-20 h-20 object-cover rounded-lg border border-[#1C1C1C] bg-[#111111] ${
+                        className={`w-16 h-16 sm:w-18 sm:h-18 object-cover rounded-lg border border-[#1C1C1C] bg-[#111111] ${
                           isItemOutOfStock ? 'brightness-75' : ''
                         }`}
                       />
