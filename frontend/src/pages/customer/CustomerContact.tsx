@@ -56,7 +56,7 @@ export const CustomerContact: React.FC = () => {
       </div>
 
       {/* Main Content Container */}
-      <div className="w-full max-w-[1720px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 py-10 sm:py-14 lg:py-16 relative z-10 flex-1 flex items-center">
+      <div className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 py-10 sm:py-14 lg:py-16 relative z-10 flex-1 flex items-center">
         
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           

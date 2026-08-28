@@ -16,7 +16,7 @@ export const OrderingHeader: React.FC<Props> = ({ onOpenLocationModal }) => {
 
   return (
     <header className="sticky top-0 z-50 bg-[#0A0A0A] border-b border-[#1F1F1F] shadow-2xl">
-      <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-12 py-3 flex items-center justify-between gap-3">
+      <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-8 lg:px-12 py-3 flex items-center justify-between gap-3">
 
         {/* Left Section: Round Brand Logo (Text removed as requested) */}
         <div className="flex items-center">
