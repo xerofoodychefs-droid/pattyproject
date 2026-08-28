@@ -85,10 +85,10 @@ export const CustomerHome: React.FC = () => {
   return (
     <div className="pb-0 space-y-6 sm:space-y-16">
       {/* Hero Section matching exact reference image */}
-      <section id="hero" className="relative bg-black min-h-[calc(100vh-65px)] lg:min-h-[580px] lg:max-h-[740px] flex flex-col justify-between overflow-hidden px-6 sm:px-10 lg:px-12 xl:px-16 pt-6 lg:pt-8 pb-6 lg:pb-8">
+      <section id="hero" className="relative bg-black min-h-[calc(100vh-65px)] lg:h-[calc(100vh-65px)] flex flex-col justify-between overflow-hidden px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 pt-6 lg:pt-8 pb-6 lg:pb-8">
         
         {/* Full-bleed right side burger background image overlay */}
-        <div className="absolute inset-y-0 right-0 w-full lg:w-[58%] xl:w-[60%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
+        <div className="absolute inset-y-0 right-0 w-full lg:w-[62%] xl:w-[66%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
           <img
             src="/herobackground.png"
             alt="Hero Smash Burger"
@@ -99,21 +99,21 @@ export const CustomerHome: React.FC = () => {
         </div>
 
         {/* Top/Middle Hero Content (Headline + Description + Buttons) */}
-        <div className="relative z-10 my-auto max-w-[540px]">
+        <div className="relative z-10 my-auto max-w-[560px]">
           {/* Orange Location Tag */}
           <span className="text-xs lg:text-sm text-[#FF5500] tracking-[0.25em] font-extrabold uppercase block mb-3 sm:mb-4">
             LONDON
           </span>
 
           {/* Giant Headline matching exact reference screenshot */}
-          <h1 className="text-5xl sm:text-7xl lg:text-6xl xl:text-7xl font-black leading-[0.92] tracking-tight font-hero uppercase">
+          <h1 className="text-5xl sm:text-7xl lg:text-[5.5rem] xl:text-[6.5rem] 2xl:text-[7.2rem] font-black leading-[0.88] tracking-tight font-hero uppercase">
             <span className="text-white">SMASH.</span><br />
             <span className="text-[#FF5500]">STACK.</span><br />
             <span className="text-white">SATISFY.</span>
           </h1>
 
           {/* Supporting Paragraph */}
-          <p className="text-[#9CA3AF] text-sm sm:text-base font-medium leading-relaxed max-w-[420px] mt-4 lg:mt-5 mb-6 lg:mb-7">
+          <p className="text-[#9CA3AF] text-sm sm:text-base font-medium leading-relaxed max-w-[420px] mt-4 lg:mt-6 mb-6 lg:mb-8">
             London-made burgers. Fresh ingredients.<br className="hidden sm:inline" />
             Bold flavours.
           </p>
@@ -125,7 +125,7 @@ export const CustomerHome: React.FC = () => {
                 setOrderType('DELIVERY');
                 navigate('/select-location');
               }}
-              className="bg-[#FF5500] hover:bg-[#E04B00] text-white px-7 py-3.5 rounded-xl font-bold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#FF5500]/30 flex items-center gap-2 cursor-pointer"
+              className="bg-[#FF5500] hover:bg-[#E04B00] text-white px-7 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#FF5500]/30 flex items-center gap-2 cursor-pointer"
             >
               <span>ORDER NOW</span>
               <ChevronRight className="w-4 h-4" />
@@ -135,7 +135,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* WELCOME TO PATTY PROJECT BRAND INTRODUCTION SECTION */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-8 pb-0 text-center text-white space-y-6">
+      <section className="w-full max-w-[1280px] mx-auto px-6 sm:px-10 lg:px-16 pt-10 pb-0 text-center text-white space-y-6">
         {/* Top 3 Stars */}
         <div className="flex items-center justify-center gap-1.5 text-[#FF5500]">
           <Star className="w-4 h-4 fill-[#FF5500]" />
@@ -149,7 +149,7 @@ export const CustomerHome: React.FC = () => {
         </p>
 
         {/* Serif Headline */}
-        <h2 className="text-4xl sm:text-5xl lg:text-5xl font-serif text-white tracking-tight leading-tight font-normal">
+        <h2 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-white tracking-tight leading-tight font-normal">
           Good Food. Great Times.
         </h2>
 
@@ -203,7 +203,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* CATEGORIES SHOWCASE BANNER (DIRECTLY ABOVE SIGNATURE BURGERS) */}
-      <section className="w-full max-w-[1360px] mx-auto px-4 sm:px-10 lg:px-12 pt-2 pb-0 sm:pt-4 sm:pb-1">
+      <section className="w-full max-w-[1720px] mx-auto px-4 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 pt-2 pb-0 sm:pt-4 sm:pb-1">
         <Link to="/order" className="block w-full overflow-hidden rounded-2xl sm:rounded-3xl hover:opacity-95 transition-opacity">
           {/* Mobile View: 2-column + full width stack matching attached photo */}
           <img
@@ -224,9 +224,9 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* SIGNATURE BURGERS & TODAY'S OFFERS SECTION */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 space-y-8 sm:space-y-14 pt-4 sm:pt-6 pb-2 sm:pb-14">
+      <section className="w-full max-w-[1720px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 space-y-8 sm:space-y-16 pt-4 sm:pt-6 pb-2 sm:pb-16">
         {/* SIGNATURE BURGERS SHOWCASE SECTION (Full Width & Large Scale matching reference poster) */}
-        <div className="space-y-8 sm:space-y-10">
+        <div className="space-y-10 sm:space-y-12">
           <div className="flex items-center justify-between">
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-widest uppercase font-hero">
               SIGNATURE BURGERS
@@ -238,15 +238,15 @@ export const CustomerHome: React.FC = () => {
           </div>
 
           {/* Top Row: 3 Signature Burgers spanning full width */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 xl:gap-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 xl:gap-14">
             {/* 1. MC PROJECT */}
             <div
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-5 sm:gap-6 cursor-pointer p-3 sm:p-5"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-36 sm:h-48 lg:h-52 xl:h-60 shrink-0 relative overflow-hidden rounded-3xl bg-[#111111]">
                 <img
                   src={mcProduct?.image_url || '/product_the_mc_project.png'}
                   alt="MC Project"
@@ -255,13 +255,13 @@ export const CustomerHome: React.FC = () => {
                   decoding="async"
                 />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-serif font-black tracking-wide uppercase leading-tight">
+              <div className="space-y-2.5">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black tracking-wide uppercase leading-tight">
                   <span className="text-white">MC </span>
                   <br className="hidden sm:inline" />
                   <span className="text-[#FF5500]">PROJECT</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium leading-relaxed max-w-[280px]">
+                <p className="text-xs sm:text-sm lg:text-base text-[#D1D5DB] font-medium leading-relaxed max-w-[280px] sm:max-w-[320px]">
                   Double beef, double American cheese, burger sauce, lettuce, onion & gherkins
                 </p>
               </div>
@@ -272,9 +272,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-5 sm:gap-6 cursor-pointer p-3 sm:p-5"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-36 sm:h-48 lg:h-52 xl:h-60 shrink-0 relative overflow-hidden rounded-3xl bg-[#111111]">
                 <img
                   src={outlawProduct?.image_url || '/product_the_outlaw_project_.png'}
                   alt="Outlaw Project"
@@ -283,13 +283,13 @@ export const CustomerHome: React.FC = () => {
                   decoding="async"
                 />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-serif font-black tracking-wide uppercase leading-tight">
+              <div className="space-y-2.5">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black tracking-wide uppercase leading-tight">
                   <span className="text-white">OUTLAW </span>
                   <br className="hidden sm:inline" />
                   <span className="text-[#FF5500]">PROJECT</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium leading-relaxed max-w-[280px]">
+                <p className="text-xs sm:text-sm lg:text-base text-[#D1D5DB] font-medium leading-relaxed max-w-[280px] sm:max-w-[320px]">
                   Double beef, mature cheddar, bacon, smoky BBQ, jalapeños & jalapeño mayo
                 </p>
               </div>
@@ -300,9 +300,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-5 sm:gap-6 cursor-pointer p-3 sm:p-5"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-36 sm:h-48 lg:h-52 xl:h-60 shrink-0 relative overflow-hidden rounded-3xl bg-[#111111]">
                 <img
                   src={pastramiProduct?.image_url || '/product_pastrami_burger_.png'}
                   alt="Pastrami Burger"
@@ -311,13 +311,13 @@ export const CustomerHome: React.FC = () => {
                   decoding="async"
                 />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-serif font-black tracking-wide uppercase leading-tight">
+              <div className="space-y-2.5">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black tracking-wide uppercase leading-tight">
                   <span className="text-white">PASTRAMI </span>
                   <br className="hidden sm:inline" />
                   <span className="text-[#FF5500]">BURGER</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium leading-relaxed max-w-[280px]">
+                <p className="text-xs sm:text-sm lg:text-base text-[#D1D5DB] font-medium leading-relaxed max-w-[280px] sm:max-w-[320px]">
                   Pastrami, Emmental, Russian sauce & pickled gherkins
                 </p>
               </div>
@@ -325,15 +325,15 @@ export const CustomerHome: React.FC = () => {
           </div>
 
           {/* Bottom Row: 2 Signature Burgers Large Centered */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 max-w-5xl mx-auto pt-2 sm:pt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 xl:gap-28 max-w-5xl lg:max-w-6xl mx-auto pt-4 sm:pt-8">
             {/* 4. FRIED CHICKEN SANDO */}
             <div
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-5 sm:gap-6 cursor-pointer p-3 sm:p-5"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-36 sm:h-48 lg:h-52 xl:h-60 shrink-0 relative overflow-hidden rounded-3xl bg-[#111111]">
                 <img
                   src={chickenProduct?.image_url || '/product_buffalo_chicken_sando_.png'}
                   alt="Fried Chicken Sando"
@@ -342,13 +342,13 @@ export const CustomerHome: React.FC = () => {
                   decoding="async"
                 />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-serif font-black tracking-wide uppercase leading-tight">
+              <div className="space-y-2.5">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black tracking-wide uppercase leading-tight">
                   <span className="text-white">FRIED CHICKEN </span>
                   <br className="hidden sm:inline" />
                   <span className="text-[#FF5500]">SANDO</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium leading-relaxed max-w-[280px]">
+                <p className="text-xs sm:text-sm lg:text-base text-[#D1D5DB] font-medium leading-relaxed max-w-[280px] sm:max-w-[320px]">
                   Buffalo buttermilk chicken, coleslaw, lime mayo & gherkins
                 </p>
               </div>
@@ -359,9 +359,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-5 sm:gap-6 cursor-pointer p-3 sm:p-5"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-36 sm:h-48 lg:h-52 xl:h-60 shrink-0 relative overflow-hidden rounded-3xl bg-[#111111]">
                 <img
                   src={halloumiProduct?.image_url || '/product_the_halloumi_project_veg.png'}
                   alt="Halloumi Burger"
@@ -370,13 +370,13 @@ export const CustomerHome: React.FC = () => {
                   decoding="async"
                 />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-serif font-black tracking-wide uppercase leading-tight">
+              <div className="space-y-2.5">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black tracking-wide uppercase leading-tight">
                   <span className="text-white">HALLOUMI </span>
                   <br className="hidden sm:inline" />
                   <span className="text-[#FF5500]">BURGER</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium leading-relaxed max-w-[280px]">
+                <p className="text-xs sm:text-sm lg:text-base text-[#D1D5DB] font-medium leading-relaxed max-w-[280px] sm:max-w-[320px]">
                   Halloumi, guacamole, tomato, pickled onion & hot-honey ketchup
                 </p>
               </div>
@@ -396,7 +396,7 @@ export const CustomerHome: React.FC = () => {
             </Link>
           </div>
 
-          {/* 3 Promotional Banner Cards Grid */}
+          {/* 3 Large Promotional Banner Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
             {todaysOffersData.cards.map((card: any, idx: number) => {
               const bgTexture = idx === 0 ? offerBg1 : idx === 1 ? offerBg2 : offerBg3;
@@ -404,7 +404,7 @@ export const CustomerHome: React.FC = () => {
                 <div 
                   key={card.id || idx}
                   onClick={() => navigate(card.link_url || '/order')}
-                  className="bg-[#120B07] border border-[#2A1810] hover:border-[#FF5500]/60 rounded-xl p-4 sm:p-5 flex items-center justify-between relative overflow-hidden shadow-2xl transition-all hover:scale-[1.02] cursor-pointer group min-h-[160px] sm:min-h-[180px]"
+                  className="bg-[#120B07] border border-[#2A1810] hover:border-[#FF5500]/60 rounded-xl p-5 sm:p-6 flex items-center justify-between relative overflow-hidden shadow-2xl transition-all hover:scale-[1.02] cursor-pointer group min-h-[180px] sm:min-h-[200px]"
                 >
                   {/* Background texture overlay */}
                   <div
@@ -413,29 +413,29 @@ export const CustomerHome: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-black/70 pointer-events-none" />
 
-                  <div className="space-y-2.5 relative z-10 max-w-[55%]">
-                    <h3 className="font-black text-white text-lg sm:text-xl tracking-wide uppercase font-hero leading-tight">
+                  <div className="space-y-3 relative z-10 max-w-[55%]">
+                    <h3 className="font-black text-white text-xl sm:text-2xl tracking-wide uppercase font-hero leading-tight">
                       {card.title}
                     </h3>
                     {card.badge && (
                       <div className="pt-0.5">
-                        <span className="inline-block px-3 py-1 bg-[#FF5500] text-white text-[11px] font-extrabold rounded uppercase tracking-wider shadow-md shadow-[#FF5500]/30">
+                        <span className="inline-block px-4 py-1.5 bg-[#FF5500] text-white text-xs font-extrabold rounded-lg uppercase tracking-wider shadow-lg shadow-[#FF5500]/30">
                           {card.badge}
                         </span>
                       </div>
                     )}
-                    <p className="text-xs text-[#D1D5DB] font-medium">{card.subtitle}</p>
+                    <p className="text-xs sm:text-sm text-[#D1D5DB] font-medium">{card.subtitle}</p>
                   </div>
 
                   {card.image_url ? (
                     <img
                       src={card.image_url}
                       alt={card.title}
-                      className="w-28 sm:w-36 lg:w-40 h-28 sm:h-32 lg:h-34 object-cover rounded-lg border border-[#262626] shadow-xl shrink-0 group-hover:scale-105 transition-transform duration-300 relative z-10"
+                      className="w-36 sm:w-44 lg:w-48 xl:w-52 h-32 sm:h-36 lg:h-40 object-cover rounded-lg border border-[#262626] shadow-xl shrink-0 group-hover:scale-105 transition-transform duration-300 relative z-10"
                     />
                   ) : (
-                    <div className="w-28 sm:w-36 lg:w-40 h-28 sm:h-32 lg:h-34 bg-[#161616]/90 border border-[#262626] rounded-lg p-3 flex flex-col items-center justify-center text-center shadow-xl shrink-0 group-hover:border-[#FF5500]/40 transition-colors relative z-10">
-                      <div className="w-9 h-9 rounded-full bg-[#FF5500]/20 border border-[#FF5500]/40 flex items-center justify-center text-[#FF5500] font-extrabold text-xs mb-1.5 shadow-md">
+                    <div className="w-36 sm:w-48 lg:w-52 xl:w-60 h-32 sm:h-36 lg:h-40 bg-[#161616]/90 border border-[#262626] rounded-lg p-3 flex flex-col items-center justify-center text-center shadow-xl shrink-0 group-hover:border-[#FF5500]/40 transition-colors relative z-10">
+                      <div className="w-10 h-10 rounded-full bg-[#FF5500]/20 border border-[#FF5500]/40 flex items-center justify-center text-[#FF5500] font-extrabold text-xs mb-1.5 shadow-md">
                         ID
                       </div>
                       <span className="text-[11px] font-extrabold text-white uppercase tracking-wider">{card.title}</span>
@@ -450,9 +450,9 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* HUNGRY? UNLOCK YOUR PATTYPROJECT MEAL BANNER matching Screenshot */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-2 pb-8 sm:py-12 text-center text-white space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1450px] mx-auto px-6 sm:px-10 lg:px-16 pt-2 pb-8 sm:py-12 text-center text-white space-y-4 sm:space-y-6">
         {/* Main 2-Line Headline in Serif */}
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif tracking-wide leading-tight max-w-4xl mx-auto uppercase">
+        <h2 className="text-3xl sm:text-5xl lg:text-6xl font-serif tracking-wide leading-tight max-w-4xl mx-auto uppercase">
           <span className="text-white">HUNGRY? </span>
           <span className="text-[#FF5500]">UNLOCK YOUR</span>
           <br />
@@ -466,12 +466,12 @@ export const CustomerHome: React.FC = () => {
         </p>
 
         {/* GET STARTED Pill Button */}
-        <div className="pt-2">
+        <div className="pt-3">
           <button
             onClick={() => {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="bg-[#FF5500] hover:bg-[#E04B00] text-white text-xs sm:text-sm font-black uppercase tracking-widest px-9 py-3.5 rounded-full shadow-2xl shadow-[#FF5500]/30 transition-all hover:scale-105 cursor-pointer"
+            className="bg-[#FF5500] hover:bg-[#E04B00] text-white text-xs sm:text-sm font-black uppercase tracking-widest px-10 py-4 rounded-full shadow-2xl shadow-[#FF5500]/30 transition-all hover:scale-105 cursor-pointer"
           >
             GET STARTED
           </button>

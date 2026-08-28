@@ -276,13 +276,13 @@ export const CustomerMenu: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-black text-[#F5F5F5] pb-36 sm:pb-24">
-      <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-5 sm:space-y-6">
+      <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-16 pt-8 sm:pt-10 space-y-6 sm:space-y-7">
         {/* Page Heading & Subtitle */}
         <div className="pb-2 border-b border-[#1C1C1C]">
           <span className="text-xs text-[#FF5A00] tracking-[0.25em] font-extrabold uppercase block mb-1">
             PATTY PROJECT
           </span>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase font-hero">
+          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight uppercase font-hero">
             OUR MENU
           </h1>
           <p className="text-xs sm:text-sm text-[#A1A1AA] mt-1 font-normal">

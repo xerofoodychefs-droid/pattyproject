@@ -188,12 +188,12 @@ export const CustomerOffers: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent sm:via-black/50 md:via-transparent z-[1] pointer-events-none" />
 
         {/* Banner Content Container */}
-        <div className="w-full max-w-[1360px] h-full mx-auto px-4 sm:px-8 lg:px-12 flex items-center relative z-10 py-8 sm:py-0">
-          <div className="w-full sm:w-1/2 lg:max-w-[540px] text-left">
+        <div className="w-full max-w-[1720px] h-full mx-auto px-4 sm:px-8 lg:px-16 flex items-center relative z-10 py-8 sm:py-0">
+          <div className="w-full sm:w-1/2 lg:max-w-[560px] text-left">
             <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.14em] block mb-2 sm:mb-2.5">
               {offersData.banner.tagline || "EXCLUSIVE OFFERS"}
             </span>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[44px] font-black uppercase tracking-tight leading-[0.98]">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[50px] font-black uppercase tracking-tight leading-[0.98]">
               <span className="text-white block">{offersData.banner.headline_main || "DEALS THAT"}</span>
               <span className="text-[#FF5A00] block mt-1">{offersData.banner.headline_highlight || "HIT DIFFERENT."}</span>
             </h1>
@@ -205,7 +205,7 @@ export const CustomerOffers: React.FC = () => {
       </section>
 
       {/* MAIN CONTENT AREA (SEAMLESS FLOW WITH PURE BLACK BACKGROUND) */}
-      <main className="flex-1 w-full max-w-[1360px] mx-auto px-4 sm:px-8 lg:px-12 pt-4 pb-12 sm:pt-6 sm:pb-16 space-y-8">
+      <main className="flex-1 w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-16 pt-4 pb-12 sm:pt-6 sm:pb-16 space-y-8">
         {/* CATEGORY FILTER BAR (MATCHING MENU PAGE SHAPE) */}
         <section className="w-full flex justify-center">
           <div className="w-full flex items-center justify-start sm:justify-center gap-2.5 pb-2 overflow-x-auto scrollbar-none scroll-smooth">
