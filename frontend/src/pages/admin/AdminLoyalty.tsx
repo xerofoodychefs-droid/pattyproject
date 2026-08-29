@@ -1016,23 +1016,24 @@ export const AdminLoyalty: React.FC = () => {
       {/* MODAL: MANUAL POINTS ADJUSTMENT */}
       {/* ============================================================ */}
       {adjustModalOpen && selectedMember && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#121212] border border-[#2E2E2E] rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[#242424]">
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-container bg-[#121212] border border-[#2E2E2E] rounded-2xl max-w-md p-4 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#242424] shrink-0">
               <div>
                 <h3 className="text-base font-extrabold text-white">Manual Point Adjustment</h3>
                 <p className="text-xs text-[#9CA3AF]">{selectedMember.full_name} ({selectedMember.email})</p>
               </div>
               <button
                 onClick={() => setAdjustModalOpen(false)}
-                className="text-[#9CA3AF] hover:text-white p-1"
+                className="text-[#9CA3AF] hover:text-white p-1 shrink-0 cursor-pointer"
+                aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitAdjustment} className="space-y-4">
-              <div className="flex gap-2">
+            <form onSubmit={handleSubmitAdjustment} className="flex-1 min-h-0 flex flex-col space-y-4">
+              <div className="flex gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setAdjustType('CREDIT')}
@@ -1148,127 +1149,122 @@ export const AdminLoyalty: React.FC = () => {
       {/* MODAL: CAMPAIGN CREATE / EDIT */}
       {/* ============================================================ */}
       {campaignModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#121212] border border-[#2E2E2E] rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[#242424]">
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-container bg-[#121212] border border-[#2E2E2E] rounded-2xl max-w-lg p-4 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#242424] shrink-0">
               <h3 className="text-base font-extrabold text-white">
                 {editingCampaign ? 'Edit Loyalty Campaign' : 'Create New Campaign'}
               </h3>
               <button
                 onClick={() => setCampaignModalOpen(false)}
-                className="text-[#9CA3AF] hover:text-white p-1"
+                className="text-[#9CA3AF] hover:text-white p-1 shrink-0 cursor-pointer"
+                aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveCampaign} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-white mb-1">
-                  Campaign Name <span className="text-[#FF5500]">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Weekend Double Points Special"
-                  value={campName}
-                  onChange={(e) => setCampName(e.target.value)}
-                  className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3.5 text-xs text-white focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveCampaign} className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 <div>
                   <label className="block text-xs font-bold text-white mb-1">
-                    Campaign Type
+                    Campaign Name <span className="text-[#FF5500]">*</span>
                   </label>
-                  <select
-                    value={campType}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCampType(val);
-                      if (val === 'DOUBLE_POINTS') setCampMultiplier(2.0);
-                      else if (val === 'TRIPLE_POINTS') setCampMultiplier(3.0);
-                    }}
-                    className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none cursor-pointer"
-                  >
-                    <option value="DOUBLE_POINTS">DOUBLE_POINTS (2x)</option>
-                    <option value="TRIPLE_POINTS">TRIPLE_POINTS (3x)</option>
-                    <option value="BONUS_POINTS">BONUS_POINTS (+PTS)</option>
-                    <option value="CUSTOM_MULTIPLIER">CUSTOM_MULTIPLIER</option>
-                  </select>
+                  <input
+                    type="text"
+                    placeholder="e.g. Weekend Double Points Special"
+                    value={campName}
+                    onChange={(e) => setCampName(e.target.value)}
+                    className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3.5 text-xs text-white focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-white mb-1">Campaign Type</label>
+                    <select
+                      value={campType}
+                      onChange={(e) => setCampType(e.target.value as any)}
+                      className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none"
+                    >
+                      <option value="MULTIPLIER">Points Multiplier (e.g. 2x)</option>
+                      <option value="BONUS_FIXED">Bonus Fixed Points (+100)</option>
+                      <option value="SPECIAL_EVENT">Special Event</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-white mb-1">
+                      Multiplier Value
+                    </label>
+                    <input
+                      type="number"
+                      min="1.0"
+                      max="10.0"
+                      step="0.1"
+                      value={campMultiplier}
+                      onChange={(e) => setCampMultiplier(Number(e.target.value))}
+                      className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3.5 text-xs text-white focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-white mb-1">
-                    Points Multiplier
+                    Bonus Fixed Points (Optional)
                   </label>
                   <input
                     type="number"
-                    step="0.1"
-                    min="1.0"
-                    max="10.0"
-                    value={campMultiplier}
-                    onChange={(e) => setCampMultiplier(Number(e.target.value))}
+                    min="0"
+                    step="50"
+                    value={campBonus}
+                    onChange={(e) => setCampBonus(Number(e.target.value))}
                     className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3.5 text-xs text-white focus:outline-none"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-white mb-1">
-                  Bonus Fixed Points (Optional)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={campBonus}
-                  onChange={(e) => setCampBonus(Number(e.target.value))}
-                  className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3.5 text-xs text-white focus:outline-none"
-                />
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-white mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={campStartDate}
+                      onChange={(e) => setCampStartDate(e.target.value)}
+                      className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={campStartDate}
-                    onChange={(e) => setCampStartDate(e.target.value)}
-                    className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none"
-                  />
+                  <div>
+                    <label className="block text-xs font-bold text-white mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={campEndDate}
+                      onChange={(e) => setCampEndDate(e.target.value)}
+                      className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">End Date</label>
+                <div className="flex items-center gap-3 pt-2">
                   <input
-                    type="date"
-                    value={campEndDate}
-                    onChange={(e) => setCampEndDate(e.target.value)}
-                    className="w-full h-11 bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#FF5500] rounded-xl px-3 text-xs text-white focus:outline-none"
+                    type="checkbox"
+                    id="campActive"
+                    checked={campIsActive}
+                    onChange={(e) => setCampIsActive(e.target.checked)}
+                    className="w-4 h-4 accent-[#FF5500] rounded cursor-pointer"
                   />
+                  <label htmlFor="campActive" className="text-xs font-bold text-white cursor-pointer">
+                    Activate campaign immediately
+                  </label>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
-                <input
-                  type="checkbox"
-                  id="campActive"
-                  checked={campIsActive}
-                  onChange={(e) => setCampIsActive(e.target.checked)}
-                  className="w-4 h-4 accent-[#FF5500] rounded cursor-pointer"
-                />
-                <label htmlFor="campActive" className="text-xs font-bold text-white cursor-pointer">
-                  Activate campaign immediately
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#242424]">
+              <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-[#242424] shrink-0">
                 <button
                   type="button"
                   onClick={() => setCampaignModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-[#9CA3AF] hover:text-white"
+                  className="px-4 py-2 text-xs font-bold text-[#9CA3AF] hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>

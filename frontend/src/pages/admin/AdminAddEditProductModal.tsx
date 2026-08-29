@@ -90,6 +90,15 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
   const mainImageInputRef = useRef<HTMLInputElement | null>(null);
   const galleryImageInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Prevent background body scroll while modal is open
+  useEffect(() => {
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = orig;
+    };
+  }, []);
+
   useEffect(() => {
     if (product) {
       setName(product.name || '');
@@ -277,16 +286,16 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto shadow-2xl p-6 sm:p-7 relative text-white flex flex-col">
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-6xl shadow-2xl p-4 sm:p-6 md:p-7 relative text-white">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-6 shrink-0">
+        <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-4 sm:mb-6 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-[#FF5500]/10 border border-[#FF5500]/30 rounded-xl text-[#FF5500]">
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white tracking-wide">
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide">
                 {product ? 'Edit Product' : 'Add New Product'}
               </h2>
               <p className="text-xs text-[#9CA3AF]">
@@ -296,21 +305,23 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 text-[#9CA3AF] hover:text-white rounded-xl hover:bg-[#1A1A1A] cursor-pointer"
+            className="p-2 text-[#9CA3AF] hover:text-white rounded-xl hover:bg-[#1A1A1A] cursor-pointer shrink-0"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {error && (
-          <div className="mb-5 p-3.5 bg-[#2A1215] border border-[#EF4444]/40 text-[#FCA5A5] rounded-xl text-xs font-semibold shrink-0">
+          <div className="mb-4 p-3.5 bg-[#2A1215] border border-[#EF4444]/40 text-[#FCA5A5] rounded-xl text-xs font-semibold shrink-0">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6 flex-1">
-          {/* Main 3-Column Aligned Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 space-y-6">
+            {/* Main 3-Column Aligned Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             
             {/* ============================================================ */}
             {/* COLUMN 1: Basic Information & Pricing */}
@@ -908,10 +919,11 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
               </div>
             </div>
 
+            </div>
           </div>
 
           {/* Action Bar Footer */}
-          <div className="flex items-center justify-between pt-5 border-t border-[#262626] shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 sm:pt-5 border-t border-[#262626] shrink-0 mt-3">
             <button
               type="button"
               onClick={onClose}

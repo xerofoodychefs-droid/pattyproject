@@ -17,6 +17,15 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Prevent body scrolling while modal is open
+  useEffect(() => {
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = orig;
+    };
+  }, []);
+
   // Sync categoryList when parent categories prop changes (excluding combo categories)
   useEffect(() => {
     setCategoryList(
@@ -134,17 +143,18 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-lg shadow-2xl p-6 relative flex flex-col max-h-[90vh]">
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-lg shadow-2xl p-4 sm:p-6 relative flex flex-col text-white">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-5 shrink-0">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-[#262626] mb-4 sm:mb-5 shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-wide">Manage Categories</h2>
+            <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">Manage Categories</h2>
             <p className="text-xs text-[#9CA3AF]">Create, reorder positions, and remove menu categories</p>
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 text-[#9CA3AF] hover:text-white rounded-xl hover:bg-[#1A1A1A] cursor-pointer"
+            className="p-1.5 text-[#9CA3AF] hover:text-white rounded-xl hover:bg-[#1A1A1A] cursor-pointer shrink-0"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>

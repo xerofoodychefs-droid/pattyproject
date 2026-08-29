@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, MapPin, CreditCard, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { Order } from '../../types';
 import { api } from '../../api/client';
@@ -12,6 +12,14 @@ interface Props {
 export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpdateStatus }) => {
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = orig;
+    };
+  }, []);
 
   const handleUpdateStatus = async () => {
     setLoading(true);
@@ -39,12 +47,12 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative text-[#F5F5F5] animate-in fade-in duration-150 space-y-5">
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-container bg-[#0D0D0D] border border-[#242424] rounded-xl max-w-4xl shadow-2xl p-4 sm:p-6 relative text-[#F5F5F5] flex flex-col space-y-4">
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]">
+        <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-[#F5F5F5]">Order Details <span className="text-[#FF5A00]">{order.order_number}</span></h2>
+            <h2 className="text-base sm:text-lg font-bold text-[#F5F5F5]">Order Details <span className="text-[#FF5A00]">{order.order_number}</span></h2>
             <span className="px-2.5 py-0.5 bg-[#241209] text-[#FF5A00] border border-[#6B2A0D] rounded text-[10px] font-semibold uppercase tracking-wider">
               {order.status}
             </span>
@@ -52,11 +60,13 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
           <button
             onClick={onClose}
             aria-label="Close modal"
-            className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer"
+            className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <div className="flex-1 overflow-y-auto space-y-5 pr-1">
 
         {/* Top Info Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -263,6 +273,7 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
             </div>
 
           </div>
+        </div>
         </div>
       </div>
     </div>

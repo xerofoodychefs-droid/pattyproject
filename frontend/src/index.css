@@ -135,5 +135,54 @@ input:-webkit-autofill:active {
   animation-play-state: paused;
 }
 
+/* ========================================================================== */
+/* Admin Modal Standard Responsive Overlay & Sizing Rules */
+/* ========================================================================== */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background-color: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
 
+@media (min-width: 1024px) {
+  .admin-modal-overlay {
+    padding-left: calc(var(--admin-sidebar-w, 16rem) + 16px);
+    padding-right: 16px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+}
 
+@media (max-width: 1023px) {
+  .admin-modal-overlay {
+    padding: 12px;
+  }
+}
+
+.admin-modal-container {
+  width: 100%;
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .admin-modal-container {
+    max-height: calc(100vh - 32px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-modal-container {
+    max-height: calc(100vh - 40px);
+  }
+}

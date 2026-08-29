@@ -595,9 +595,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Delete Branch Dialog */}
       {branchToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl w-full max-w-md shadow-2xl p-6 relative text-[#F5F5F5] space-y-4">
-            <div className="flex items-center gap-3">
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-container bg-[#0D0D0D] border border-[#242424] rounded-xl max-w-md shadow-2xl p-4 sm:p-6 relative text-[#F5F5F5] space-y-4">
+            <div className="flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 rounded-lg bg-[#EF4444]/10 border border-[#EF4444]/30 flex items-center justify-center text-[#EF4444] shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -611,7 +611,7 @@ export const AdminDashboard: React.FC = () => {
               Are you sure you want to delete <strong className="text-[#F5F5F5]">{branchToDelete.name}</strong> ({branchToDelete.code})? This will permanently remove the branch.
             </p>
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#1C1C1C]">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#1C1C1C] shrink-0">
               <button
                 onClick={() => setBranchToDelete(null)}
                 disabled={deleting}

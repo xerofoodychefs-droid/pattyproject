@@ -164,7 +164,10 @@ const AdminLayoutShell: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div
+      className="min-h-screen bg-black text-white flex"
+      style={{ '--admin-sidebar-w': isCollapsed ? '0px' : '16rem' } as React.CSSProperties}
+    >
       {/* Sidebar Component stays permanently mounted during navigation */}
       <AdminSidebar isCollapsed={isCollapsed} onToggleCollapse={toggleSidebar} />
 

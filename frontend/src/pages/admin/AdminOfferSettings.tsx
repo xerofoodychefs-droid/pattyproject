@@ -793,21 +793,21 @@ export const AdminOfferSettings: React.FC = () => {
 
           {/* Offer Edit / Add Modal */}
           {editingOffer && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-lg shadow-2xl p-6 relative space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
+            <div className="admin-modal-overlay">
+              <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-lg shadow-2xl p-4 sm:p-6 relative space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#262626] shrink-0">
                   <h3 className="text-sm font-bold text-white uppercase">
                     {isAddingNewOffer ? 'Add New Offer Deal' : `Edit Offer (${editingOffer.title})`}
                   </h3>
                   <button
                     onClick={() => setEditingOffer(null)}
-                    className="text-[#9CA3AF] hover:text-white text-xs px-2 py-1 bg-[#1A1A1A] rounded-lg cursor-pointer"
+                    className="text-[#9CA3AF] hover:text-white text-xs px-2 py-1 bg-[#1A1A1A] rounded-lg cursor-pointer shrink-0"
                   >
                     Cancel
                   </button>
                 </div>
 
-                <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                   <div>
                     <label className="block text-xs font-semibold text-[#D1D5DB] mb-1">Offer Title</label>
                     <input
@@ -1115,9 +1115,9 @@ export const AdminOfferSettings: React.FC = () => {
 
           {/* Create / Edit Combo Deal Modal */}
           {editingCombo && (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl p-6 relative flex flex-col text-white">
-                <div className="flex items-center justify-between pb-4 border-b border-[#262626] shrink-0">
+            <div className="admin-modal-overlay">
+              <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-2xl shadow-2xl p-4 sm:p-6 relative flex flex-col text-white">
+                <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-[#262626] shrink-0">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-[#FF5500]/10 border border-[#FF5500]/30 rounded-xl text-[#FF5500]">
                       <UtensilsCrossed className="w-5 h-5" />

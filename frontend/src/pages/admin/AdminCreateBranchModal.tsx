@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Building, Plus } from 'lucide-react';
 import { api } from '../../api/client';
 
@@ -20,6 +20,14 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
   const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = orig;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,10 +79,10 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl w-full max-w-md shadow-2xl p-6 relative text-[#F5F5F5] animate-in fade-in duration-150">
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-container bg-[#0D0D0D] border border-[#242424] rounded-xl max-w-lg shadow-2xl p-4 sm:p-6 relative text-[#F5F5F5] space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C] mb-5">
+        <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#241209] border border-[#6B2A0D] flex items-center justify-center text-[#FF5A00] shrink-0">
               <Building className="w-4.5 h-4.5" />
@@ -87,19 +95,20 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
           <button
             onClick={onClose}
             aria-label="Close modal"
-            className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer"
+            className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 text-[#EF4444] rounded-lg text-xs font-medium">
+          <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 text-[#EF4444] rounded-lg text-xs font-medium shrink-0">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3.5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-[#A1A1AA] uppercase mb-1">Branch Name *</label>
@@ -241,9 +250,10 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
               </div>
             </div>
           </div>
+          </div>
 
           {/* Footer Buttons */}
-          <div className="pt-4 mt-5 border-t border-[#1C1C1C] flex items-center justify-end gap-2.5">
+          <div className="pt-4 mt-4 border-t border-[#1C1C1C] flex flex-wrap items-center justify-end gap-2.5 shrink-0">
             <button
               type="button"
               onClick={onClose}
