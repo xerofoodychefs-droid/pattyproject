@@ -60,8 +60,16 @@ def seed_db():
                     payment_method_type="CARD"
                 )
                 db.add(pm)
+        # Ensure any legacy admin loyalty accounts have 0 points without deleting immutable audit ledger history
+        admin_users = db.query(User).filter(User.role.in_([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])).all()
+        for au in admin_users:
+            admin_loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == au.id).first()
+            if admin_loyalty and (admin_loyalty.available_points != 0 or admin_loyalty.lifetime_points != 0):
+                admin_loyalty.available_points = 0
+                admin_loyalty.lifetime_points = 0
+                print(f"Sanitized non-customer loyalty balance to 0 for {au.role} {au.email}.")
         db.commit()
-        print("Database already seeded. Verified payments and £0.00 delivery fees.")
+        print("Database already seeded. Verified payments, £0.00 delivery fees, and customer-only loyalty accounts.")
         db.close()
         return
 

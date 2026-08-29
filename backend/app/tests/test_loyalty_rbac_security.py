@@ -932,3 +932,64 @@ def test_50_admin_transactions_ledger_excludes_admin_records():
     tx_ids = [t["id"] for t in resp.json()]
     assert "tx-sa-ledger-rogue" not in tx_ids
 
+
+def test_51_order_with_admin_email_never_creates_or_awards_loyalty_points():
+    """51. An order placed with Super Admin or Branch Admin email never awards loyalty points or creates loyalty accounts."""
+    db = TestingSessionLocal()
+    order = Order(
+        id="ord-admin-test-01",
+        order_number="#PP-ADMIN-999",
+        customer_name="Global Super Admin",
+        customer_email="superadmin@pattyproject.co.uk",
+        customer_phone="+44 7000 000000",
+        branch_id="branch-camden-001",
+        order_type=OrderType.DELIVERY,
+        status=OrderStatus.DELIVERED,
+        subtotal=50.00,
+        total_amount=50.00,
+        points_earned=5000,
+        points_redeemed=0
+    )
+    db.add(order)
+    db.commit()
+
+    # Attempt to award loyalty points
+    tx = award_order_loyalty_points(db, order)
+    assert tx is None
+
+    # Verify no LoyaltyAccount was created for Super Admin
+    sa_loy = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == "usr-sec-superadmin-01").first()
+    assert sa_loy is None
+
+
+def test_52_cleanup_routine_sanitizes_admin_loyalty_points_preserving_audit_ledger():
+    """52. Startup seed cleanup routine sanitizes admin loyalty points to 0 while preserving customer accounts and audit ledger."""
+    db = TestingSessionLocal()
+
+    # Inject rogue admin loyalty account
+    rogue_sa = LoyaltyAccount(id="loy-sa-cleanup-test", user_id="usr-sec-superadmin-01", available_points=5128, lifetime_points=5128)
+    rogue_ba = LoyaltyAccount(id="loy-ba-cleanup-test", user_id="usr-sec-camden-admin-01", available_points=1000, lifetime_points=1000)
+    db.add_all([rogue_sa, rogue_ba])
+    db.commit()
+
+    # Run seed cleanup logic
+    admin_users = db.query(User).filter(User.role.in_([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])).all()
+    for au in admin_users:
+        admin_loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == au.id).first()
+        if admin_loyalty and (admin_loyalty.available_points != 0 or admin_loyalty.lifetime_points != 0):
+            admin_loyalty.available_points = 0
+            admin_loyalty.lifetime_points = 0
+    db.commit()
+
+    # Admin loyalty accounts sanitized to 0
+    sa_res = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == "usr-sec-superadmin-01").first()
+    ba_res = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == "usr-sec-camden-admin-01").first()
+    assert sa_res.available_points == 0
+    assert sa_res.lifetime_points == 0
+    assert ba_res.available_points == 0
+    assert ba_res.lifetime_points == 0
+
+    # Customer loyalty accounts preserved
+    alice_loy = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == "usr-sec-alice-01").first()
+    assert alice_loy is not None
+    assert alice_loy.available_points == 5000
