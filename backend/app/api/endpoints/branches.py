@@ -29,8 +29,9 @@ router = APIRouter()
 
 @router.get("", response_model=List[BranchResponse])
 @router.get("/", response_model=List[BranchResponse])
-def list_public_branches(db: Session = Depends(get_db)):
-    """Returns active public branches."""
+def list_public_branches(response: Response, db: Session = Depends(get_db)):
+    """Returns active public branches with caching for client and edge speed."""
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
     return db.query(Branch).filter(Branch.is_active == True).all()
 
 @router.get("/stats", response_model=List[BranchStatsResponse])

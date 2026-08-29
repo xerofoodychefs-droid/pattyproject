@@ -42,26 +42,12 @@ export const CustomerMenu: React.FC = () => {
 
     const loadAllMenuData = async () => {
       try {
-        // Authoritative branch UUID reconciliation
-        let activeBranches: Branch[] = [];
-        try {
-          const branches = await api.get<Branch[]>('/branches');
-          activeBranches = (branches || []).filter((b) => b.is_active !== false);
-          useCartStore.getState().reconcileActiveBranches(activeBranches);
-        } catch (e) {
-          console.error('Failed to load branch list:', e);
-        }
-
         let currentBranch = useCartStore.getState().selectedBranch;
-        if (!currentBranch && activeBranches.length > 0) {
-          currentBranch = activeBranches[0];
-          setSelectedBranch(currentBranch, null, false, currentBranch);
-        }
-
         const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}` : '';
 
-        // Concurrent high-speed data fetch (All 5 requests in parallel)
-        const [catData, prodData, todayData, pageOffersData, comboData] = await Promise.all([
+        // Concurrent high-speed data fetch (All 6 requests fully parallelized)
+        const [branchData, catData, prodData, todayData, pageOffersData, comboData] = await Promise.all([
+          api.get<Branch[]>('/branches').catch(() => []),
           api.get<Category[]>('/categories').catch(() => []),
           api.get<Product[]>(`/products${branchParam}`).catch(() => []),
           api.get<any>('/promotions/settings/todays-offers').catch(() => null),
@@ -70,6 +56,16 @@ export const CustomerMenu: React.FC = () => {
         ]);
 
         if (!isMounted) return;
+
+        // Authoritative branch UUID reconciliation in background
+        const activeBranches = (branchData || []).filter((b) => b.is_active !== false);
+        if (activeBranches.length > 0) {
+          useCartStore.getState().reconcileActiveBranches(activeBranches);
+          if (!currentBranch) {
+            currentBranch = activeBranches[0];
+            setSelectedBranch(currentBranch, null, false, currentBranch);
+          }
+        }
 
         let currentCategories = Array.isArray(catData) ? [...catData] : [];
         let currentProducts = Array.isArray(prodData) ? [...prodData] : [];

@@ -22,8 +22,9 @@ export const OrderingHeader: React.FC<Props> = ({ onOpenLocationModal }) => {
         <div className="flex items-center">
           <Link to="/" className="flex items-center group">
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="Patty Project"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
               className="w-10 h-10 sm:w-11 sm:h-11 object-contain group-hover:scale-105 transition-transform"
             />
           </Link>

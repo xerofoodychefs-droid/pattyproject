@@ -70,7 +70,7 @@ const CustomerLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children
           <div
             className="fixed inset-0 z-0 bg-cover bg-right bg-no-repeat pointer-events-none block md:hidden"
             style={{
-              backgroundImage: `url('/order_now_mobile_bg.png')`,
+              backgroundImage: `url('/order_now_mobile_bg.webp')`,
               backgroundAttachment: 'fixed',
             }}
             aria-hidden="true"
@@ -80,7 +80,7 @@ const CustomerLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children
           <div
             className="fixed inset-0 z-0 bg-cover bg-right-top md:bg-right bg-no-repeat pointer-events-none hidden md:block"
             style={{
-              backgroundImage: `url('/order_now_bg.png')`,
+              backgroundImage: `url('/order_now_bg.webp')`,
               backgroundAttachment: 'fixed',
             }}
             aria-hidden="true"

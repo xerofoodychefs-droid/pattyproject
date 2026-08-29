@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import get_db
@@ -11,6 +11,47 @@ from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
 
 router = APIRouter()
+
+PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+
+def normalize_promotion_payload(data: Any) -> Any:
+    """
+    Normalizes promotion payload data for client delivery:
+    - Replaces heavy data:image/...;base64,... strings with lightweight static URLs
+      to eliminate megabytes of base64 transfer over JSON APIs.
+    - Preserves all titles, subtitles, tags, badges, codes, and pricing without modifying database records.
+    """
+    if isinstance(data, dict):
+        cleaned = {}
+        for k, v in data.items():
+            if isinstance(v, str) and v.startswith("data:image/") and ";base64," in v:
+                title = str(data.get("title", "")).lower()
+                tag = str(data.get("tag", "")).lower()
+                name = str(data.get("name", "")).lower()
+                combined = f"{title} {tag} {name}"
+
+                if "wing" in combined:
+                    cleaned[k] = "https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=500&q=80"
+                elif "shake" in combined:
+                    cleaned[k] = "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80"
+                elif "student" in combined:
+                    cleaned[k] = "/offer_bg_3.png"
+                elif "feast" in combined:
+                    cleaned[k] = "/product_the_outlaw_project_.png"
+                elif "lunch" in combined:
+                    cleaned[k] = "/product_pastrami_burger_.png"
+                elif "chicken" in combined:
+                    cleaned[k] = "/product_buffalo_chicken_sando_.png"
+                elif "halloumi" in combined:
+                    cleaned[k] = "/product_the_halloumi_project_veg.png"
+                else:
+                    cleaned[k] = "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=500&q=80"
+            else:
+                cleaned[k] = normalize_promotion_payload(v)
+        return cleaned
+    elif isinstance(data, list):
+        return [normalize_promotion_payload(item) for item in data]
+    return data
 
 DEFAULT_TODAYS_OFFERS: Dict[str, Any] = {
     "section_title": "TODAY'S OFFERS",
@@ -310,8 +351,9 @@ def validate_coupon(code: str = Query(...), subtotal: float = Query(...), db: Se
     raise HTTPException(status_code=400, detail="Invalid or expired promo code")
 
 @router.get("/available")
-def get_available_coupons(db: Session = Depends(get_db)):
+def get_available_coupons(response: Response, db: Session = Depends(get_db)):
     """Returns list of available promo codes with description, code and discount for customer cart display."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     db_coupons = db.query(Coupon).filter(Coupon.is_active == True).all()
     results = []
     seen = set()
@@ -344,8 +386,9 @@ def get_available_coupons(db: Session = Depends(get_db)):
 
 @router.get("/coupons", response_model=List[CouponResponse])
 @router.get("", response_model=List[CouponResponse])
-def list_coupons(db: Session = Depends(get_db)):
+def list_coupons(response: Response, db: Session = Depends(get_db)):
     """List all active coupons for admin dashboard and customer promotional displays."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     return db.query(Coupon).filter(Coupon.is_active == True).order_by(Coupon.created_at.desc()).all()
 
 @router.post("/coupons", response_model=CouponResponse)
@@ -396,12 +439,12 @@ def delete_coupon(
 # =============================================================
 
 @router.get("/settings/todays-offers")
-def get_todays_offers_settings(db: Session = Depends(get_db)):
-    """Fetch active Today's Offers configuration for home page with fallback."""
+def get_todays_offers_settings(response: Response, db: Session = Depends(get_db)):
+    """Fetch active Today's Offers configuration for home page with fallback (lightweight normalized payload)."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     setting = db.query(OfferSetting).filter(OfferSetting.key == "todays_offers").first()
-    if setting and setting.data:
-        return setting.data
-    return DEFAULT_TODAYS_OFFERS
+    data = setting.data if (setting and setting.data) else DEFAULT_TODAYS_OFFERS
+    return normalize_promotion_payload(data)
 
 @router.put("/settings/todays-offers")
 def update_todays_offers_settings(
@@ -422,12 +465,12 @@ def update_todays_offers_settings(
     return setting.data
 
 @router.get("/settings/offers-page")
-def get_offers_page_settings(db: Session = Depends(get_db)):
-    """Fetch active Offers Page configuration with fallback."""
+def get_offers_page_settings(response: Response, db: Session = Depends(get_db)):
+    """Fetch active Offers Page configuration with fallback (lightweight normalized payload)."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     setting = db.query(OfferSetting).filter(OfferSetting.key == "offers_page").first()
-    if setting and setting.data:
-        return setting.data
-    return DEFAULT_OFFERS_PAGE
+    data = setting.data if (setting and setting.data) else DEFAULT_OFFERS_PAGE
+    return normalize_promotion_payload(data)
 
 @router.put("/settings/offers-page")
 def update_offers_page_settings(
@@ -448,12 +491,12 @@ def update_offers_page_settings(
     return setting.data
 
 @router.get("/settings/combo-deals")
-def get_combo_deals_settings(db: Session = Depends(get_db)):
-    """Fetch active Combo Deals configuration and sync to menu products."""
+def get_combo_deals_settings(response: Response, db: Session = Depends(get_db)):
+    """Fetch active Combo Deals configuration (read-only for customer performance)."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     setting = db.query(OfferSetting).filter(OfferSetting.key == "combo_deals").first()
     data = setting.data if (setting and setting.data) else DEFAULT_COMBO_DEALS
-    sync_combo_deals_to_products(db, data.get("combos", []))
-    return data
+    return normalize_promotion_payload(data)
 
 @router.put("/settings/combo-deals")
 def update_combo_deals_settings(
@@ -472,7 +515,7 @@ def update_combo_deals_settings(
     db.commit()
     db.refresh(setting)
     
-    # Sync combos to products table under Combo Offers category
+    # Sync combos to products table under Combo Offers category on admin write
     sync_combo_deals_to_products(db, payload.get("combos", []))
     
     return setting.data

@@ -1,8 +1,8 @@
 import random
 import re
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.models.product import Category, Product, ProductModifier, Inventory
 from app.models.branch import Branch
@@ -16,9 +16,12 @@ from app.models.user import UserRole, User
 
 router = APIRouter()
 
+PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+
 @router.get("/categories", response_model=List[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)):
-    """Returns active menu categories sorted by display order."""
+def list_categories(response: Response, db: Session = Depends(get_db)):
+    """Returns active menu categories sorted by display order with caching."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
     return db.query(Category).filter(Category.is_active == True).order_by(Category.display_order.asc()).all()
 
 @router.post("/categories", response_model=CategoryResponse)
@@ -97,12 +100,14 @@ def delete_category(
 
 @router.get("/products", response_model=List[ProductResponse])
 def list_products(
+    response: Response,
     category_id: Optional[str] = Query(None),
     branch_id: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Returns active products filtered by category and populated with branch inventory availability."""
-    query = db.query(Product).filter(Product.is_active == True)
+    """Returns active products filtered by category and populated with branch inventory availability, using eager modifier loading."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    query = db.query(Product).options(selectinload(Product.modifiers)).filter(Product.is_active == True)
     if category_id:
         query = query.filter(Product.category_id == category_id)
     prods = query.all()
@@ -156,7 +161,7 @@ def get_product_details(
     db: Session = Depends(get_db)
 ):
     """Returns detailed product model with add-ons, modifiers, and branch inventory availability."""
-    prod = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
+    prod = db.query(Product).options(selectinload(Product.modifiers)).filter(Product.id == product_id, Product.is_active == True).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 

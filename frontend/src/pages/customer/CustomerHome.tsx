@@ -90,8 +90,9 @@ export const CustomerHome: React.FC = () => {
         {/* Full-bleed right side burger background image overlay */}
         <div className="absolute inset-y-0 right-0 w-full lg:w-[62%] xl:w-[66%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
           <img
-            src="/herobackground.png"
+            src="/herobackground.webp"
             alt="Hero Smash Burger"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/herobackground.png'; }}
             className="w-full h-full object-cover object-center lg:object-right select-none opacity-95 lg:opacity-100"
           />
           {/* Left-to-right soft gradient overlay for seamless text readability */}
@@ -118,7 +119,6 @@ export const CustomerHome: React.FC = () => {
             Bold flavours.
           </p>
 
-          {/* CTA Buttons Row matching screenshot */}
           <div className="flex flex-wrap items-center gap-4">
             <button
               onClick={() => {
@@ -207,18 +207,22 @@ export const CustomerHome: React.FC = () => {
         <Link to="/order" className="block w-full overflow-hidden rounded-2xl sm:rounded-3xl hover:opacity-95 transition-opacity">
           {/* Mobile View: 2-column + full width stack matching attached photo */}
           <img
-            src="/categories_showcase_mobile.png"
+            src="/categories_showcase_mobile.webp"
             alt="Menu Categories: Breakfast Buns, Burgers & Sandos, Wings & Tenders, Shakes & Drinks, Fries & Sides"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/categories_showcase_mobile.png'; }}
             className="w-full h-auto object-contain sm:object-cover rounded-2xl sm:rounded-3xl shadow-2xl block md:hidden"
-            loading="eager"
+            loading="lazy"
+            decoding="async"
           />
 
           {/* Desktop / Tablet View: Landscape banner */}
           <img
-            src="/categories_showcase_banner.png"
+            src="/categories_showcase_banner.webp"
             alt="Menu Categories: Breakfast Buns, Burgers & Sandos, Wings & Tenders, Shakes & Drinks, Fries & Sides"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/categories_showcase_banner.png'; }}
             className="w-full h-auto object-cover rounded-2xl sm:rounded-3xl shadow-2xl hidden md:block"
-            loading="eager"
+            loading="lazy"
+            decoding="async"
           />
         </Link>
       </section>
