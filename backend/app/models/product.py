@@ -42,7 +42,36 @@ class Product(Base):
 
     category = relationship("Category", back_populates="products")
     modifiers = relationship("ProductModifier", back_populates="product", cascade="all, delete-orphan")
+    choice_groups = relationship("ProductChoiceGroup", back_populates="product", cascade="all, delete-orphan", order_by="ProductChoiceGroup.display_order.asc()")
     inventory_records = relationship("Inventory", back_populates="product", cascade="all, delete-orphan")
+
+class ProductChoiceGroup(Base):
+    __tablename__ = "product_choice_groups"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_id = Column(String(36), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(150), nullable=False)
+    min_selections = Column(Integer, nullable=False, default=1)
+    max_selections = Column(Integer, nullable=False, default=1)
+    is_required = Column(Boolean, nullable=False, default=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    product = relationship("Product", back_populates="choice_groups")
+    options = relationship("ProductChoiceOption", back_populates="group", cascade="all, delete-orphan", order_by="ProductChoiceOption.display_order.asc()")
+
+class ProductChoiceOption(Base):
+    __tablename__ = "product_choice_options"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = Column(String(36), ForeignKey("product_choice_groups.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(150), nullable=False)
+    price_delta = Column(Float, nullable=False, default=0.0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    group = relationship("ProductChoiceGroup", back_populates="options")
 
 class ProductModifier(Base):
     __tablename__ = "product_modifiers"

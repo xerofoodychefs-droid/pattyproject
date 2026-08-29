@@ -11,6 +11,30 @@ class ProductModifierResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ProductChoiceOptionResponse(BaseModel):
+    id: str
+    group_id: str
+    name: str
+    price_delta: float = 0.0
+    is_active: bool = True
+    display_order: int = 0
+
+    class Config:
+        from_attributes = True
+
+class ProductChoiceGroupResponse(BaseModel):
+    id: str
+    product_id: str
+    name: str
+    min_selections: int = 1
+    max_selections: int = 1
+    is_required: bool = True
+    display_order: int = 0
+    options: List[ProductChoiceOptionResponse] = []
+
+    class Config:
+        from_attributes = True
+
 class CategoryResponse(BaseModel):
     id: str
     name: str
@@ -56,6 +80,7 @@ class ProductResponse(BaseModel):
     is_available: bool = True
     stock_quantity: int = 100
     modifiers: List[ProductModifierResponse] = []
+    choice_groups: List[ProductChoiceGroupResponse] = []
 
     class Config:
         from_attributes = True
@@ -78,6 +103,7 @@ class ProductCreateRequest(BaseModel):
     has_service_charge: bool = False
     stock_quantity: int = 100
     modifiers: List[dict] = []
+    choice_groups: Optional[List[dict]] = None
 
 class ProductUpdateRequest(BaseModel):
     category_id: Optional[str] = None
@@ -97,6 +123,7 @@ class ProductUpdateRequest(BaseModel):
     has_service_charge: Optional[bool] = None
     is_active: Optional[bool] = None
     modifiers: Optional[List[dict]] = None
+    choice_groups: Optional[List[dict]] = None
 
 class InventoryResponse(BaseModel):
     id: str

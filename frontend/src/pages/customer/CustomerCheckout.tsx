@@ -583,7 +583,14 @@ export const CustomerCheckout: React.FC = () => {
         items: items.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
-          selected_modifiers: (i.selectedModifiers || []).map((m) => ({ name: m.price ? m.name : m.name, price: m.price }))
+          selected_modifiers: (i.selectedModifiers || []).map((m) => ({ name: m.name, price: m.price })),
+          selected_choices: (i.selectedChoices || []).map((c) => ({
+            group_id: c.group_id,
+            group_name: c.group_name,
+            option_id: c.option_id,
+            option_name: c.option_name,
+            price_delta: c.price_delta
+          }))
         }))
       };
 

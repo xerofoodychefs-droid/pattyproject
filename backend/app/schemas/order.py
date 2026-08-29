@@ -6,6 +6,7 @@ class OrderItemCreate(BaseModel):
     product_id: str
     quantity: int = 1
     selected_modifiers: List[Dict[str, Any]] = []
+    selected_choices: Optional[List[Dict[str, Any]]] = []
 
 class OrderCreateRequest(BaseModel):
     branch_id: str
@@ -32,6 +33,7 @@ class OrderItemResponse(BaseModel):
     unit_price: float
     total_price: float
     selected_modifiers: Optional[List[Dict[str, Any]]] = None
+    selected_choices: Optional[List[Dict[str, Any]]] = None
 
     class Config:
         from_attributes = True

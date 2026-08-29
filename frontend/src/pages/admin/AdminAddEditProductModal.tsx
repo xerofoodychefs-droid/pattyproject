@@ -13,6 +13,7 @@ import {
   Sparkles,
   Info,
   Sliders,
+  Utensils,
 } from 'lucide-react';
 import { Category, Product } from '../../types';
 import { api } from '../../api/client';
@@ -63,6 +64,27 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
       : []
   );
 
+  const [choiceGroups, setChoiceGroups] = useState<{
+    name: string;
+    min_selections: number;
+    max_selections: number;
+    is_required: boolean;
+    options: { name: string; price_delta: string; is_active: boolean }[];
+  }[]>(() => {
+    if (!product?.choice_groups || product.choice_groups.length === 0) return [];
+    return product.choice_groups.map((g) => ({
+      name: g.name,
+      min_selections: g.min_selections,
+      max_selections: g.max_selections,
+      is_required: g.is_required,
+      options: (g.options || []).map((o) => ({
+        name: o.name,
+        price_delta: String(o.price_delta ?? 0),
+        is_active: o.is_active ?? true
+      }))
+    }));
+  });
+
   const [loading, setLoading] = useState(false);
 
   const mainImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -95,6 +117,21 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
           ? product.modifiers.map((m) => ({ name: m.name, price: String(m.price) }))
           : []
       );
+      setChoiceGroups(
+        product.choice_groups && product.choice_groups.length > 0
+          ? product.choice_groups.map((g) => ({
+              name: g.name,
+              min_selections: g.min_selections,
+              max_selections: g.max_selections,
+              is_required: g.is_required,
+              options: (g.options || []).map((o) => ({
+                name: o.name,
+                price_delta: String(o.price_delta ?? 0),
+                is_active: o.is_active ?? true
+              }))
+            }))
+          : []
+      );
     }
   }, [product, categories]);
 
@@ -112,6 +149,38 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
 
   const handleRemoveModifier = (idx: number) => {
     setModifiers(modifiers.filter((_, i) => i !== idx));
+  };
+
+  const handleAddChoiceGroup = () => {
+    setChoiceGroups([
+      ...choiceGroups,
+      {
+        name: 'Choose any 2',
+        min_selections: 2,
+        max_selections: 2,
+        is_required: true,
+        options: [
+          { name: '', price_delta: '0.00', is_active: true },
+          { name: '', price_delta: '0.00', is_active: true }
+        ]
+      }
+    ]);
+  };
+
+  const handleRemoveChoiceGroup = (gIdx: number) => {
+    setChoiceGroups(choiceGroups.filter((_, i) => i !== gIdx));
+  };
+
+  const handleAddOptionToGroup = (gIdx: number) => {
+    const updated = [...choiceGroups];
+    updated[gIdx].options.push({ name: '', price_delta: '0.00', is_active: true });
+    setChoiceGroups(updated);
+  };
+
+  const handleRemoveOptionFromGroup = (gIdx: number, oIdx: number) => {
+    const updated = [...choiceGroups];
+    updated[gIdx].options = updated[gIdx].options.filter((_, i) => i !== oIdx);
+    setChoiceGroups(updated);
   };
 
   const handleMainImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,7 +242,24 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
         images: galleryImages.length > 0 ? galleryImages : [imageUrl || '/placeholder-burger.svg'],
         modifiers: modifiers
           .filter((m) => m.name.trim() !== '')
-          .map((m) => ({ name: m.name, price: parseFloat(m.price || '0') }))
+          .map((m) => ({ name: m.name, price: parseFloat(m.price || '0') })),
+        choice_groups: choiceGroups
+          .filter((g) => g.name.trim() !== '')
+          .map((g, gIdx) => ({
+            name: g.name.trim(),
+            min_selections: Number(g.min_selections) || 1,
+            max_selections: Number(g.max_selections) || 1,
+            is_required: Boolean(g.is_required),
+            display_order: gIdx,
+            options: g.options
+              .filter((o) => o.name.trim() !== '')
+              .map((o, oIdx) => ({
+                name: o.name.trim(),
+                price_delta: parseFloat(o.price_delta || '0'),
+                is_active: Boolean(o.is_active),
+                display_order: oIdx
+              }))
+          }))
       };
 
       if (product?.id) {
@@ -510,6 +596,158 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Menu Choice Groups Card (Optional) */}
+              <div className="bg-[#181818] border border-[#262626] p-5 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-[#FF5500]" />
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Menu Choice Groups ({choiceGroups.length})
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddChoiceGroup}
+                    className="text-[10px] bg-[#FF5500]/10 text-[#FF5500] border border-[#FF5500]/30 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 hover:bg-[#FF5500] hover:text-white transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Choice Group</span>
+                  </button>
+                </div>
+
+                {choiceGroups.length === 0 ? (
+                  <p className="text-xs text-[#71717A] italic py-3 text-center border border-dashed border-[#262626] rounded-xl">
+                    Optional. Add a choice group (e.g. "Choose any 2", "Choose your rasher").
+                  </p>
+                ) : (
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+                    {choiceGroups.map((grp, gIdx) => (
+                      <div key={gIdx} className="p-3 bg-[#121212] border border-[#262626] rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Group Name (e.g. Choose any 2)"
+                            value={grp.name}
+                            onChange={(e) => {
+                              const updated = [...choiceGroups];
+                              updated[gIdx].name = e.target.value;
+                              setChoiceGroups(updated);
+                            }}
+                            className="flex-1 bg-[#181818] border border-[#262626] rounded-lg py-1.5 px-2.5 text-xs text-white placeholder-[#555] focus:outline-none focus:border-[#FF5500]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveChoiceGroup(gIdx)}
+                            className="p-1.5 text-[#EF4444] hover:bg-[#2A1212] rounded-lg cursor-pointer transition-colors"
+                            title="Delete Choice Group"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Rules: Min / Max / Required */}
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[#A1A1AA]">Min:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={grp.min_selections}
+                              onChange={(e) => {
+                                const updated = [...choiceGroups];
+                                updated[gIdx].min_selections = parseInt(e.target.value) || 0;
+                                setChoiceGroups(updated);
+                              }}
+                              className="w-12 bg-[#181818] border border-[#262626] rounded px-1.5 py-1 text-center text-white"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[#A1A1AA]">Max:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={grp.max_selections}
+                              onChange={(e) => {
+                                const updated = [...choiceGroups];
+                                updated[gIdx].max_selections = parseInt(e.target.value) || 1;
+                                setChoiceGroups(updated);
+                              }}
+                              className="w-12 bg-[#181818] border border-[#262626] rounded px-1.5 py-1 text-center text-white"
+                            />
+                          </div>
+
+                          <label className="flex items-center gap-1.5 text-[#A1A1AA] cursor-pointer ml-auto">
+                            <input
+                              type="checkbox"
+                              checked={grp.is_required}
+                              onChange={(e) => {
+                                const updated = [...choiceGroups];
+                                updated[gIdx].is_required = e.target.checked;
+                                setChoiceGroups(updated);
+                              }}
+                              className="accent-[#FF5500]"
+                            />
+                            <span>Required</span>
+                          </label>
+                        </div>
+
+                        {/* Options */}
+                        <div className="space-y-2 pt-1 border-t border-[#1F1F1F]">
+                          <div className="flex items-center justify-between text-[10px] text-[#71717A] uppercase font-bold">
+                            <span>Choices ({grp.options.length})</span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddOptionToGroup(gIdx)}
+                              className="text-[#FF5500] hover:underline flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Plus className="w-2.5 h-2.5" /> Add Choice
+                            </button>
+                          </div>
+
+                          {grp.options.map((opt, oIdx) => (
+                            <div key={oIdx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Choice name (e.g. Sausage, Bacon)"
+                                value={opt.name}
+                                onChange={(e) => {
+                                  const updated = [...choiceGroups];
+                                  updated[gIdx].options[oIdx].name = e.target.value;
+                                  setChoiceGroups(updated);
+                                }}
+                                className="flex-1 bg-[#181818] border border-[#262626] rounded-lg py-1 px-2 text-xs text-white placeholder-[#555] focus:outline-none focus:border-[#FF5500]"
+                              />
+                              <input
+                                type="text"
+                                placeholder="+£0.00"
+                                value={opt.price_delta}
+                                onChange={(e) => {
+                                  const updated = [...choiceGroups];
+                                  updated[gIdx].options[oIdx].price_delta = e.target.value;
+                                  setChoiceGroups(updated);
+                                }}
+                                className="w-16 bg-[#181818] border border-[#262626] rounded-lg py-1 px-2 text-xs text-white placeholder-[#555] focus:outline-none focus:border-[#FF5500]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOptionFromGroup(gIdx, oIdx)}
+                                className="p-1 text-[#EF4444] hover:bg-[#2A1212] rounded cursor-pointer"
+                                title="Remove Choice"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>

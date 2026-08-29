@@ -1,7 +1,8 @@
 from decimal import Decimal
 from typing import List, Dict, Any, Optional, Tuple
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.product import Product, ProductModifier
+from app.models.product import Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption
 from app.models.promotion import Coupon
 from app.models.loyalty import LoyaltyReward
 from app.services.loyalty_service import calculate_eligible_spend_and_points, get_or_create_loyalty_config
@@ -73,6 +74,71 @@ def calculate_order_totals(
             else:
                 modifier_details.append({"name": mod_name, "price": 0.0})
 
+        # Validate choice groups and compute choice price delta
+        choice_details = []
+        selected_choices_input = item.get("selected_choices", []) or []
+
+        db_groups = db.query(ProductChoiceGroup).filter(
+            ProductChoiceGroup.product_id == product.id
+        ).order_by(ProductChoiceGroup.display_order.asc()).all()
+
+        for grp in db_groups:
+            # Find submitted choices for this group
+            grp_choices = [
+                c for c in selected_choices_input
+                if isinstance(c, dict) and (
+                    c.get("group_id") == grp.id or
+                    c.get("group_name", "").strip().lower() == grp.name.strip().lower()
+                )
+            ]
+            count = len(grp_choices)
+            if (grp.is_required and count < grp.min_selections) or (count > 0 and count < grp.min_selections):
+                if grp.min_selections == grp.max_selections:
+                    msg = f"Please select exactly {grp.min_selections} items for {grp.name}."
+                else:
+                    msg = f"Please select at least {grp.min_selections} items for {grp.name}."
+                raise HTTPException(status_code=400, detail=msg)
+            if count > grp.max_selections:
+                msg = f"You can select at most {grp.max_selections} items for {grp.name}."
+                raise HTTPException(status_code=400, detail=msg)
+
+            # Prevent duplicate option submissions within the same choice group
+            opt_identifiers = [
+                (c.get("option_id") or c.get("id") or c.get("option_name") or c.get("name"))
+                for c in grp_choices
+                if (c.get("option_id") or c.get("id") or c.get("option_name") or c.get("name"))
+            ]
+            if len(opt_identifiers) != len(set(opt_identifiers)):
+                raise HTTPException(status_code=400, detail=f"Duplicate choices are not permitted for {grp.name}.")
+
+            for c_input in grp_choices:
+                opt_id = c_input.get("option_id") or c_input.get("id")
+                opt_name = c_input.get("option_name") or c_input.get("name")
+
+                query_opt = db.query(ProductChoiceOption).filter(
+                    ProductChoiceOption.group_id == grp.id,
+                    ProductChoiceOption.is_active == True
+                )
+                if opt_id:
+                    db_opt = query_opt.filter(ProductChoiceOption.id == opt_id).first()
+                else:
+                    db_opt = query_opt.filter(ProductChoiceOption.name == opt_name).first()
+
+                if not db_opt:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Selected choice '{opt_name or opt_id}' in '{grp.name}' is invalid or unavailable."
+                    )
+
+                unit_price += db_opt.price_delta
+                choice_details.append({
+                    "group_id": grp.id,
+                    "group_name": grp.name,
+                    "option_id": db_opt.id,
+                    "option_name": db_opt.name,
+                    "price_delta": db_opt.price_delta
+                })
+
         line_total = round(unit_price * quantity, 2)
         subtotal += line_total
 
@@ -82,7 +148,8 @@ def calculate_order_totals(
             "quantity": quantity,
             "unit_price": round(unit_price, 2),
             "total_price": line_total,
-            "selected_modifiers": modifier_details
+            "selected_modifiers": modifier_details,
+            "selected_choices": choice_details
         })
 
     subtotal = round(subtotal, 2)

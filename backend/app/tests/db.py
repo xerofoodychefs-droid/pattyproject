@@ -16,7 +16,7 @@ import app.models as _all_models_registered
 from app.models import (
     User, UserRole, CustomerAddress, UserAuthIdentity, AuthProvider, AuthConsumedJti, AuthSession,
     Branch, BranchUser,
-    Category, Product, ProductModifier,
+    Category, Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption,
     Order, OrderItem, OrderStatusHistory, OrderStatus, OrderType,
     Payment, PaymentStatus, PaymentProvider,
     LoyaltyAccount, LoyaltyTransaction, LoyaltyReward,

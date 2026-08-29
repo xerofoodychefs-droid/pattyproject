@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
-from app.models.product import Category, Product, ProductModifier, Inventory
+from app.models.product import Category, Product, ProductModifier, Inventory, ProductChoiceGroup, ProductChoiceOption
 from app.models.branch import Branch
 from app.schemas.product import (
     CategoryResponse, CategoryCreateRequest, CategoryReorderRequest,
@@ -113,7 +113,10 @@ def list_products(
 ):
     """Returns active products filtered by category and populated with branch inventory availability, using eager modifier loading."""
     response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
-    query = db.query(Product).options(selectinload(Product.modifiers)).filter(Product.is_active == True)
+    query = db.query(Product).options(
+        selectinload(Product.modifiers),
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+    ).filter(Product.is_active == True)
     if category_id:
         query = query.filter(Product.category_id == category_id)
     prods = query.all()
@@ -155,7 +158,8 @@ def list_products(
             "is_active": p.is_active,
             "is_available": is_avail,
             "stock_quantity": stock_qty,
-            "modifiers": p.modifiers or []
+            "modifiers": p.modifiers or [],
+            "choice_groups": p.choice_groups or []
         }
         res.append(ProductResponse(**p_dict))
     return res
@@ -166,8 +170,11 @@ def get_product_details(
     branch_id: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Returns detailed product model with add-ons, modifiers, and branch inventory availability."""
-    prod = db.query(Product).options(selectinload(Product.modifiers)).filter(Product.id == product_id, Product.is_active == True).first()
+    """Returns detailed product model with add-ons, modifiers, choice groups, and branch inventory availability."""
+    prod = db.query(Product).options(
+        selectinload(Product.modifiers),
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+    ).filter(Product.id == product_id, Product.is_active == True).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -201,7 +208,8 @@ def get_product_details(
         "is_active": prod.is_active,
         "is_available": is_avail,
         "stock_quantity": stock_qty,
-        "modifiers": prod.modifiers or []
+        "modifiers": prod.modifiers or [],
+        "choice_groups": prod.choice_groups or []
     }
     return ProductResponse(**p_dict)
 
@@ -247,8 +255,39 @@ def create_product(
                 )
                 db.add(m)
 
+    if request.choice_groups:
+        for g_idx, grp_data in enumerate(request.choice_groups):
+            grp_name = grp_data.get("name", "").strip()
+            if not grp_name:
+                continue
+            grp = ProductChoiceGroup(
+                product_id=prod.id,
+                name=grp_name,
+                min_selections=int(grp_data.get("min_selections", 1)),
+                max_selections=int(grp_data.get("max_selections", 1)),
+                is_required=bool(grp_data.get("is_required", True)),
+                display_order=int(grp_data.get("display_order", g_idx))
+            )
+            db.add(grp)
+            db.flush()
+            for o_idx, opt_data in enumerate(grp_data.get("options", [])):
+                opt_name = opt_data.get("name", "").strip()
+                if not opt_name:
+                    continue
+                opt = ProductChoiceOption(
+                    group_id=grp.id,
+                    name=opt_name,
+                    price_delta=float(opt_data.get("price_delta", 0.0)),
+                    is_active=bool(opt_data.get("is_active", True)),
+                    display_order=int(opt_data.get("display_order", o_idx))
+                )
+                db.add(opt)
+
     db.commit()
-    db.refresh(prod)
+    prod = db.query(Product).options(
+        selectinload(Product.modifiers),
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+    ).filter(Product.id == prod.id).first()
     return prod
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
@@ -307,8 +346,40 @@ def update_product(
                 )
                 db.add(m)
 
+    if request.choice_groups is not None:
+        db.query(ProductChoiceGroup).filter(ProductChoiceGroup.product_id == prod.id).delete()
+        for g_idx, grp_data in enumerate(request.choice_groups):
+            grp_name = grp_data.get("name", "").strip()
+            if not grp_name:
+                continue
+            grp = ProductChoiceGroup(
+                product_id=prod.id,
+                name=grp_name,
+                min_selections=int(grp_data.get("min_selections", 1)),
+                max_selections=int(grp_data.get("max_selections", 1)),
+                is_required=bool(grp_data.get("is_required", True)),
+                display_order=int(grp_data.get("display_order", g_idx))
+            )
+            db.add(grp)
+            db.flush()
+            for o_idx, opt_data in enumerate(grp_data.get("options", [])):
+                opt_name = opt_data.get("name", "").strip()
+                if not opt_name:
+                    continue
+                opt = ProductChoiceOption(
+                    group_id=grp.id,
+                    name=opt_name,
+                    price_delta=float(opt_data.get("price_delta", 0.0)),
+                    is_active=bool(opt_data.get("is_active", True)),
+                    display_order=int(opt_data.get("display_order", o_idx))
+                )
+                db.add(opt)
+
     db.commit()
-    db.refresh(prod)
+    prod = db.query(Product).options(
+        selectinload(Product.modifiers),
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+    ).filter(Product.id == prod.id).first()
     return prod
 
 @router.delete("/products/{product_id}")

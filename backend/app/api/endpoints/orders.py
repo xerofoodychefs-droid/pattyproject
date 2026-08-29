@@ -172,7 +172,15 @@ def create_order(
             resolved_user = db.query(User).filter(User.email == request.customer_email.strip().lower()).first()
 
     # Calculate authoritative server totals
-    items_input = [{"product_id": item.product_id, "quantity": item.quantity, "selected_modifiers": item.selected_modifiers} for item in request.items]
+    items_input = [
+        {
+            "product_id": item.product_id,
+            "quantity": item.quantity,
+            "selected_modifiers": item.selected_modifiers,
+            "selected_choices": item.selected_choices
+        }
+        for item in request.items
+    ]
     totals = calculate_order_totals(
         db=db,
         items=items_input,
@@ -275,6 +283,16 @@ def create_order(
             raise HTTPException(status_code=400, detail=msg)
 
     for item_data in totals["items"]:
+        all_customizations = list(item_data.get("selected_modifiers", []))
+        for ch in item_data.get("selected_choices", []):
+            all_customizations.append({
+                "name": f"{ch['group_name']}: {ch['option_name']}",
+                "price": ch.get("price_delta", 0.0),
+                "group_name": ch["group_name"],
+                "option_name": ch["option_name"],
+                "is_choice": True
+            })
+
         oi = OrderItem(
             order_id=order.id,
             product_id=item_data["product_id"],
@@ -282,7 +300,7 @@ def create_order(
             quantity=item_data["quantity"],
             unit_price=item_data["unit_price"],
             total_price=item_data["total_price"],
-            selected_modifiers=item_data["selected_modifiers"]
+            selected_modifiers=all_customizations
         )
         db.add(oi)
 

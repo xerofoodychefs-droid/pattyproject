@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { CartItem, Product, ProductModifier, Branch } from '../types';
+import { CartItem, Product, ProductModifier, SelectedChoice, Branch } from '../types';
 
 export const MIN_DELIVERY_SUBTOTAL = 15.00;
 
@@ -30,7 +30,7 @@ interface CartState {
   setUserCoords: (coords: { lat: number; lng: number; accuracy?: number } | null, postcode?: string | null) => void;
   setLocationErrorMsg: (msg: string | null) => void;
   setProductModalOpen: (open: boolean) => void;
-  addItem: (product: Product, quantity: number, selectedModifiers: ProductModifier[], removedIngredients?: string[]) => void;
+  addItem: (product: Product, quantity: number, selectedModifiers: ProductModifier[], removedIngredients?: string[], selectedChoices?: SelectedChoice[]) => void;
   updateQuantity: (index: number, quantity: number) => void;
   removeItem: (index: number) => void;
   applyCoupon: (code: string, discount: number) => void;
@@ -141,15 +141,16 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setProductModalOpen: (open) => set({ isProductModalOpen: open }),
 
-  addItem: (product, quantity, selectedModifiers, removedIngredients = []) => {
+  addItem: (product, quantity, selectedModifiers, removedIngredients = [], selectedChoices = []) => {
     const isOutOfStock = product.is_available === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
     if (isOutOfStock) return;
 
-    const modCost = selectedModifiers.reduce((acc, m) => acc + m.price, 0);
-    const unitPrice = product.base_price + modCost;
+    const modCost = (selectedModifiers || []).reduce((acc, m) => acc + m.price, 0);
+    const choiceCost = (selectedChoices || []).reduce((acc, c) => acc + c.price_delta, 0);
+    const unitPrice = product.base_price + modCost + choiceCost;
     const lineTotal = unitPrice * quantity;
 
-    const newItems = [...get().items, { product, quantity, selectedModifiers, removedIngredients, lineTotal }];
+    const newItems = [...get().items, { product, quantity, selectedModifiers, selectedChoices, removedIngredients, lineTotal }];
     safeSetStorage('patty_cart_items', newItems);
     set({ items: newItems });
   },
@@ -162,8 +163,9 @@ export const useCartStore = create<CartState>((set, get) => ({
     const newItems = [...get().items];
     const item = newItems[index];
     if (!item) return;
-    const modCost = item.selectedModifiers.reduce((acc, m) => acc + m.price, 0);
-    const unitPrice = item.product.base_price + modCost;
+    const modCost = (item.selectedModifiers || []).reduce((acc, m) => acc + m.price, 0);
+    const choiceCost = (item.selectedChoices || []).reduce((acc, c) => acc + c.price_delta, 0);
+    const unitPrice = item.product.base_price + modCost + choiceCost;
     newItems[index] = {
       ...item,
       quantity,

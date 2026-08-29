@@ -44,6 +44,34 @@ export interface ProductModifier {
   is_active: boolean;
 }
 
+export interface ProductChoiceOption {
+  id: string;
+  group_id?: string;
+  name: string;
+  price_delta: number;
+  is_active: boolean;
+  display_order?: number;
+}
+
+export interface ProductChoiceGroup {
+  id: string;
+  product_id?: string;
+  name: string;
+  min_selections: number;
+  max_selections: number;
+  is_required: boolean;
+  display_order?: number;
+  options: ProductChoiceOption[];
+}
+
+export interface SelectedChoice {
+  group_id: string;
+  group_name: string;
+  option_id: string;
+  option_name: string;
+  price_delta: number;
+}
+
 export interface Product {
   id: string;
   category_id: string;
@@ -67,6 +95,7 @@ export interface Product {
   is_active: boolean;
   is_available?: boolean;
   modifiers: ProductModifier[];
+  choice_groups?: ProductChoiceGroup[];
   stock_quantity?: number;
 }
 
@@ -82,6 +111,7 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedModifiers: ProductModifier[];
+  selectedChoices?: SelectedChoice[];
   removedIngredients?: string[];
   lineTotal: number;
 }
@@ -93,7 +123,8 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
-  selected_modifiers?: { name: string; price?: number }[];
+  selected_modifiers?: { name: string; price?: number; group_name?: string; option_name?: string; is_choice?: boolean }[];
+  selected_choices?: SelectedChoice[];
 }
 
 export interface OrderStatusHistory {

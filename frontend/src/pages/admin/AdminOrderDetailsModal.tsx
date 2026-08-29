@@ -119,10 +119,19 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
             <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
               {order.items && order.items.length > 0 ? (
                 order.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs pb-2.5 border-b border-[#242424] last:border-0">
+                  <div key={idx} className="flex items-start justify-between text-xs pb-2.5 border-b border-[#242424] last:border-0">
                     <div>
                       <p className="font-semibold text-[#F5F5F5]">{item.product_name}</p>
                       <p className="text-[11px] text-[#71717A]">Qty: {item.quantity}</p>
+                      {item.selected_modifiers && item.selected_modifiers.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {item.selected_modifiers.map((mod: any, mIdx: number) => (
+                            <p key={mIdx} className="text-[11px] text-[#FF5A00]/90">
+                              • {mod.name}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <p className="font-semibold text-[#F5F5F5]">£{item.total_price.toFixed(2)}</p>
                   </div>

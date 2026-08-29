@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Share2, X, Check, Plus, Minus, ShoppingCart, Sliders } from 'lucide-react';
-import { Product, ProductModifier } from '../../types';
+import { Share2, X, Check, Plus, Minus, ShoppingCart, Sliders, Utensils } from 'lucide-react';
+import { Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption, SelectedChoice } from '../../types';
 import { useCartStore } from '../../store/cartStore';
 
 interface Props {
@@ -10,9 +10,69 @@ interface Props {
 
 export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
   const [selectedModifiers, setSelectedModifiers] = useState<ProductModifier[]>([]);
+  const [selectedChoices, setSelectedChoices] = useState<SelectedChoice[]>([]);
   const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
   const { items, addItem, setProductModalOpen } = useCartStore();
+
+  const choiceGroups = useMemo(() => product.choice_groups || [], [product.choice_groups]);
+
+  // Check if any required group is not satisfied
+  const unsatisfiedGroup = useMemo(() => {
+    return choiceGroups.find((grp) => {
+      const count = selectedChoices.filter((c) => c.group_id === grp.id).length;
+      return grp.is_required && count < grp.min_selections;
+    });
+  }, [choiceGroups, selectedChoices]);
+
+  const isChoiceRequirementSatisfied = !unsatisfiedGroup;
+
+  const toggleChoice = (grp: ProductChoiceGroup, opt: ProductChoiceOption) => {
+    if (!opt.is_active) return;
+    const currentForGroup = selectedChoices.filter((c) => c.group_id === grp.id);
+    const isAlreadySelected = currentForGroup.some((c) => c.option_id === opt.id);
+
+    if (isAlreadySelected) {
+      setSelectedChoices(selectedChoices.filter((c) => !(c.group_id === grp.id && c.option_id === opt.id)));
+    } else {
+      if (grp.max_selections === 1) {
+        const otherChoices = selectedChoices.filter((c) => c.group_id !== grp.id);
+        setSelectedChoices([
+          ...otherChoices,
+          {
+            group_id: grp.id,
+            group_name: grp.name,
+            option_id: opt.id,
+            option_name: opt.name,
+            price_delta: opt.price_delta || 0.0
+          }
+        ]);
+      } else {
+        if (currentForGroup.length >= grp.max_selections) {
+          alert(`You can select up to ${grp.max_selections} items for ${grp.name}.`);
+          return;
+        }
+        setSelectedChoices([
+          ...selectedChoices,
+          {
+            group_id: grp.id,
+            group_name: grp.name,
+            option_id: opt.id,
+            option_name: opt.name,
+            price_delta: opt.price_delta || 0.0
+          }
+        ]);
+      }
+    }
+  };
+
+  // Reset selections when viewing a different product
+  useEffect(() => {
+    setSelectedModifiers([]);
+    setSelectedChoices([]);
+    setRemovedIngredients([]);
+    setQuantity(1);
+  }, [product.id]);
 
   // Parse product ingredients list
   const ingredientOptions = useMemo(() => {
@@ -74,14 +134,15 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
   };
 
   const modTotal = selectedModifiers.reduce((sum, m) => sum + m.price, 0);
-  const unitPrice = product.base_price + modTotal;
+  const choiceTotal = selectedChoices.reduce((sum, c) => sum + c.price_delta, 0);
+  const unitPrice = product.base_price + modTotal + choiceTotal;
   const totalPrice = unitPrice * quantity;
 
   const isProductOutOfStock = product.is_available === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
 
   const handleAddToCart = () => {
-    if (isProductOutOfStock || quantity < 1) return;
-    addItem(product, quantity, selectedModifiers, removedIngredients);
+    if (isProductOutOfStock || quantity < 1 || !isChoiceRequirementSatisfied) return;
+    addItem(product, quantity, selectedModifiers, removedIngredients, selectedChoices);
     onClose();
   };
 
@@ -251,10 +312,21 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 {/* Add to Cart Button */}
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 h-11 bg-[#FF5A00] hover:bg-[#E84F00] active:scale-[0.99] text-white rounded-lg px-4 flex items-center justify-between font-semibold text-sm transition-all cursor-pointer shadow-lg focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50"
+                  disabled={!isChoiceRequirementSatisfied}
+                  className={`flex-1 h-11 rounded-lg px-4 flex items-center justify-between font-semibold text-sm transition-all shadow-lg focus:outline-none ${
+                    isChoiceRequirementSatisfied
+                      ? 'bg-[#FF5A00] hover:bg-[#E84F00] active:scale-[0.99] text-white cursor-pointer focus:ring-2 focus:ring-[#FF5A00]/50'
+                      : 'bg-[#242424] text-[#71717A] cursor-not-allowed border border-[#333333]'
+                  }`}
                 >
                   <span className="font-bold">£{totalPrice.toFixed(2)}</span>
-                  <span>Add {quantity} {quantity === 1 ? 'piece' : 'pieces'} to cart</span>
+                  <span>
+                    {isChoiceRequirementSatisfied
+                      ? `Add ${quantity} ${quantity === 1 ? 'piece' : 'pieces'} to cart`
+                      : unsatisfiedGroup?.min_selections === unsatisfiedGroup?.max_selections
+                      ? `Select ${unsatisfiedGroup?.min_selections} items to add`
+                      : `Select ${unsatisfiedGroup?.name || 'choices'}`}
+                  </span>
                 </button>
               </div>
             )}
@@ -283,6 +355,98 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
 
           {/* Scrollable Option Cards List */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 bg-[#121212]">
+            
+            {/* 0. CHOICE GROUPS SECTION (e.g. Choose any 2, Choose your rasher) */}
+            {choiceGroups.length > 0 && (
+              <div className="space-y-5 pb-4 border-b border-[#242424]">
+                {choiceGroups.map((grp) => {
+                  const currentForGrp = selectedChoices.filter((c) => c.group_id === grp.id);
+                  const count = currentForGrp.length;
+                  const isSatisfied = !grp.is_required || count >= grp.min_selections;
+
+                  return (
+                    <div key={grp.id} className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Utensils className="w-4 h-4 text-[#FF5A00]" />
+                          <h4 className="font-bold text-xs text-[#F5F5F5] uppercase tracking-wider">
+                            {grp.name}
+                          </h4>
+                          {grp.is_required && (
+                            <span className="text-[10px] text-[#FF5A00] font-bold">*Required</span>
+                          )}
+                        </div>
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded font-bold border ${
+                            isSatisfied
+                              ? 'bg-[#10B981]/15 text-[#34D399] border-[#10B981]/30'
+                              : 'bg-[#FF5A00]/15 text-[#FF5A00] border-[#FF5A00]/30'
+                          }`}
+                        >
+                          {grp.min_selections === grp.max_selections
+                            ? `Selected: ${count} / ${grp.max_selections}`
+                            : `Selected: ${count} (Max ${grp.max_selections})`}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {grp.options.map((opt) => {
+                          const isSelected = currentForGrp.some((c) => c.option_id === opt.id);
+                          const isUnavailable = !opt.is_active;
+
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => toggleChoice(grp, opt)}
+                              className={`border rounded-xl p-3 min-h-[50px] flex items-center justify-between transition-all select-none ${
+                                isUnavailable
+                                  ? 'border-[#242424] bg-[#151515]/50 opacity-40 cursor-not-allowed'
+                                  : isSelected
+                                  ? 'border-[#FF5A00] bg-[#FF5A00]/10 text-[#F5F5F5] cursor-pointer'
+                                  : 'border-[#242424] bg-[#151515] hover:border-[#333333] hover:bg-[#181818] text-[#A1A1AA] cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                                    isSelected
+                                      ? 'border-[#FF5A00] bg-[#FF5A00] text-white'
+                                      : 'border-[#242424] bg-[#0D0D0D]'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-[#F5F5F5]">
+                                    {opt.name}
+                                  </p>
+                                  {isUnavailable && (
+                                    <span className="text-[11px] font-semibold text-[#EF4444] block mt-0.5">
+                                      UNAVAILABLE
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {!isUnavailable && opt.price_delta > 0 && (
+                                <span className="text-xs font-semibold text-[#FF5A00] shrink-0">
+                                  +£{opt.price_delta.toFixed(2)}
+                                </span>
+                              )}
+                              {!isUnavailable && (!opt.price_delta || opt.price_delta === 0) && (
+                                <span className="text-[11px] font-medium text-[#71717A] shrink-0">
+                                  Included
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             
             {/* 1. CUSTOMIZE / REMOVE INGREDIENTS SECTION */}
             {ingredientOptions.length > 0 && (
@@ -449,10 +613,21 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 {/* Add to Cart Button */}
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 h-11 bg-[#FF5A00] hover:bg-[#E84F00] active:scale-[0.99] text-white rounded-lg px-4 flex items-center justify-between font-semibold text-sm transition-all cursor-pointer shadow-lg focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50"
+                  disabled={!isChoiceRequirementSatisfied}
+                  className={`flex-1 h-11 rounded-lg px-4 flex items-center justify-between font-semibold text-sm transition-all shadow-lg focus:outline-none ${
+                    isChoiceRequirementSatisfied
+                      ? 'bg-[#FF5A00] hover:bg-[#E84F00] active:scale-[0.99] text-white cursor-pointer focus:ring-2 focus:ring-[#FF5A00]/50'
+                      : 'bg-[#242424] text-[#71717A] cursor-not-allowed border border-[#333333]'
+                  }`}
                 >
                   <span className="font-bold">£{totalPrice.toFixed(2)}</span>
-                  <span>Add {quantity} {quantity === 1 ? 'pc' : 'pcs'}</span>
+                  <span>
+                    {isChoiceRequirementSatisfied
+                      ? `Add ${quantity} ${quantity === 1 ? 'pc' : 'pcs'}`
+                      : unsatisfiedGroup?.min_selections === unsatisfiedGroup?.max_selections
+                      ? `Select ${unsatisfiedGroup?.min_selections} items to add`
+                      : `Select ${unsatisfiedGroup?.name || 'choices'}`}
+                  </span>
                 </button>
               </div>
             )}
