@@ -36,6 +36,16 @@ export interface BranchStats {
   pending_orders: number;
 }
 
+export interface BranchAdmin {
+  id: string;
+  name: string;
+  email: string;
+  is_active: boolean;
+  branch_id: string;
+  branch_name: string;
+  created_at?: string;
+}
+
 export interface ProductModifier {
   id: string;
   name: string;

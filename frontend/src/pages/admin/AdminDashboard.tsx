@@ -60,8 +60,9 @@ export const AdminDashboard: React.FC = () => {
         })
       ]);
       let filtered = branchData || [];
-      if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids.length > 0) {
-        filtered = filtered.filter((b) => user.branch_ids.includes(b.id));
+      if (user?.role === 'BRANCH_ADMIN') {
+        const allowedIds = user.branch_ids || [];
+        filtered = filtered.filter((b) => allowedIds.includes(b.id));
       }
       setBranches(filtered);
 

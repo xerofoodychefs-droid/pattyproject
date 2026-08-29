@@ -14,6 +14,10 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
   const [postcode, setPostcode] = useState('');
   const [city, setCity] = useState('London');
   const [phone, setPhone] = useState('020 7946 0000');
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +26,21 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
     if (!name.trim() || !addressLine1.trim() || !postcode.trim()) {
       setError('Please fill in Branch Name, Address, and Postcode.');
       return;
+    }
+
+    if (adminEmail.trim() || adminPassword.trim()) {
+      if (!adminEmail.trim() || !adminEmail.includes('@')) {
+        setError('Please provide a valid Branch Admin login email address.');
+        return;
+      }
+      if (adminPassword.length < 6) {
+        setError('Branch Admin password must be at least 6 characters long.');
+        return;
+      }
+      if (adminPassword !== adminConfirmPassword) {
+        setError('Branch Admin passwords do not match.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -38,11 +57,14 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
         delivery_enabled: true,
         collection_enabled: true,
         ordering_enabled: true,
+        admin_name: adminName.trim() || undefined,
+        admin_email: adminEmail.trim() || undefined,
+        admin_password: adminPassword.trim() || undefined,
       });
       onSuccess();
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Failed to create branch. Please check address/postcode.');
+      setError(err?.message || err?.detail || 'Failed to create branch. Please check address/postcode.');
     } finally {
       setLoading(false);
     }
@@ -161,6 +183,62 @@ export const AdminCreateBranchModal: React.FC<Props> = ({ onClose, onSuccess }) 
                 className="w-full h-10 bg-[#151515] border border-[#242424] opacity-70 cursor-not-allowed rounded-lg px-3 text-xs text-[#A1A1AA] focus:outline-none"
               />
               <p className="text-[10px] text-[#71717A] mt-0.5">Fixed at 2.0 miles (Business Rule)</p>
+            </div>
+          </div>
+
+          {/* Branch Admin Credentials Section */}
+          <div className="pt-3 border-t border-[#1C1C1C] space-y-3">
+            <div>
+              <h3 className="text-xs font-bold text-[#F5F5F5] uppercase tracking-wider">Branch Admin Login (Optional)</h3>
+              <p className="text-[11px] text-[#71717A]">Configure login credentials for the branch store manager.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#A1A1AA] uppercase mb-1">Admin Full Name</label>
+                <input
+                  type="text"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="e.g. Camden Store Manager"
+                  className="w-full h-10 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#A1A1AA] uppercase mb-1">Login Email</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="e.g. camden@pattyproject.co.uk"
+                  className="w-full h-10 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#A1A1AA] uppercase mb-1">Password</label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="w-full h-10 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#A1A1AA] uppercase mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={adminConfirmPassword}
+                  onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  className="w-full h-10 bg-[#151515] border border-[#242424] focus:border-[#FF5A00] rounded-lg px-3 text-xs text-[#F5F5F5] placeholder-[#71717A] focus:outline-none transition-colors"
+                />
+              </div>
             </div>
           </div>
 

@@ -39,6 +39,26 @@ class BranchBase(BaseModel):
     def validate_delivery_radius_miles(cls, v: float) -> float:
         return 2.0
 
+class BranchAdminCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class BranchAdminUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+class BranchAdminResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    is_active: bool
+    branch_id: str
+    branch_name: str
+    created_at: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
 class BranchCreate(BaseModel):
     code: Optional[str] = None
     name: str
@@ -54,6 +74,9 @@ class BranchCreate(BaseModel):
     ordering_enabled: bool = True
     delivery_radius_miles: float = 2.0
     is_active: bool = True
+    admin_name: Optional[str] = None
+    admin_email: Optional[str] = None
+    admin_password: Optional[str] = None
 
     @field_validator("latitude")
     @classmethod
@@ -112,6 +135,7 @@ class BranchUpdate(BaseModel):
 
 class BranchResponse(BranchBase):
     id: str
+    admin: Optional[BranchAdminResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 class NearestBranchInfo(BranchBase):

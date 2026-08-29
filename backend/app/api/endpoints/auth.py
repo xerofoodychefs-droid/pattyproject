@@ -145,6 +145,13 @@ def login(request: LoginRequest, http_req: Request, db: Session = Depends(get_db
             detail="Email not verified. Please enter the verification code sent to your email."
         )
 
+    # Safe guard for BRANCH_ADMIN: must have at least one active branch assignment
+    if user.role == UserRole.BRANCH_ADMIN and len(user.branch_assignments) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Branch Admin account has no active branch assignment."
+        )
+
     return create_user_session(db=db, user=user, http_req=http_req)
 
 

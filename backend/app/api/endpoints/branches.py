@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models.branch import Branch
+from app.models.branch import Branch, BranchUser
 from app.models.order import Order, OrderStatus
 from app.schemas.branch import (
     BranchResponse,
@@ -12,8 +12,12 @@ from app.schemas.branch import (
     NearestBranchRequest,
     NearestBranchResponse,
     NearestBranchInfo,
-    BranchStatsResponse
+    BranchStatsResponse,
+    BranchAdminCreate,
+    BranchAdminUpdate,
+    BranchAdminResponse
 )
+from app.core.security import get_password_hash
 from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
 from app.services.branch_service import (
@@ -26,6 +30,20 @@ from app.models.audit import AuditLog
 import random
 
 router = APIRouter()
+
+def _get_branch_admin_response(branch: Branch, db: Session) -> Optional[BranchAdminResponse]:
+    bu = db.query(BranchUser).filter(BranchUser.branch_id == branch.id).first()
+    if bu and bu.user:
+        return BranchAdminResponse(
+            id=bu.user.id,
+            name=bu.user.full_name,
+            email=bu.user.email,
+            is_active=bu.user.is_active,
+            branch_id=branch.id,
+            branch_name=branch.name,
+            created_at=bu.user.created_at.isoformat() if bu.user.created_at else None
+        )
+    return None
 
 @router.get("", response_model=List[BranchResponse])
 @router.get("/", response_model=List[BranchResponse])
@@ -112,6 +130,21 @@ def create_branch(
     if db.query(Branch).filter(Branch.code == code_val).first():
         code_val = f"{code_val}{random.randint(1, 9)}"
 
+    # Validate branch admin if provided
+    clean_admin_email = None
+    if request.admin_email and request.admin_email.strip():
+        clean_admin_email = request.admin_email.strip().lower()
+        if db.query(User).filter(func.lower(User.email) == clean_admin_email).first():
+            raise HTTPException(
+                status_code=400,
+                detail=f"A user with email '{clean_admin_email}' already exists."
+            )
+        if not request.admin_password or len(request.admin_password.strip()) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="Branch Admin password must be at least 6 characters long."
+            )
+
     # Validate or geocode coordinates
     lat = request.latitude
     lng = request.longitude
@@ -147,9 +180,29 @@ def create_branch(
         is_active=True
     )
     db.add(branch)
+    db.flush()
+
+    if clean_admin_email:
+        admin_user = User(
+            email=clean_admin_email,
+            password_hash=get_password_hash(request.admin_password.strip()),
+            full_name=request.admin_name.strip() if request.admin_name and request.admin_name.strip() else f"{branch.name} Admin",
+            role=UserRole.BRANCH_ADMIN,
+            is_active=True,
+            email_verified=True
+        )
+        db.add(admin_user)
+        db.flush()
+
+        bu = BranchUser(user_id=admin_user.id, branch_id=branch.id)
+        db.add(bu)
+
     db.commit()
     db.refresh(branch)
-    return branch
+
+    resp = BranchResponse.model_validate(branch)
+    resp.admin = _get_branch_admin_response(branch, db)
+    return resp
 
 @router.put("/{branch_id}", response_model=BranchResponse)
 @router.patch("/{branch_id}", response_model=BranchResponse)
@@ -340,6 +393,16 @@ def delete_branch(
         from app.models.printer import Printer, PrintJob
         from app.models.order import Order
 
+        # Deactivate branch admins who are only assigned to this branch
+        bus = db.query(BranchUser).filter(BranchUser.branch_id == branch_id).all()
+        for bu_item in bus:
+            other_assignments = db.query(BranchUser).filter(
+                BranchUser.user_id == bu_item.user_id,
+                BranchUser.branch_id != branch_id
+            ).count()
+            if other_assignments == 0 and bu_item.user:
+                bu_item.user.is_active = False
+
         # Clean up related records
         db.query(BranchUser).filter(BranchUser.branch_id == branch_id).delete(synchronize_session=False)
         db.query(CollectionSlot).filter(CollectionSlot.branch_id == branch_id).delete(synchronize_session=False)
@@ -375,3 +438,131 @@ def delete_branch(
             db.commit()
 
     return {"message": "Branch deleted successfully", "id": branch_id}
+
+
+@router.get("/{branch_id}/admin", response_model=Optional[BranchAdminResponse])
+def get_branch_admin(
+    branch_id: str,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Retrieve the branch admin profile for a specific branch."""
+    if current_user.role == UserRole.BRANCH_ADMIN:
+        assigned_ids = [bu.branch_id for bu in current_user.branch_assignments]
+        if branch_id not in assigned_ids:
+            raise HTTPException(status_code=403, detail="Access denied to this branch admin profile")
+
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    return _get_branch_admin_response(branch, db)
+
+
+@router.post("/{branch_id}/admin", response_model=BranchAdminResponse)
+def create_or_update_branch_admin(
+    branch_id: str,
+    request: BranchAdminCreate,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Super Admin create or update the Branch Admin credentials for a branch."""
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    clean_email = request.email.strip().lower()
+    if not clean_email:
+        raise HTTPException(status_code=400, detail="Valid email address is required.")
+
+    bu = db.query(BranchUser).filter(BranchUser.branch_id == branch_id).first()
+    if bu and bu.user:
+        admin_user = bu.user
+        # Check email uniqueness if email is changing
+        if clean_email != admin_user.email.lower():
+            existing = db.query(User).filter(func.lower(User.email) == clean_email, User.id != admin_user.id).first()
+            if existing:
+                raise HTTPException(status_code=400, detail=f"A user with email '{clean_email}' already exists.")
+            admin_user.email = clean_email
+
+        if request.name and request.name.strip():
+            admin_user.full_name = request.name.strip()
+
+        if request.password and request.password.strip():
+            if len(request.password.strip()) < 6:
+                raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
+            admin_user.password_hash = get_password_hash(request.password.strip())
+
+        admin_user.is_active = True
+        db.commit()
+        db.refresh(admin_user)
+        return BranchAdminResponse(
+            id=admin_user.id,
+            name=admin_user.full_name,
+            email=admin_user.email,
+            is_active=admin_user.is_active,
+            branch_id=branch.id,
+            branch_name=branch.name,
+            created_at=admin_user.created_at.isoformat() if admin_user.created_at else None
+        )
+    else:
+        # Create new Branch Admin
+        if not request.password or len(request.password.strip()) < 6:
+            raise HTTPException(status_code=400, detail="Password is required and must be at least 6 characters long.")
+
+        existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"A user with email '{clean_email}' already exists.")
+
+        new_admin = User(
+            email=clean_email,
+            password_hash=get_password_hash(request.password.strip()),
+            full_name=request.name.strip() if request.name and request.name.strip() else f"{branch.name} Admin",
+            role=UserRole.BRANCH_ADMIN,
+            is_active=True,
+            email_verified=True
+        )
+        db.add(new_admin)
+        db.flush()
+
+        bu = BranchUser(user_id=new_admin.id, branch_id=branch.id)
+        db.add(bu)
+        db.commit()
+        db.refresh(new_admin)
+
+        return BranchAdminResponse(
+            id=new_admin.id,
+            name=new_admin.full_name,
+            email=new_admin.email,
+            is_active=new_admin.is_active,
+            branch_id=branch.id,
+            branch_name=branch.name,
+            created_at=new_admin.created_at.isoformat() if new_admin.created_at else None
+        )
+
+
+@router.delete("/{branch_id}/admin")
+def delete_branch_admin(
+    branch_id: str,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Super Admin delete or unassign the Branch Admin for a branch."""
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    bu = db.query(BranchUser).filter(BranchUser.branch_id == branch_id).first()
+    if not bu:
+        return {"message": "No branch admin assigned to this branch", "branch_id": branch_id}
+
+    user = bu.user
+    db.delete(bu)
+    if user:
+        # Check if user has other branch assignments
+        other_assignments = db.query(BranchUser).filter(BranchUser.user_id == user.id, BranchUser.branch_id != branch_id).count()
+        if other_assignments == 0:
+            user.is_active = False
+
+    db.commit()
+    return {"message": "Branch admin removed successfully", "branch_id": branch_id}
