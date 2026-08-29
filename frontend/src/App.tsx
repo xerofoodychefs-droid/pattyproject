@@ -146,6 +146,9 @@ const AdminLayoutShell: React.FC = () => {
   const { token, user } = useAuthStore();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      return true;
+    }
     return localStorage.getItem('admin_sidebar_collapsed') === 'true';
   });
 
@@ -157,6 +160,13 @@ const AdminLayoutShell: React.FC = () => {
     });
   };
 
+  // Auto-close sidebar on mobile on navigation
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsCollapsed(true);
+    }
+  }, [location.pathname]);
+
   const isAdmin = token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN');
 
   if (!isAdmin) {
@@ -164,22 +174,47 @@ const AdminLayoutShell: React.FC = () => {
   }
 
   return (
-    <div
-      className="min-h-screen bg-black text-white flex"
-      style={{ '--admin-sidebar-w': isCollapsed ? '0px' : '16rem' } as React.CSSProperties}
-    >
+    <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row">
+      {/* Mobile Backdrop Overlay when sidebar is open */}
+      {!isCollapsed && (
+        <div
+          onClick={() => setIsCollapsed(true)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-30 lg:hidden cursor-pointer animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar Component stays permanently mounted during navigation */}
       <AdminSidebar isCollapsed={isCollapsed} onToggleCollapse={toggleSidebar} />
 
       {/* Main Content Area */}
       <main
-        className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'ml-0' : 'ml-64'
+        className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'ml-0' : 'ml-0 lg:ml-64'
         }`}
       >
-        {/* Floating/Top Bar Show Sidebar Button when Collapsed */}
+        {/* Mobile Top Navigation Header */}
+        <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#0A0A0A] border-b border-[#1F1F1F] lg:hidden">
+          <button
+            onClick={toggleSidebar}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#141414] hover:bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded-xl text-xs font-semibold cursor-pointer shadow-sm"
+            aria-label="Toggle navigation menu"
+          >
+            <Menu className="w-4 h-4 text-[#FF5500]" />
+            <span>Menu</span>
+          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/logo.png" alt="Patty Project" className="w-6 h-6 object-contain shrink-0" />
+            <span className="text-xs font-bold text-white tracking-tight truncate">PATTY PROJECT</span>
+          </div>
+          <span className="text-[10px] font-bold text-[#FF5500] uppercase bg-[#FF5500]/10 px-2 py-0.5 rounded border border-[#FF5500]/20 shrink-0">
+            {user?.role === 'SUPER_ADMIN' ? 'SUPER' : 'BRANCH'}
+          </span>
+        </div>
+
+        {/* Desktop Floating Show Sidebar Button when Collapsed */}
         {isCollapsed && (
-          <div className="sticky top-4 left-4 z-30 px-6 pt-4 pb-0">
+          <div className="hidden lg:block sticky top-4 left-4 z-20 px-6 pt-4 pb-0">
             <button
               onClick={toggleSidebar}
               className="inline-flex items-center gap-2 px-3 py-2 bg-[#121212]/95 backdrop-blur-md hover:bg-[#1C1C1C] text-white border border-[#2E2E2E] hover:border-[#FF5500]/50 rounded-xl shadow-2xl transition-all text-xs font-semibold cursor-pointer group"
@@ -190,8 +225,9 @@ const AdminLayoutShell: React.FC = () => {
             </button>
           </div>
         )}
+
         <React.Suspense fallback={<AdminPageSkeleton />}>
-          <div key={location.pathname} className="page-enter">
+          <div key={location.pathname} className="page-enter flex-1">
             <Outlet />
           </div>
         </React.Suspense>

@@ -503,10 +503,10 @@ export const AdminOfferSettings: React.FC = () => {
       )}
 
       {/* Tabs Navigation Bar */}
-      <div className="flex border-b border-[#262626] gap-2">
+      <div className="flex border-b border-[#262626] gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#262626]">
         <button
           onClick={() => setActiveTab('today')}
-          className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 sm:px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'today'
               ? 'border-[#FF5500] text-white bg-[#FF5500]/10 rounded-t-xl'
               : 'border-transparent text-[#9CA3AF] hover:text-white'
@@ -518,7 +518,7 @@ export const AdminOfferSettings: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('offersPage')}
-          className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 sm:px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'offersPage'
               ? 'border-[#FF5500] text-white bg-[#FF5500]/10 rounded-t-xl'
               : 'border-transparent text-[#9CA3AF] hover:text-white'
@@ -530,7 +530,7 @@ export const AdminOfferSettings: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('comboSetting')}
-          className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 sm:px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'comboSetting'
               ? 'border-[#FF5500] text-white bg-[#FF5500]/10 rounded-t-xl'
               : 'border-transparent text-[#9CA3AF] hover:text-white'

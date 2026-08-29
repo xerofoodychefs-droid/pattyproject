@@ -101,6 +101,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth < 1024 && onToggleCollapse && !isCollapsed) {
+                    onToggleCollapse();
+                  }
+                }}
                 onMouseEnter={() => {
                   try {
                     lazyPreloadMap[item.path]?.();
