@@ -6,7 +6,7 @@ import { api } from '../../api/client';
 interface Props {
   categories: Category[];
   onClose: () => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
 }
 
 export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRefresh }) => {
@@ -45,6 +45,11 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
 
+    if (categoryList.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      showFeedback(`Category "${trimmed}" already exists.`, true);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -64,7 +69,7 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
       }
       setNewCategoryName('');
       showFeedback(`Category "${created?.name || trimmed}" created successfully!`);
-      onRefresh();
+      await onRefresh();
     } catch (err: any) {
       console.error(err);
       showFeedback(err?.message || err?.detail || 'Failed to create category.', true);

@@ -38,18 +38,24 @@ def create_category(
     slug_base = clean_name.lower().replace(" ", "-")
     slug_val = re.sub(r'[^a-z0-9\-]', '', slug_base) or "category"
     
-    existing = db.query(Category).filter(Category.slug == slug_val).first()
+    existing = db.query(Category).filter(
+        (Category.slug == slug_val) | (Category.name.ilike(clean_name))
+    ).first()
     if existing:
-        if not existing.is_active:
-            existing.is_active = True
-            existing.name = clean_name
-            db.commit()
-            db.refresh(existing)
-            return existing
-        while db.query(Category).filter(Category.slug == slug_val).first():
-            slug_val = f"{slug_base[:80]}-{random.randint(100, 999)}"
+        if existing.is_active:
+            raise HTTPException(status_code=400, detail=f"Category '{existing.name}' already exists.")
+        existing.is_active = True
+        existing.name = clean_name
+        existing.slug = slug_val
+        max_order = db.query(Category).filter(Category.is_active == True).count()
+        existing.display_order = request.display_order if request.display_order is not None else max_order
+        if request.icon:
+            existing.icon = request.icon
+        db.commit()
+        db.refresh(existing)
+        return existing
 
-    max_order = db.query(Category).count()
+    max_order = db.query(Category).filter(Category.is_active == True).count()
 
     category = Category(
         name=clean_name,

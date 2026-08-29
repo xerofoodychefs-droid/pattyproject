@@ -43,9 +43,10 @@ export const AdminProducts: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
+      const timestamp = Date.now();
       const [prodData, catData, branchData] = await Promise.all([
-        api.get<Product[]>('/products'),
-        api.get<Category[]>('/categories'),
+        api.get<Product[]>(`/products?_t=${timestamp}`),
+        api.get<Category[]>(`/categories?_t=${timestamp}`),
         api.get<Branch[]>('/branches')
       ]);
       const standardCategories = (catData || []).filter(
