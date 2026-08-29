@@ -51,7 +51,7 @@ const DynamicTitleManager: React.FC = () => {
       document.title = 'Patty Project Admin | Coupons & Promo Codes';
     } else if (path === '/admin/offers') {
       document.title = 'Patty Project Admin | Offers & Banner Settings';
-    } else if (path === '/admin/settings') {
+    } else if (path === '/admin/settings' || path === '/admin/profile-settings' || path === '/admin/profile') {
       document.title = 'Patty Project Admin | Branch & Profile Settings';
     } else if (path.startsWith('/admin')) {
       document.title = 'Patty Project Admin | Management Portal';
@@ -145,7 +145,7 @@ const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children })
   const isAdmin = token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN');
 
   if (!isAdmin) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/admin" state={{ from: location }} replace />;
   }
 
   return (
@@ -300,6 +300,8 @@ export function App() {
             <Route path="/admin/coupons" element={<AdminLayoutShell><AdminCoupons /></AdminLayoutShell>} />
             <Route path="/admin/offers" element={<AdminLayoutShell><AdminOfferSettings /></AdminLayoutShell>} />
             <Route path="/admin/settings" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
+            <Route path="/admin/profile-settings" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
+            <Route path="/admin/profile" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
 
             {/* Customer Routes */}
             <Route path="/" element={<CustomerLayoutShell><CustomerHome /></CustomerLayoutShell>} />

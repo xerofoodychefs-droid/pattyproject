@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
@@ -14,13 +14,16 @@ export const AdminLogin: React.FC = () => {
 
   const { token, user, setAuth } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
+  const targetDestination = from === '/admin' || from === '/admin/login' ? '/admin/dashboard' : from;
 
-  // If already authenticated as an admin, automatically redirect to admin dashboard
+  // If already authenticated as an admin, automatically redirect to target destination
   useEffect(() => {
     if (token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN')) {
-      navigate('/admin/dashboard', { replace: true });
+      navigate(targetDestination, { replace: true });
     }
-  }, [token, user, navigate]);
+  }, [token, user, navigate, targetDestination]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +60,7 @@ export const AdminLogin: React.FC = () => {
       }
 
       setAuth(res.access_token, res.user, res.refresh_token);
-      navigate('/admin/dashboard', { replace: true });
+      navigate(targetDestination, { replace: true });
     } catch (err: any) {
       const errMsg = err?.detail || err?.message || 'Incorrect email or password.';
       setError(errMsg);
