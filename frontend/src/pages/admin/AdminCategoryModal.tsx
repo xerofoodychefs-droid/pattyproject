@@ -43,7 +43,10 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      showFeedback('Please enter a category name.', true);
+      return;
+    }
 
     if (categoryList.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase())) {
       showFeedback(`Category "${trimmed}" already exists.`, true);
@@ -167,6 +170,7 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
           <div className="flex gap-2">
             <input
               type="text"
+              autoFocus
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               placeholder="e.g. Desserts, Milkshakes, Combos"
@@ -175,7 +179,7 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
             />
             <button
               type="submit"
-              disabled={loading || !newCategoryName.trim()}
+              disabled={loading}
               className="bg-[#FF5500] hover:bg-[#E04B00] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-[#FF5500]/20"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
