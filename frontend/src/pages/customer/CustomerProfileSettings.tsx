@@ -12,6 +12,9 @@ export const CustomerProfileSettings: React.FC = () => {
     navigate('/');
   };
 
+  // Strictly check user.role === 'CUSTOMER'; fail closed if missing or admin
+  const isCustomer = user?.role === 'CUSTOMER';
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 pb-28 space-y-6 text-white">
       <div>
@@ -19,21 +22,23 @@ export const CustomerProfileSettings: React.FC = () => {
         <p className="text-[#9CA3AF] text-xs mt-0.5">Manage your loyalty account and preferences</p>
       </div>
 
-      {/* User Info Header Card */}
-      <div className="bg-[#121212] border border-[#262626] p-5 rounded-2xl flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-[#FF5500]/20 text-[#FF5500] font-black text-xl flex items-center justify-center border border-[#FF5500]/40">
-            {user?.full_name ? user.full_name.charAt(0) : 'U'}
-          </div>
-          <div>
-            <h2 className="font-extrabold text-white text-base">{user?.full_name || 'Loyalty Customer'}</h2>
-            <p className="text-xs text-[#9CA3AF]">{user?.email || 'customer@pattyproject.co.uk'}</p>
-            <span className="inline-block mt-1 bg-[#FF5500]/20 text-[#FF5500] text-[10px] font-black uppercase px-2 py-0.5 rounded border border-[#FF5500]/30 tracking-wider">
-              LOYALTY MEMBER
-            </span>
+      {/* User Info Header Card - Strictly for Customer Accounts */}
+      {isCustomer && (
+        <div className="bg-[#121212] border border-[#262626] p-5 rounded-2xl flex items-center justify-between shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-[#FF5500]/20 text-[#FF5500] font-black text-xl flex items-center justify-center border border-[#FF5500]/40">
+              {user?.full_name ? user.full_name.charAt(0) : 'U'}
+            </div>
+            <div>
+              <h2 className="font-extrabold text-white text-base">{user?.full_name || 'Loyalty Customer'}</h2>
+              <p className="text-xs text-[#9CA3AF]">{user?.email || 'customer@pattyproject.co.uk'}</p>
+              <span className="inline-block mt-1 bg-[#FF5500]/20 text-[#FF5500] text-[10px] font-black uppercase px-2 py-0.5 rounded border border-[#FF5500]/30 tracking-wider">
+                LOYALTY MEMBER
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Account Settings Navigation List */}
       <div className="space-y-3">

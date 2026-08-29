@@ -54,13 +54,21 @@ export const OrderingHeader: React.FC<Props> = ({ onOpenLocationModal }) => {
           </button>
 
           {/* 3. LOGIN / User Profile */}
-          {user ? (
+          {user?.role === 'CUSTOMER' ? (
             <Link
               to="/profile"
               className="flex items-center gap-2 text-xs font-bold text-white hover:text-[#FF5500] transition-colors bg-[#141414] border border-[#262626] px-3 sm:px-3.5 py-1.5 rounded-xl"
             >
               <User className="w-3.5 h-3.5 text-[#FF5500]" />
               <span className="hidden sm:inline-block uppercase tracking-wider">{user.full_name.split(' ')[0]}</span>
+            </Link>
+          ) : user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN') ? (
+            <Link
+              to="/admin/dashboard"
+              className="flex items-center gap-2 text-xs font-bold text-white hover:text-[#FF5500] transition-colors bg-[#141414] border border-[#262626] px-3 sm:px-3.5 py-1.5 rounded-xl"
+            >
+              <User className="w-3.5 h-3.5 text-[#FF5500]" />
+              <span className="hidden sm:inline-block uppercase tracking-wider">ADMIN</span>
             </Link>
           ) : (
             <Link
