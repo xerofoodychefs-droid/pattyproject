@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Table, UniqueConstraint
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Table, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -24,7 +24,7 @@ class User(Base):
     phone = Column(String(50), nullable=True)
     role = Column(String(50), nullable=False, default=UserRole.CUSTOMER)
     is_active = Column(Boolean, default=True)
-    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False, server_default=text('false'))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
