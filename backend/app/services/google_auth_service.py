@@ -220,7 +220,8 @@ def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) ->
             email=email,
             full_name=name,
             password_hash=None,
-            welcome_points=100
+            welcome_points=100,
+            email_verified=True
         )
         create_identity_for_user(
             db=db,

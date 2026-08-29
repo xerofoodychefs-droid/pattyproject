@@ -28,7 +28,8 @@ def setup_rbac_environment():
         password_hash=get_password_hash("CamdenAdmin123!"),
         full_name="Camden Branch Admin",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(camden_admin)
     db.flush()
@@ -46,7 +47,8 @@ def setup_rbac_environment():
         password_hash=get_password_hash("WestfieldAdmin123!"),
         full_name="Westfield Branch Admin",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(westfield_admin)
     db.flush()

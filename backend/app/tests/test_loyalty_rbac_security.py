@@ -41,7 +41,8 @@ def setup_security_test_environment():
         password_hash=get_password_hash("SuperAdmin123!"),
         full_name="Global Super Admin",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(super_admin)
 
@@ -52,7 +53,8 @@ def setup_security_test_environment():
         password_hash=get_password_hash("CamdenAdmin123!"),
         full_name="Camden Branch Admin",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(camden_admin)
     db.flush()
@@ -71,7 +73,8 @@ def setup_security_test_environment():
         password_hash=get_password_hash("WestfieldAdmin123!"),
         full_name="Westfield Branch Admin",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(westfield_admin)
     db.flush()
@@ -91,7 +94,8 @@ def setup_security_test_environment():
         full_name="Alice Camden",
         phone="+44 7111 111111",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(alice)
     db.flush()
@@ -142,7 +146,8 @@ def setup_security_test_environment():
         full_name="Bob Westfield",
         phone="+44 7222 222222",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(bob)
     db.flush()
@@ -193,7 +198,8 @@ def setup_security_test_environment():
         full_name="Charlie NoOrders",
         phone="+44 7333 333333",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(charlie)
 

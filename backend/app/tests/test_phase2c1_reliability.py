@@ -72,7 +72,8 @@ def setup_phase2c1_data():
         full_name="Alice Customer",
         phone="+44 7123456789",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(cust_user)
 
@@ -83,7 +84,8 @@ def setup_phase2c1_data():
         password_hash=get_password_hash("AdminPass123!"),
         full_name="Bob Administrator",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(admin_user)
 

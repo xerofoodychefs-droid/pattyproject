@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, User as UserIcon, Phone, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User as UserIcon, Phone, AlertCircle, Loader2, CheckCircle2, KeyRound, ArrowLeft, RefreshCw } from 'lucide-react';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
 export const CustomerLogin: React.FC = () => {
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'verify'>('login');
   
   // Form fields
   const [email, setEmail] = useState('');
@@ -14,6 +14,12 @@ export const CustomerLogin: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // OTP Verification fields
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
 
   // Status states
   const [loading, setLoading] = useState(false);
@@ -33,6 +39,15 @@ export const CustomerLogin: React.FC = () => {
     setError(null);
     setSuccessMessage(null);
   };
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,14 +119,21 @@ export const CustomerLogin: React.FC = () => {
 
   const handleGoogleButtonClick = () => {
     resetFormState();
-    if ((window as any).google?.accounts?.id) {
-      (window as any).google.accounts.id.prompt((notification: any) => {
+    const googleAccounts = (window as any).google?.accounts?.id;
+    if (!googleAccounts) {
+      setError('Google Sign-In is initializing. Please try again in a moment or use email login.');
+      return;
+    }
+
+    try {
+      googleAccounts.prompt((notification: any) => {
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          setError('Google One-Tap is not available in this browser window. Please check browser popups or sign in with email.');
+          console.warn('One Tap not displayed, reason:', notification.getNotDisplayedReason?.() || notification.getSkippedReason?.());
         }
       });
-    } else {
-      setError('Google Sign-In is initializing. Please try again in a moment.');
+    } catch (err: any) {
+      console.warn('Google prompt exception:', err);
+      setError('Unable to open Google Sign-In prompt. Please use email and password.');
     }
   };
 
@@ -119,8 +141,8 @@ export const CustomerLogin: React.FC = () => {
     e.preventDefault();
     resetFormState();
 
-    if (!email.trim()) {
-      setError('Please enter your email address.');
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email address.');
       return;
     }
     if (!password) {
@@ -132,7 +154,7 @@ export const CustomerLogin: React.FC = () => {
 
     try {
       const response: any = await api.post('/auth/login', {
-        email: email.trim().toLowerCase(),
+        email: email.trim(),
         password: password,
       });
 
@@ -140,12 +162,18 @@ export const CustomerLogin: React.FC = () => {
         setAuth(response.access_token, response.user, response.refresh_token);
         navigate(redirectPath, { replace: true });
       } else {
-        setError('Invalid response from authentication server.');
+        setError('Unexpected authentication response. Please try again.');
       }
     } catch (err: any) {
       const errorDetail = typeof err?.message === 'string' ? err.message : '';
-      if (errorDetail.toLowerCase().includes('incorrect') || errorDetail.toLowerCase().includes('invalid')) {
-        setError('Invalid email or password.');
+      if (errorDetail.toLowerCase().includes('not verified') || err?.status === 403) {
+        setPendingVerificationEmail(email.trim());
+        setOtp('');
+        setResendCooldown(60);
+        setMode('verify');
+        setError('Please verify your email address to log in. Enter the code sent to your email.');
+      } else if (errorDetail.toLowerCase().includes('incorrect email or password')) {
+        setError('Incorrect email or password. Please check your credentials.');
       } else if (errorDetail.toLowerCase().includes('disabled')) {
         setError('This account has been disabled. Please contact support.');
       } else {
@@ -176,19 +204,27 @@ export const CustomerLogin: React.FC = () => {
     setLoading(true);
 
     try {
+      const cleanEmail = email.trim();
       const response: any = await api.post('/auth/register', {
-        email: email.trim(),
+        email: cleanEmail,
         password: password,
         full_name: fullName.trim(),
         phone: phone.trim() || undefined,
       });
 
-      if (response && response.access_token && response.user) {
+      if (response?.requires_verification) {
+        setPendingVerificationEmail(cleanEmail);
+        setOtp('');
+        setResendCooldown(60);
+        setMode('verify');
+        setSuccessMessage('Account created! Enter the 6-digit verification code sent to your email.');
+      } else if (response && response.access_token && response.user) {
         setAuth(response.access_token, response.user, response.refresh_token);
         navigate('/loyalty', { replace: true });
       } else {
-        setError('Registration completed, please login to continue.');
-        setMode('login');
+        setPendingVerificationEmail(cleanEmail);
+        setMode('verify');
+        setSuccessMessage('Please check your email for the 6-digit verification code.');
       }
     } catch (err: any) {
       const errorDetail = typeof err?.message === 'string' ? err.message : '';
@@ -199,6 +235,58 @@ export const CustomerLogin: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetFormState();
+
+    const cleanOtp = otp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const targetEmail = pendingVerificationEmail || email.trim();
+      const response: any = await api.post('/auth/verify-email', {
+        email: targetEmail,
+        otp: cleanOtp,
+      });
+
+      if (response && response.access_token && response.user) {
+        setAuth(response.access_token, response.user, response.refresh_token);
+        navigate(redirectPath === '/' ? '/loyalty' : redirectPath, { replace: true });
+      } else {
+        setError('Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Invalid or expired verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
+    resetFormState();
+
+    try {
+      const targetEmail = pendingVerificationEmail || email.trim();
+      await api.post('/auth/resend-verification', {
+        email: targetEmail,
+      });
+      setResendCooldown(60);
+      setSuccessMessage('A fresh verification code has been dispatched to your email.');
+    } catch (err: any) {
+      const errorDetail = typeof err?.message === 'string' ? err.message : '';
+      setError(errorDetail || 'Unable to resend code right now. Please try again.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -261,6 +349,103 @@ export const CustomerLogin: React.FC = () => {
               <div className="mb-5 bg-[#122718] border border-[#22C55E]/40 text-[#86EFAC] text-xs font-semibold px-4 py-3 rounded-xl flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0" />
                 <span>{successMessage}</span>
+              </div>
+            )}
+
+            {/* OTP VERIFICATION MODE */}
+            {mode === 'verify' && (
+              <div>
+                <div>
+                  <div className="w-12 h-12 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center mx-auto mb-3">
+                    <KeyRound className="w-6 h-6 text-[#FF5500]" />
+                  </div>
+                  <h1 className="text-2xl font-extrabold text-white tracking-tight text-center">Verify Your Email</h1>
+                  <p className="text-xs text-[#9CA3AF] text-center mt-2 leading-relaxed">
+                    We sent a 6-digit verification code to <span className="text-white font-semibold">{pendingVerificationEmail || email}</span>. Enter the code below to activate your account.
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerifySubmit} className="mt-6 space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-[#D1D5DB] text-center">
+                      6-Digit Verification Code
+                    </label>
+                    <div className="flex items-center justify-center bg-[#181818] border border-[#282828] focus-within:border-[#FF5500] rounded-xl px-4 py-3.5 transition-colors max-w-[280px] mx-auto">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        autoFocus
+                        value={otp}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          setOtp(val);
+                        }}
+                        placeholder="••••••"
+                        className="w-full bg-transparent text-center text-2xl font-mono tracking-[8px] text-[#FF5500] placeholder-[#444] focus:outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || otp.trim().length !== 6}
+                    className="w-full mt-4 bg-[#FF5500] hover:bg-[#E04B00] text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#FF5500]/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>VERIFYING CODE...</span>
+                      </>
+                    ) : (
+                      <span>VERIFY & ACTIVATE</span>
+                    )}
+                  </button>
+                </form>
+
+                {/* Resend Cooldown & Action */}
+                <div className="mt-6 text-center space-y-3">
+                  <p className="text-xs text-[#9CA3AF]">
+                    Didn't receive the code?{' '}
+                    {resendCooldown > 0 ? (
+                      <span className="text-[#FF5500] font-semibold">Resend in {resendCooldown}s</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={resending}
+                        className="text-[#FF5500] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                      >
+                        {resending ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Sending...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Resend Code</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </p>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetFormState();
+                        setMode('login');
+                      }}
+                      className="text-xs text-[#6B7280] hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1.5 font-medium"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Login</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

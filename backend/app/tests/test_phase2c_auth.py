@@ -20,7 +20,8 @@ def setup_phase2c_data():
         password_hash=get_password_hash("CustomerPass123!"),
         full_name="Phase 2C Customer",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(cust_user)
     db.commit()

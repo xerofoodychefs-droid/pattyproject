@@ -23,7 +23,8 @@ def setup_test_data():
         password_hash=get_password_hash("CustPass123!"),
         full_name="Hardened Customer",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(cust_user)
 
@@ -34,7 +35,8 @@ def setup_test_data():
         password_hash=get_password_hash("AdminPass123!"),
         full_name="Hardened Admin",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(admin_user)
 

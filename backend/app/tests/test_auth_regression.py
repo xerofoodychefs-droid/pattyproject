@@ -10,12 +10,12 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user import User, UserRole
 from app.models.loyalty import LoyaltyAccount
+from app.models.verification import EmailVerificationChallenge
 from app.tests.db import client, TestingSessionLocal
 
 
 def test_customer_registration_and_loyalty_account():
-    """Verify that customer registration creates user and exactly one loyalty account with bonus."""
-    db = TestingSessionLocal()
+    """Verify that customer registration creates unverified user, loyalty account, and verify-email activates tokens."""
     reg_payload = {
         "full_name": "Alice Wonderland",
         "email": "alice.wonderland@example.com",
@@ -27,22 +27,48 @@ def test_customer_registration_and_loyalty_account():
     assert response.status_code == 200, response.text
     data = response.json()
     
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
-    assert data["user"]["email"] == "alice.wonderland@example.com"
-    assert data["user"]["role"] == UserRole.CUSTOMER
+    assert data["requires_verification"] is True
+    assert data["email"] == "alice.wonderland@example.com"
 
-    # Verify database state
-    user_in_db = db.query(User).filter(User.email == "alice.wonderland@example.com").first()
-    assert user_in_db is not None
-    assert user_in_db.full_name == "Alice Wonderland"
-    
-    # Verify loyalty account creation
-    loyalty_acc = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_in_db.id).first()
-    assert loyalty_acc is not None
-    assert loyalty_acc.available_points == 100
-    assert loyalty_acc.lifetime_points == 100
-    db.close()
+    # Verify database state & extract challenge OTP
+    db = TestingSessionLocal()
+    try:
+        user_in_db = db.query(User).filter(User.email == "alice.wonderland@example.com").first()
+        assert user_in_db is not None
+        assert user_in_db.full_name == "Alice Wonderland"
+        assert user_in_db.email_verified is False
+
+        # Verify loyalty account creation
+        loyalty_acc = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_in_db.id).first()
+        assert loyalty_acc is not None
+        assert loyalty_acc.available_points == 100
+        assert loyalty_acc.lifetime_points == 100
+
+        challenge = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.user_id == user_in_db.id).first()
+        assert challenge is not None
+    finally:
+        db.close()
+
+    # Now verify with generated OTP via verify-email
+    # Simulate valid OTP verification
+    from app.services.otp_service import hash_otp
+    otp_test = "123456"
+    db = TestingSessionLocal()
+    try:
+        ch = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.user_id == user_in_db.id).first()
+        ch.otp_hash = hash_otp(email="alice.wonderland@example.com", otp=otp_test, salt=ch.salt)
+        db.commit()
+    finally:
+        db.close()
+
+    verify_resp = client.post("/api/v1/auth/verify-email", json={"email": "alice.wonderland@example.com", "otp": otp_test})
+    assert verify_resp.status_code == 200
+    verify_data = verify_resp.json()
+    assert "access_token" in verify_data
+    assert verify_data["token_type"] == "bearer"
+    assert verify_data["user"]["email"] == "alice.wonderland@example.com"
+    assert verify_data["user"]["role"] == UserRole.CUSTOMER
+    assert verify_data["user"]["email_verified"] is True
 
 
 def test_duplicate_email_registration_fails():

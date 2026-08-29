@@ -24,6 +24,7 @@ class User(Base):
     phone = Column(String(50), nullable=True)
     role = Column(String(50), nullable=False, default=UserRole.CUSTOMER)
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -34,6 +35,7 @@ class User(Base):
     loyalty_account = relationship("LoyaltyAccount", back_populates="user", uselist=False)
     auth_identities = relationship("UserAuthIdentity", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+    verification_challenges = relationship("EmailVerificationChallenge", back_populates="user", cascade="all, delete-orphan")
 
 class UserAuthIdentity(Base):
     __tablename__ = "user_auth_identities"

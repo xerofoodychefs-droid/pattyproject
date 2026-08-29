@@ -37,7 +37,8 @@ def test_product_deletion_safety(setup_db):
         password_hash="fakehashadmin",
         full_name="Admin Test",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db_session.add(admin_user)
 
@@ -49,7 +50,8 @@ def test_product_deletion_safety(setup_db):
         password_hash="fakehashcust",
         full_name="Customer Test",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db_session.add(cust_user)
 

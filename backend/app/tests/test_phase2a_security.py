@@ -27,7 +27,8 @@ def setup_security_test_data():
         password_hash="hash_super_admin",
         full_name="Super Administrator",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
 
     # 2. Branch Admin (Assigned to Camden Branch only)
@@ -37,7 +38,8 @@ def setup_security_test_data():
         password_hash="hash_camden_admin",
         full_name="Camden Branch Admin",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
 
     # 3. Customer A
@@ -47,7 +49,8 @@ def setup_security_test_data():
         password_hash="hash_usera",
         full_name="User Alpha",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
 
     # 4. Customer B
@@ -57,7 +60,8 @@ def setup_security_test_data():
         password_hash="hash_userb",
         full_name="User Beta",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
 
     db.add_all([super_admin, camden_admin, user_a, user_b])

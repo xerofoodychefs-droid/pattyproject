@@ -190,13 +190,22 @@ def test_google_auth_email_collision_anti_takeover_and_anti_enumeration():
     - If customer exists with local password, an unlinked Google login with same email
       is REJECTED with generic 401 failure to prevent account takeover and email enumeration.
     """
-    # Register local customer
+    # Register local customer and verify email
     reg_resp = client.post("/api/v1/auth/register", json={
         "email": "victim@pattyproject.co.uk",
         "password": "Password123!",
         "full_name": "Victim Customer"
     })
     assert reg_resp.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        victim_user = db.query(User).filter(User.email == "victim@pattyproject.co.uk").first()
+        assert victim_user is not None
+        victim_user.email_verified = True
+        db.commit()
+    finally:
+        db.close()
 
     # Attacker tries to log in with Google using victim's email
     n = client.get("/api/v1/auth/google/nonce").json()

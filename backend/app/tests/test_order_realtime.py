@@ -30,7 +30,8 @@ def setup_realtime_environment():
         password_hash=get_password_hash("CamdenAdmin123!"),
         full_name="Camden Admin User",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(camden_admin)
     db.flush()
@@ -48,7 +49,8 @@ def setup_realtime_environment():
         password_hash=get_password_hash("WestfieldAdmin123!"),
         full_name="Westfield Admin User",
         role=UserRole.BRANCH_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(westfield_admin)
     db.flush()
@@ -66,7 +68,8 @@ def setup_realtime_environment():
         password_hash=get_password_hash("Customer123!"),
         full_name="John Customer",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(customer)
 

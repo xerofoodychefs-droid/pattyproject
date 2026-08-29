@@ -67,7 +67,8 @@ def reset_test_db():
         password_hash=get_password_hash("Admin123!"),
         full_name="Super Admin",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
 
     # Seed Camden branch

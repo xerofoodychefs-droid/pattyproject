@@ -39,7 +39,8 @@ def test_one_to_one_loyalty_account_invariant():
         email="loyalty.invariant@pattyproject.co.uk",
         full_name="Loyalty User",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(user)
     db.flush()
@@ -65,7 +66,8 @@ def test_order_relationship_invariant():
         email="order.customer@pattyproject.co.uk",
         full_name="Order Customer",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(user)
     db.flush()
@@ -110,7 +112,8 @@ def test_cascade_isolation_only_affects_identities():
         email="cascade.test@pattyproject.co.uk",
         full_name="Cascade User",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(user)
     db.flush()

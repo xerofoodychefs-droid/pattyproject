@@ -22,7 +22,8 @@ def setup_phase2b_data():
         password_hash=get_password_hash("OldSecurePass123!"),
         full_name="Phase2B Admin User",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(admin_user)
     db.commit()

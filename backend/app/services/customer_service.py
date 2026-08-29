@@ -10,7 +10,8 @@ def create_customer_with_loyalty(
     full_name: str,
     password_hash: Optional[str] = None,
     phone: Optional[str] = None,
-    welcome_points: int = 100
+    welcome_points: int = 100,
+    email_verified: bool = False
 ) -> Tuple[User, LoyaltyAccount]:
     """
     Atomic customer creation service shared between standard registration and Google OAuth.
@@ -22,7 +23,8 @@ def create_customer_with_loyalty(
         full_name=full_name.strip(),
         phone=phone.strip() if phone else None,
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=email_verified
     )
     db.add(user)
     db.flush()  # Populates user.id for relational foreign keys

@@ -62,7 +62,8 @@ def test_branch_stats_endpoint_and_route_order_integrity(setup_db):
         email=f"admin_{uuid.uuid4().hex[:4]}@example.com",
         full_name="Admin Test",
         role=UserRole.SUPER_ADMIN,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db_session.add(super_admin)
     db_session.commit()

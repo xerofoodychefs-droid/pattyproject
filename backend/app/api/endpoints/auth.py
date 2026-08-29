@@ -12,11 +12,13 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User, UserRole, CustomerAddress, AuthSession
+from app.models.verification import EmailVerificationChallenge
 from app.models.loyalty import LoyaltyAccount
 from app.schemas.auth import (
     LoginRequest, RegisterRequest, SocialLoginRequest, Token, UserResponse,
     GoogleAuthRequest, GoogleNonceResponse, GoogleConfigResponse, ChangePasswordRequest,
-    RefreshTokenRequest, LogoutRequest
+    RefreshTokenRequest, LogoutRequest,
+    VerifyEmailRequest, ResendVerificationRequest, RegistrationResponse
 )
 from app.services.customer_service import create_customer_with_loyalty
 from app.services.google_auth_service import (
@@ -25,6 +27,13 @@ from app.services.google_auth_service import (
     verify_google_id_token,
     authenticate_google_customer
 )
+from app.services.otp_service import (
+    create_verification_challenge,
+    verify_otp_hash,
+    check_resend_cooldown,
+    OTP_MAX_ATTEMPTS
+)
+from app.services.email_service import send_verification_otp_email
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -102,6 +111,7 @@ def create_user_session(db: Session, user: User, http_req: Optional[Request] = N
         phone=user.phone,
         role=user.role,
         is_active=user.is_active,
+        email_verified=user.email_verified,
         branch_ids=branch_ids
     )
     return Token(access_token=access_token, refresh_token=refresh_token, user=user_resp)
@@ -129,27 +139,158 @@ def login(request: LoginRequest, http_req: Request, db: Session = Depends(get_db
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account disabled")
 
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please enter the verification code sent to your email."
+        )
+
     return create_user_session(db=db, user=user, http_req=http_req)
 
 
-@router.post("/register", response_model=Token)
-def register(request: RegisterRequest, http_req: Request, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == request.email.strip().lower()).first()
+@router.post("/register", response_model=RegistrationResponse)
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    email_clean = request.email.strip().lower()
+    existing = db.query(User).filter(User.email == email_clean).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        if existing.email_verified:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        # If existing unverified account, update details and issue fresh OTP challenge
+        existing.full_name = request.full_name.strip()
+        existing.password_hash = get_password_hash(request.password)
+        if request.phone:
+            existing.phone = request.phone.strip()
+        user = existing
+    else:
+        user, loyalty_acc = create_customer_with_loyalty(
+            db=db,
+            email=email_clean,
+            full_name=request.full_name,
+            password_hash=get_password_hash(request.password),
+            phone=request.phone,
+            welcome_points=100,
+            email_verified=False
+        )
 
-    user, loyalty_acc = create_customer_with_loyalty(
-        db=db,
-        email=request.email,
-        full_name=request.full_name,
-        password_hash=get_password_hash(request.password),
-        phone=request.phone,
-        welcome_points=100
+    challenge, otp = create_verification_challenge(db=db, user_id=user.id, email=email_clean)
+    db.commit()
+
+    # Dispatch verification code via Resend
+    send_verification_otp_email(to_email=email_clean, otp=otp)
+
+    return RegistrationResponse(
+        message="Verification code sent to your email.",
+        email=email_clean,
+        requires_verification=True
     )
+
+
+@router.post("/verify-email", response_model=Token)
+def verify_email(request: VerifyEmailRequest, http_req: Request, db: Session = Depends(get_db)):
+    email_clean = request.email.strip().lower()
+    now = datetime.now(timezone.utc)
+
+    # Find latest active challenge
+    challenge = db.query(EmailVerificationChallenge).filter(
+        EmailVerificationChallenge.email == email_clean,
+        EmailVerificationChallenge.used_at == None
+    ).order_by(EmailVerificationChallenge.created_at.desc()).first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active verification code found. Please request a new code."
+        )
+
+    exp = challenge.expires_at.replace(tzinfo=timezone.utc) if challenge.expires_at.tzinfo is None else challenge.expires_at
+    if exp < now:
+        challenge.used_at = now
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code."
+        )
+
+    if challenge.attempt_count >= OTP_MAX_ATTEMPTS:
+        challenge.used_at = now
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum verification attempts exceeded. Please request a new code."
+        )
+
+    # Constant-time comparison
+    if not verify_otp_hash(email=email_clean, otp=request.otp, salt=challenge.salt, stored_hash=challenge.otp_hash):
+        challenge.attempt_count += 1
+        db.commit()
+        remaining = max(0, OTP_MAX_ATTEMPTS - challenge.attempt_count)
+        if remaining > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid verification code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+            )
+        else:
+            challenge.used_at = now
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum verification attempts exceeded. Please request a new code."
+            )
+
+    # Successful verification
+    challenge.used_at = now
+
+    # Invalidate any remaining active challenges for this email
+    active_challenges = db.query(EmailVerificationChallenge).filter(
+        EmailVerificationChallenge.email == email_clean,
+        EmailVerificationChallenge.used_at == None
+    ).all()
+    for ch in active_challenges:
+        ch.used_at = now
+
+    user = db.query(User).filter(User.id == challenge.user_id).first()
+    if not user:
+        user = db.query(User).filter(User.email == email_clean).first()
+
+    if not user:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+
+    user.email_verified = True
+    user.is_active = True
     db.commit()
     db.refresh(user)
 
+    # Issue authorized session & tokens
     return create_user_session(db=db, user=user, http_req=http_req)
+
+
+@router.post("/resend-verification")
+def resend_verification(request: ResendVerificationRequest, db: Session = Depends(get_db)):
+    email_clean = request.email.strip().lower()
+
+    # Rate limiting & cooldown check
+    cooldown = check_resend_cooldown(db, email_clean)
+    if cooldown is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Please wait {cooldown} seconds before requesting a new verification code."
+        )
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        # Safe response to prevent account enumeration
+        return {"message": "If an unverified account exists for this email, a verification code has been sent."}
+
+    if user.email_verified:
+        return {"message": "This account is already verified. Please sign in."}
+
+    challenge, otp = create_verification_challenge(db=db, user_id=user.id, email=email_clean)
+    db.commit()
+
+    send_verification_otp_email(to_email=email_clean, otp=otp)
+
+    return {"message": "A new verification code has been sent to your email."}
 
 
 @router.post("/refresh", response_model=Token)

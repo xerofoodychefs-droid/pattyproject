@@ -79,7 +79,8 @@ def seed_db():
                     password_hash=get_password_hash(admin_pwd),
                     full_name="Super Admin",
                     role=UserRole.SUPER_ADMIN,
-                    is_active=True
+                    is_active=True,
+                    email_verified=True
                 )
                 db.add(admin)
                 db.commit()
@@ -99,7 +100,8 @@ def seed_db():
             full_name="Super Admin",
             phone="+44 20 7946 0912",
             role=UserRole.SUPER_ADMIN,
-            is_active=True
+            is_active=True,
+            email_verified=True
         )
         db.add(admin)
 
@@ -110,7 +112,8 @@ def seed_db():
             full_name="London Central Admin",
             phone="+44 7700 900111",
             role=UserRole.BRANCH_ADMIN,
-            is_active=True
+            is_active=True,
+            email_verified=True
         )
         westfield_admin = User(
             email="westfield@pattyproject.co.uk",
@@ -118,7 +121,8 @@ def seed_db():
             full_name="London Westfield Admin",
             phone="+44 7700 900222",
             role=UserRole.BRANCH_ADMIN,
-            is_active=True
+            is_active=True,
+            email_verified=True
         )
         db.add_all([central_admin, westfield_admin])
 
@@ -129,7 +133,8 @@ def seed_db():
             full_name="John Smith",
             phone="+44 7123 456789",
             role=UserRole.CUSTOMER,
-            is_active=True
+            is_active=True,
+            email_verified=True
         )
         customer2 = User(
             email="johnsmith@email.com",
@@ -137,7 +142,8 @@ def seed_db():
             full_name="John Smith",
             phone="+44 7123 456789",
             role=UserRole.CUSTOMER,
-            is_active=True
+            is_active=True,
+            email_verified=True
         )
         db.add_all([customer, customer2])
         db.flush()
