@@ -744,3 +744,191 @@ def test_41_charlie_no_orders_not_visible_to_any_branch_admin():
     # Super Admin
     r_super = client.get("/api/v1/customers", headers={"Authorization": f"Bearer {super_token}"})
     assert "charlie@example.com" in [c["email"] for c in r_super.json()]
+
+
+def test_42_super_admin_and_branch_admin_excluded_from_loyalty_members():
+    """42. SUPER_ADMIN and BRANCH_ADMIN accounts are strictly excluded from loyalty members list."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    db = TestingSessionLocal()
+    
+    # Even if a LoyaltyAccount exists for Super Admin or Branch Admin in the DB
+    sa_loy = LoyaltyAccount(id="loy-sa-rogue", user_id="usr-sec-superadmin-01", available_points=5128, lifetime_points=5128)
+    ba_loy = LoyaltyAccount(id="loy-ba-rogue", user_id="usr-sec-camden-admin-01", available_points=2000, lifetime_points=2000)
+    db.add_all([sa_loy, ba_loy])
+    db.commit()
+
+    resp = client.get("/api/v1/loyalty/admin/members", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp.status_code == 200
+    member_user_ids = [m["user_id"] for m in resp.json()]
+    member_emails = [m["email"] for m in resp.json()]
+
+    # 1. SUPER_ADMIN is excluded
+    assert "usr-sec-superadmin-01" not in member_user_ids
+    assert "superadmin@pattyproject.co.uk" not in member_emails
+
+    # 2. BRANCH_ADMIN is excluded
+    assert "usr-sec-camden-admin-01" not in member_user_ids
+    assert "camden.admin@pattyproject.co.uk" not in member_emails
+
+    # 3. CUSTOMERS appear
+    assert "usr-sec-alice-01" in member_user_ids
+    assert "usr-sec-bob-02" in member_user_ids
+
+
+def test_43_search_excludes_super_admin_and_branch_admin():
+    """43. Searching for Super Admin or Branch Admin in loyalty members returns 0 results."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    # Search for superadmin
+    resp_sa = client.get("/api/v1/loyalty/admin/members?search=superadmin", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_sa.status_code == 200
+    assert len(resp_sa.json()) == 0
+
+    # Search for branch admin
+    resp_ba = client.get("/api/v1/loyalty/admin/members?search=camden.admin", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_ba.status_code == 200
+    assert len(resp_ba.json()) == 0
+
+
+def test_44_super_admin_and_branch_admin_excluded_from_loyalty_totals():
+    """44. Super Admin and Branch Admin points do NOT contribute to Total Members, Active Balance, or Issued Points."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    db = TestingSessionLocal()
+
+    # Get baseline stats with only customers
+    resp_before = client.get("/api/v1/loyalty/admin/stats", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_before.status_code == 200
+    stats_before = resp_before.json()
+    base_members = stats_before["total_members"]
+    base_active_pts = stats_before["total_active_points"]
+    base_issued_pts = stats_before["total_points_issued"]
+
+    # Inject rogue loyalty accounts and transactions for Super Admin (5,128 pts) and Branch Admin (2,000 pts)
+    sa_loy = LoyaltyAccount(id="loy-sa-stat-test", user_id="usr-sec-superadmin-01", available_points=5128, lifetime_points=5128)
+    ba_loy = LoyaltyAccount(id="loy-ba-stat-test", user_id="usr-sec-camden-admin-01", available_points=2000, lifetime_points=2000)
+    db.add_all([sa_loy, ba_loy])
+    db.flush()
+
+    sa_tx = LoyaltyTransaction(
+        id="tx-sa-rogue", loyalty_account_id=sa_loy.id, points=5128,
+        transaction_type="MANUAL_CREDIT", resulting_balance=5128
+    )
+    ba_tx = LoyaltyTransaction(
+        id="tx-ba-rogue", loyalty_account_id=ba_loy.id, points=2000,
+        transaction_type="MANUAL_CREDIT", resulting_balance=2000
+    )
+    db.add_all([sa_tx, ba_tx])
+    db.commit()
+
+    resp_after = client.get("/api/v1/loyalty/admin/stats", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_after.status_code == 200
+    stats_after = resp_after.json()
+
+    # Points and members for Super Admin and Branch Admin MUST be excluded
+    assert stats_after["total_members"] == base_members
+    assert stats_after["total_active_points"] == base_active_pts
+    assert stats_after["total_points_issued"] == base_issued_pts
+
+
+def test_45_customer_points_remain_included_and_unchanged():
+    """45. Customer points remain fully included in stats and members."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    resp_stats = client.get("/api/v1/loyalty/admin/stats", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_stats.status_code == 200
+    stats = resp_stats.json()
+    assert stats["total_members"] == 2  # Alice (5000) and Bob (4000)
+    assert stats["total_active_points"] == 9000  # 5000 + 4000
+
+    resp_members = client.get("/api/v1/loyalty/admin/members", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp_members.status_code == 200
+    members = {m["user_id"]: m["available_points"] for m in resp_members.json()}
+    assert members["usr-sec-alice-01"] == 5000
+    assert members["usr-sec-bob-02"] == 4000
+
+
+def test_46_super_admin_cannot_receive_or_adjust_loyalty_points_via_api():
+    """46. Attempting to adjust points for a SUPER_ADMIN returns HTTP 400 Bad Request."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    payload = {
+        "user_id": "usr-sec-superadmin-01",
+        "points_delta": 500,
+        "reason": "Test audit reason for super admin adjustment"
+    }
+    resp = client.post("/api/v1/loyalty/admin/adjust-points", json=payload, headers={"Authorization": f"Bearer {super_token}"})
+    assert resp.status_code == 400
+    assert "customers" in resp.json()["detail"].lower()
+
+
+def test_47_branch_admin_cannot_receive_or_adjust_loyalty_points_via_api():
+    """47. Attempting to adjust points for a BRANCH_ADMIN returns HTTP 400 Bad Request."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    payload = {
+        "user_id": "usr-sec-camden-admin-01",
+        "points_delta": 500,
+        "reason": "Test audit reason for branch admin adjustment"
+    }
+    resp = client.post("/api/v1/loyalty/admin/adjust-points", json=payload, headers={"Authorization": f"Bearer {super_token}"})
+    assert resp.status_code == 400
+    assert "customers" in resp.json()["detail"].lower()
+
+
+def test_48_customer_point_adjustment_still_works():
+    """48. Point adjustments for valid CUSTOMER accounts still work seamlessly."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    payload = {
+        "user_id": "usr-sec-alice-01",
+        "points_delta": 250,
+        "reason": "Customer loyalty bonus compensation",
+        "admin_notes": "Added via customer support workflow"
+    }
+    resp = client.post("/api/v1/loyalty/admin/adjust-points", json=payload, headers={"Authorization": f"Bearer {super_token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["points"] == 250
+    assert data["resulting_balance"] == 5250
+
+
+def test_49_super_admin_cannot_access_customer_loyalty_portal():
+    """49. Super Admin cannot access /loyalty/balance, /loyalty/redeem, or /loyalty/history."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    
+    r_bal = client.get("/api/v1/loyalty/balance", headers={"Authorization": f"Bearer {super_token}"})
+    assert r_bal.status_code == 403
+
+    r_red = client.post("/api/v1/loyalty/redeem", json={"points": 4000}, headers={"Authorization": f"Bearer {super_token}"})
+    assert r_red.status_code == 403
+
+    r_hist = client.get("/api/v1/loyalty/history", headers={"Authorization": f"Bearer {super_token}"})
+    assert r_hist.status_code == 403
+
+
+def test_50_admin_transactions_ledger_excludes_admin_records():
+    """50. Admin transactions ledger strictly excludes transactions from non-customer accounts."""
+    super_token = create_access_token(subject="usr-sec-superadmin-01", roles=[UserRole.SUPER_ADMIN])
+    db = TestingSessionLocal()
+
+    # Create rogue loyalty account and transaction for Super Admin
+    sa_loy = LoyaltyAccount(id="loy-sa-tx-ledger-test", user_id="usr-sec-superadmin-01", available_points=5128, lifetime_points=5128)
+    db.add(sa_loy)
+    db.flush()
+
+    sa_tx = LoyaltyTransaction(
+        id="tx-sa-ledger-rogue",
+        loyalty_account_id=sa_loy.id,
+        points=5128,
+        transaction_type="MANUAL_CREDIT",
+        description="Rogue super admin points",
+        resulting_balance=5128
+    )
+    db.add(sa_tx)
+    db.commit()
+
+    resp = client.get("/api/v1/loyalty/admin/transactions", headers={"Authorization": f"Bearer {super_token}"})
+    assert resp.status_code == 200
+    tx_ids = [t["id"] for t in resp.json()]
+    assert "tx-sa-ledger-rogue" not in tx_ids
+

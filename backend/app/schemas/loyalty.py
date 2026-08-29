@@ -223,6 +223,7 @@ class LoyaltyMemberSummary(BaseModel):
     full_name: str
     email: str
     phone: Optional[str] = None
+    role: Optional[str] = None
     available_points: int
     lifetime_points: int
     total_redeemed: int

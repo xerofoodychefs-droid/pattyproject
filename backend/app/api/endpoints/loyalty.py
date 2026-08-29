@@ -62,6 +62,11 @@ def get_customer_loyalty_balance(
     Current point balance, £ reward value (1000 pts = £1), progress towards 4,000 pts milestone,
     redemption eligibility, active campaigns, and immutable transaction ledger.
     """
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Loyalty programme is only accessible to customers."
+        )
     overview = get_customer_loyalty_overview(db, current_user.id)
 
     # Legacy rewards compatibility
@@ -102,6 +107,12 @@ def redeem_customer_loyalty_points(
     Server-side authoritative point redemption validation and deduction.
     Enforces whole 1,000-point increments and minimum 4,000-point milestone threshold.
     """
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Loyalty programme is only accessible to customers."
+        )
+
     config = get_or_create_loyalty_config(db)
     if not config.is_enabled:
         raise HTTPException(
@@ -168,6 +179,11 @@ def get_customer_loyalty_history(
     db: Session = Depends(get_db)
 ):
     """Returns immutable loyalty transaction history for the logged-in customer."""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Loyalty programme is only accessible to customers."
+        )
     account = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == current_user.id).first()
     if not account:
         return []
@@ -250,6 +266,15 @@ def manual_points_adjustment(
     """
     Manually add or deduct points for a customer with MANDATORY audit reason and transaction recording.
     """
+    target_user = db.query(User).filter(User.id == payload.user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if target_user.role != UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Loyalty points can only be adjusted for customers."
+        )
+
     try:
         tx = manual_adjust_points(
             db=db,

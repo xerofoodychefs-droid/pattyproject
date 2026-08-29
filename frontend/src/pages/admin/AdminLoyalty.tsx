@@ -93,7 +93,10 @@ export const AdminLoyalty: React.FC = () => {
     try {
       const url = searchQuery ? `/loyalty/admin/members?search=${encodeURIComponent(searchQuery)}` : '/loyalty/admin/members';
       const res = await api.get<LoyaltyMemberSummary[]>(url);
-      setMembers(res);
+      const customerOnly = Array.isArray(res)
+        ? res.filter((m) => !m.role || m.role.toUpperCase() === 'CUSTOMER')
+        : [];
+      setMembers(customerOnly);
     } catch {}
   }, [searchQuery]);
 
@@ -144,6 +147,10 @@ export const AdminLoyalty: React.FC = () => {
 
   // Adjust Points Handlers
   const handleOpenAdjustModal = (member: LoyaltyMemberSummary) => {
+    if (member.role && member.role.toUpperCase() !== 'CUSTOMER') {
+      setError('Loyalty points can only be adjusted for customer accounts.');
+      return;
+    }
     setSelectedMember(member);
     setAdjustType('CREDIT');
     setAdjustPoints(100);
@@ -643,12 +650,14 @@ export const AdminLoyalty: React.FC = () => {
                           <span className="text-[#60A5FA]">-{m.total_redeemed.toLocaleString()}</span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenAdjustModal(m)}
-                            className="px-3 py-1.5 bg-[#FF5500]/10 hover:bg-[#FF5500] text-[#FF5500] hover:text-white border border-[#FF5500]/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                          >
-                            Adjust Points
-                          </button>
+                          {(!m.role || m.role.toUpperCase() === 'CUSTOMER') && (
+                            <button
+                              onClick={() => handleOpenAdjustModal(m)}
+                              className="px-3 py-1.5 bg-[#FF5500]/10 hover:bg-[#FF5500] text-[#FF5500] hover:text-white border border-[#FF5500]/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Adjust Points
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))

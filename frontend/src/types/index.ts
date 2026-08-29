@@ -273,6 +273,7 @@ export interface LoyaltyMemberSummary {
   full_name: string;
   email: string;
   phone?: string;
+  role?: string;
   available_points: number;
   lifetime_points: number;
   total_redeemed: number;

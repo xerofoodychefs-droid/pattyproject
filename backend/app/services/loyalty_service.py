@@ -171,6 +171,10 @@ def calculate_eligible_spend_and_points(
 
 def get_or_create_loyalty_account(db: Session, user_id: str) -> LoyaltyAccount:
     """Finds or initializes a customer loyalty account safely."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.role != UserRole.CUSTOMER:
+        raise ValueError(f"Loyalty accounts can only be created for customers. User role is {user.role}.")
+
     loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_id).first()
     if not loyalty:
         loyalty = LoyaltyAccount(
@@ -205,15 +209,15 @@ def award_order_loyalty_points(db: Session, order: Order) -> Optional[LoyaltyTra
         logger.info(f"Points already awarded for Order {order.order_number} (Tx {existing_tx.id}).")
         return existing_tx
 
-    # Resolve user
+    # Resolve user - LOYALTY IS CUSTOMER-ONLY
     user = None
     if order.customer_id:
         user = db.query(User).filter(User.id == order.customer_id).first()
     elif order.customer_email:
         user = db.query(User).filter(User.email == order.customer_email.strip().lower()).first()
 
-    if not user:
-        logger.info(f"No registered customer found for Order {order.order_number}. Skipping loyalty award.")
+    if not user or user.role != UserRole.CUSTOMER:
+        logger.info(f"No registered customer found for Order {order.order_number} or user is not a customer. Skipping loyalty award.")
         return None
 
     loyalty = get_or_create_loyalty_account(db, user.id)
@@ -295,7 +299,7 @@ def reverse_order_loyalty_points(
     elif order.customer_email:
         user = db.query(User).filter(User.email == order.customer_email.strip().lower()).first()
 
-    if not user:
+    if not user or user.role != UserRole.CUSTOMER:
         return None
 
     loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user.id).first()
@@ -385,7 +389,7 @@ def restore_redeemed_loyalty_points(
     elif order.customer_email:
         user = db.query(User).filter(User.email == order.customer_email.strip().lower()).first()
 
-    if not user:
+    if not user or user.role != UserRole.CUSTOMER:
         return None
 
     loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user.id).first()
@@ -456,6 +460,10 @@ def validate_and_redeem_points(
     if points_to_redeem % config.redemption_increment_points != 0:
         return False, f"Redemptions must be in whole {config.redemption_increment_points:,}-point increments.", None
 
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.role != UserRole.CUSTOMER:
+        return False, "Loyalty rewards can only be redeemed by customers.", None
+
     account = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_id).first()
     if not account:
         return False, "Loyalty account not found.", None
@@ -510,6 +518,12 @@ def manual_adjust_points(
     clean_reason = reason.strip() if reason else ""
     if not clean_reason or len(clean_reason) < 3:
         raise ValueError("A mandatory audit reason (at least 3 characters) is required for manual point adjustments.")
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise ValueError("User not found.")
+    if target_user.role != UserRole.CUSTOMER:
+        raise ValueError("Loyalty points can only be managed for customers.")
 
     loyalty = get_or_create_loyalty_account(db, user_id)
 
@@ -580,6 +594,10 @@ def get_customer_loyalty_overview(db: Session, user_id: str) -> Dict[str, Any]:
     Computes real-time customer loyalty overview, progress towards 4,000 pts milestone,
     available whole-£1 increments, and ledger history.
     """
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.role != UserRole.CUSTOMER:
+        raise ValueError("Loyalty overview is only available for customers.")
+
     config = get_or_create_loyalty_config(db)
     loyalty = get_or_create_loyalty_account(db, user_id)
     primary_milestone = get_or_create_default_milestone(db)
@@ -667,16 +685,34 @@ def get_customer_loyalty_overview(db: Session, user_id: str) -> Dict[str, Any]:
 # ==========================================
 
 def get_admin_loyalty_analytics(db: Session) -> Dict[str, Any]:
-    """Calculates overall loyalty programme KPI metrics and liability."""
+    """Calculates overall loyalty programme KPI metrics and liability for CUSTOMER accounts only."""
     config = get_or_create_loyalty_config(db)
 
-    total_members = db.query(LoyaltyAccount).count()
-    total_active_points = db.query(func.coalesce(func.sum(LoyaltyAccount.available_points), 0)).scalar() or 0
-    total_points_issued = db.query(func.coalesce(func.sum(LoyaltyAccount.lifetime_points), 0)).scalar() or 0
+    # Restrict strictly to CUSTOMER role accounts
+    customer_accounts = (
+        db.query(LoyaltyAccount)
+        .join(User, LoyaltyAccount.user_id == User.id)
+        .filter(func.upper(User.role) == UserRole.CUSTOMER)
+    )
 
-    all_txs = db.query(LoyaltyTransaction).all()
-    total_redeemed = sum(abs(t.points) for t in all_txs if t.points < 0 and t.transaction_type in ["REDEEM", "REDEEMED"])
-    total_reversed = sum(abs(t.points) for t in all_txs if t.points < 0 and t.transaction_type in ["REVERSE", "REFUND_ADJUSTMENT", "REVERSED"])
+    total_members = customer_accounts.count()
+    total_active_points = customer_accounts.with_entities(
+        func.coalesce(func.sum(LoyaltyAccount.available_points), 0)
+    ).scalar() or 0
+    total_points_issued = customer_accounts.with_entities(
+        func.coalesce(func.sum(LoyaltyAccount.lifetime_points), 0)
+    ).scalar() or 0
+
+    # Restrict transactions strictly to CUSTOMER accounts
+    customer_txs = (
+        db.query(LoyaltyTransaction)
+        .join(LoyaltyAccount, LoyaltyTransaction.loyalty_account_id == LoyaltyAccount.id)
+        .join(User, LoyaltyAccount.user_id == User.id)
+        .filter(func.upper(User.role) == UserRole.CUSTOMER)
+        .all()
+    )
+    total_redeemed = sum(abs(t.points) for t in customer_txs if t.points < 0 and t.transaction_type in ["REDEEM", "REDEEMED"])
+    total_reversed = sum(abs(t.points) for t in customer_txs if t.points < 0 and t.transaction_type in ["REVERSE", "REFUND_ADJUSTMENT", "REVERSED"])
 
     pts_per_pound = max(1, config.points_per_pound_reward)
     outstanding_liability = round(total_active_points / pts_per_pound, 2)
@@ -705,9 +741,13 @@ def get_admin_loyalty_members(
     limit: int = 50,
     offset: int = 0
 ) -> List[Dict[str, Any]]:
-    """Returns list of customer loyalty accounts with search and calculated statistics."""
+    """Returns list of customer loyalty accounts with search and calculated statistics, strictly CUSTOMER-only."""
     config = get_or_create_loyalty_config(db)
-    query = db.query(LoyaltyAccount).join(User, LoyaltyAccount.user_id == User.id)
+    query = (
+        db.query(LoyaltyAccount)
+        .join(User, LoyaltyAccount.user_id == User.id)
+        .filter(func.upper(User.role) == UserRole.CUSTOMER)
+    )
 
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
@@ -734,6 +774,7 @@ def get_admin_loyalty_members(
             "full_name": user.full_name if user else "Unknown Customer",
             "email": user.email if user else "",
             "phone": user.phone if user else None,
+            "role": user.role if user else UserRole.CUSTOMER,
             "available_points": acc.available_points,
             "lifetime_points": acc.lifetime_points,
             "total_redeemed": total_redeemed,
@@ -754,13 +795,18 @@ def get_admin_loyalty_transactions(
     limit: int = 100,
     offset: int = 0
 ) -> List[LoyaltyTransaction]:
-    """Retrieves immutable loyalty transactions ledger with filters."""
-    query = db.query(LoyaltyTransaction)
+    """Retrieves immutable loyalty transactions ledger with filters for CUSTOMER accounts only."""
+    query = (
+        db.query(LoyaltyTransaction)
+        .join(LoyaltyAccount, LoyaltyTransaction.loyalty_account_id == LoyaltyAccount.id)
+        .join(User, LoyaltyAccount.user_id == User.id)
+        .filter(func.upper(User.role) == UserRole.CUSTOMER)
+    )
 
     if tx_type and tx_type != "ALL":
         query = query.filter(LoyaltyTransaction.transaction_type == tx_type.upper())
     if user_id:
-        query = query.join(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_id)
+        query = query.filter(LoyaltyAccount.user_id == user_id)
     if order_id:
         query = query.filter(LoyaltyTransaction.order_id == order_id)
 
