@@ -117,7 +117,7 @@ export const AdminDashboard: React.FC = () => {
 
       if (isAuthErr) {
         alert('Session expired or unauthorized. Please log in with an administrator account.');
-        navigate('/admin/login');
+        navigate('/admin');
       } else {
         alert(errMsg || 'Failed to delete branch. Please try again.');
       }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { api } from '../../api/client';
@@ -12,8 +12,15 @@ export const AdminLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { setAuth } = useAuthStore();
+  const { token, user, setAuth } = useAuthStore();
   const navigate = useNavigate();
+
+  // If already authenticated as an admin, automatically redirect to admin dashboard
+  useEffect(() => {
+    if (token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN')) {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [token, user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

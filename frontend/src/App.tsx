@@ -35,9 +35,9 @@ const DynamicTitleManager: React.FC = () => {
     updateFavicon();
 
     const path = location.pathname;
-    if (path === '/admin/login') {
+    if (path === '/admin' || path === '/admin/login') {
       document.title = 'Patty Project Admin | Login';
-    } else if (path === '/admin/dashboard' || path === '/admin') {
+    } else if (path === '/admin/dashboard') {
       document.title = 'Patty Project Admin | Dashboard';
     } else if (path === '/admin/orders') {
       document.title = 'Patty Project Admin | Orders Management';
@@ -145,7 +145,7 @@ const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children })
   const isAdmin = token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN');
 
   if (!isAdmin) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   return (
@@ -290,8 +290,8 @@ export function App() {
         <React.Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
             {/* Admin Routes */}
-            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/login" element={<Navigate to="/admin" replace />} />
             <Route path="/admin/dashboard" element={<AdminLayoutShell><AdminDashboard /></AdminLayoutShell>} />
             <Route path="/admin/orders" element={<AdminLayoutShell><AdminOrderBoard /></AdminLayoutShell>} />
             <Route path="/admin/products" element={<AdminLayoutShell><AdminProducts /></AdminLayoutShell>} />
