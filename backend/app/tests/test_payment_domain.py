@@ -59,8 +59,8 @@ def test_delivery_fee_is_strictly_zero_for_delivery_orders():
 
         assert totals["delivery_fee"] == 0.0
         assert totals["subtotal"] == round(prod.base_price * 2, 2)
-        assert totals["service_fee"] == 0.99
-        expected_total = round(totals["subtotal"] + 0.0 + 0.99, 2)
+        assert totals["service_fee"] == 0.0
+        expected_total = round(totals["subtotal"] * 1.20, 2)
         assert totals["total_amount"] == expected_total
     finally:
         db.close()
@@ -75,8 +75,8 @@ def test_delivery_fee_is_strictly_zero_for_collection_orders():
         totals = calculate_order_totals(db=db, items=items, order_type="COLLECTION")
 
         assert totals["delivery_fee"] == 0.0
-        assert totals["service_fee"] == 0.99
-        expected_total = round(prod.base_price + 0.99, 2)
+        assert totals["service_fee"] == 0.0
+        expected_total = round(prod.base_price * 1.20, 2)
         assert totals["total_amount"] == expected_total
     finally:
         db.close()
@@ -113,7 +113,7 @@ def test_fake_delivery_fee_and_total_price_tampering_overridden():
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["delivery_fee"] == 0.0
-    expected_total = round(16.00 + 0.99, 2)
+    expected_total = round(16.00 * 1.20, 2)
     assert data["total_amount"] == expected_total
 
 

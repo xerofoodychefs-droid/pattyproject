@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, CheckCircle2 } from 'lucide-react';
+import { MapPin, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { api } from '../../api/client';
 
 export const CustomerContact: React.FC = () => {
   const { user } = useAuthStore();
@@ -12,6 +13,8 @@ export const CustomerContact: React.FC = () => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -22,12 +25,37 @@ export const CustomerContact: React.FC = () => {
     }
   }, [user]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setSubject('');
-    setMessage('');
-    setTimeout(() => setSubmitted(false), 6000);
+    if (isSubmitting) return;
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      await api.post('/contact', {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        subject: subject.trim(),
+        message: message.trim(),
+      });
+
+      setSubmitted(true);
+      setSubject('');
+      setMessage('');
+      if (!user) {
+        setFirstName('');
+        setLastName('');
+        setEmail('');
+      }
+    } catch (err: any) {
+      console.error('[ContactForm] Error submitting contact form:', err);
+      const msg = err?.message || 'Unable to send your message. Please try again.';
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,7 +126,7 @@ export const CustomerContact: React.FC = () => {
 
             {/* Contact Form */}
             {submitted ? (
-              <div className="p-6 bg-[#111111] border border-[#FF5500]/50 rounded-xl space-y-2.5 animate-fadeIn">
+              <div className="p-6 bg-[#111111] border border-[#FF5500]/50 rounded-xl space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-2.5 text-[#FF5500]">
                   <CheckCircle2 className="w-5 h-5" />
                   <h3 className="text-base font-black text-white uppercase font-hero tracking-wide">
@@ -106,11 +134,28 @@ export const CustomerContact: React.FC = () => {
                   </h3>
                 </div>
                 <p className="text-xs sm:text-sm text-[#A1A1A1] leading-relaxed">
-                  Thank you for reaching out to Patty Project. Our team will get back to you shortly.
+                  Thank you for reaching out to Patty Project. Your message has been sent to our team and we will get back to you shortly.
                 </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSubmitted(false)}
+                    className="text-xs font-bold text-[#FF5500] hover:text-[#FFAA00] uppercase tracking-wider underline cursor-pointer transition-colors"
+                  >
+                    Send another message
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Error Banner */}
+                {errorMessage && (
+                  <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-xs sm:text-sm text-red-200 flex items-start gap-2.5 animate-fadeIn">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">{errorMessage}</p>
+                  </div>
+                )}
+
                 {/* Row 1: First Name & Last Name */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1.5">
@@ -123,7 +168,8 @@ export const CustomerContact: React.FC = () => {
                       placeholder="Your first name"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors"
+                      disabled={isSubmitting}
+                      className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors disabled:opacity-60"
                     />
                   </div>
 
@@ -137,7 +183,8 @@ export const CustomerContact: React.FC = () => {
                       placeholder="Your last name"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors"
+                      disabled={isSubmitting}
+                      className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -153,7 +200,8 @@ export const CustomerContact: React.FC = () => {
                     placeholder="Your email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors"
+                    disabled={isSubmitting}
+                    className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors disabled:opacity-60"
                   />
                 </div>
 
@@ -168,7 +216,8 @@ export const CustomerContact: React.FC = () => {
                     placeholder="What's this about?"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors"
+                    disabled={isSubmitting}
+                    className="w-full h-[48px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg px-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors disabled:opacity-60"
                   />
                 </div>
 
@@ -183,7 +232,8 @@ export const CustomerContact: React.FC = () => {
                     placeholder="Write your message here..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="w-full h-[120px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg p-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors resize-none"
+                    disabled={isSubmitting}
+                    className="w-full h-[120px] bg-[#0E0E0E] border border-[#262626] focus:border-[#FF5500] rounded-lg p-4 text-sm text-white placeholder:text-[#555555] focus:outline-none transition-colors resize-none disabled:opacity-60"
                   />
                 </div>
 
@@ -191,9 +241,17 @@ export const CustomerContact: React.FC = () => {
                 <div className="pt-2 flex items-center gap-4">
                   <button
                     type="submit"
-                    className="bg-[#FF5500] hover:bg-[#E04B00] text-white px-8 py-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-[#FF5500]/25 cursor-pointer"
+                    disabled={isSubmitting}
+                    className="bg-[#FF5500] hover:bg-[#E04B00] disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-[#FF5500]/25 cursor-pointer flex items-center gap-2"
                   >
-                    SUBMIT MESSAGE
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>SENDING...</span>
+                      </>
+                    ) : (
+                      <span>SUBMIT MESSAGE</span>
+                    )}
                   </button>
                 </div>
               </form>

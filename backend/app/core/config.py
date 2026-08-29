@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # Google Identity Services (GIS) OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "mock-google-client-id.apps.googleusercontent.com")
 
+    # Resend & Contact Form Configuration
+    CONTACT_EMAIL_TO: str = os.getenv("CONTACT_EMAIL_TO", "xerofoodychefs@gmail.com")
+    CONTACT_EMAIL_FROM: str = os.getenv("CONTACT_EMAIL_FROM", "Patty Project <website@pattyproject.co.uk>")
+    RESEND_API_KEY: Optional[str] = os.getenv("RESEND_API_KEY")
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() == "production"

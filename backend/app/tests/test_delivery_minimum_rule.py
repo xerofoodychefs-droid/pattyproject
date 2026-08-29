@@ -240,8 +240,8 @@ def test_05_subtotal_20_valid_6_coupon_final_14_delivery_allowed():
     data = resp.json()
     assert data["subtotal"] == 20.00
     assert data["discount_amount"] == 6.00
-    # Final payable = 20.00 - 6.00 + 0.99 service fee = 14.99 (< 15.00 merchandise)
-    assert data["total_amount"] == 14.99
+    # Taxable amount = 20.00 - 6.00 = 14.00; with 20% UK VAT (2.80) = 16.80 total payable (£0 service fee)
+    assert data["total_amount"] == 16.80
     assert data["order_type"] == "DELIVERY"
 
 
