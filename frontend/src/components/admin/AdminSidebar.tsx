@@ -14,6 +14,17 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
+const lazyPreloadMap: Record<string, () => Promise<any>> = {
+  '/admin/dashboard': () => import('../../pages/admin/AdminDashboard'),
+  '/admin/orders': () => import('../../pages/admin/AdminOrderBoard'),
+  '/admin/products': () => import('../../pages/admin/AdminProducts'),
+  '/admin/customers': () => import('../../pages/admin/AdminCustomers'),
+  '/admin/loyalty': () => import('../../pages/admin/AdminLoyalty'),
+  '/admin/coupons': () => import('../../pages/admin/AdminCoupons'),
+  '/admin/offers': () => import('../../pages/admin/AdminOfferSettings'),
+  '/admin/settings': () => import('../../pages/admin/AdminProfileSettings'),
+};
+
 interface AdminSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -90,6 +101,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <NavLink
                 key={item.path}
                 to={item.path}
+                onMouseEnter={() => {
+                  try {
+                    lazyPreloadMap[item.path]?.();
+                  } catch {}
+                }}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
                     isActive

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminSidebar } from './components/admin/AdminSidebar';
 import { CustomerHeader } from './components/customer/CustomerHeader';
@@ -124,10 +124,25 @@ const RouteLoadingSpinner = () => (
   </div>
 );
 
+const AdminPageSkeleton = () => (
+  <div className="p-6 space-y-6 animate-pulse">
+    <div className="flex items-center justify-between">
+      <div className="h-8 w-48 bg-[#1A1A1A] rounded-lg"></div>
+      <div className="h-8 w-32 bg-[#1A1A1A] rounded-lg"></div>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="h-28 bg-[#141414] border border-[#222222] rounded-xl"></div>
+      <div className="h-28 bg-[#141414] border border-[#222222] rounded-xl"></div>
+      <div className="h-28 bg-[#141414] border border-[#222222] rounded-xl"></div>
+    </div>
+    <div className="h-64 bg-[#141414] border border-[#222222] rounded-xl"></div>
+  </div>
+);
+
 const queryClient = new QueryClient();
 
-// Admin Layout Shell with Protection Guard & Sidebar Collapse Toggle
-const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Persistent Admin Layout Shell with Protection Guard & Sidebar Collapse Toggle
+const AdminLayoutShell: React.FC = () => {
   const { token, user } = useAuthStore();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -150,13 +165,12 @@ const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children })
 
   return (
     <div className="min-h-screen bg-black text-white flex">
-      {/* Sidebar Component with Hide Button */}
+      {/* Sidebar Component stays permanently mounted during navigation */}
       <AdminSidebar isCollapsed={isCollapsed} onToggleCollapse={toggleSidebar} />
 
       {/* Main Content Area */}
       <main
-        key={location.pathname}
-        className={`page-enter flex-1 min-w-0 transition-all duration-300 ease-in-out ${
+        className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'ml-0' : 'ml-64'
         }`}
       >
@@ -173,7 +187,11 @@ const AdminLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children })
             </button>
           </div>
         )}
-        {children}
+        <React.Suspense fallback={<AdminPageSkeleton />}>
+          <div key={location.pathname} className="page-enter">
+            <Outlet />
+          </div>
+        </React.Suspense>
       </main>
     </div>
   );
@@ -289,19 +307,22 @@ export function App() {
         <ScrollToTop />
         <React.Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
-            {/* Admin Routes */}
+            {/* Admin Routes with Persistent Layout Shell */}
             <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin/login" element={<Navigate to="/admin" replace />} />
-            <Route path="/admin/dashboard" element={<AdminLayoutShell><AdminDashboard /></AdminLayoutShell>} />
-            <Route path="/admin/orders" element={<AdminLayoutShell><AdminOrderBoard /></AdminLayoutShell>} />
-            <Route path="/admin/products" element={<AdminLayoutShell><AdminProducts /></AdminLayoutShell>} />
-            <Route path="/admin/customers" element={<AdminLayoutShell><AdminCustomers /></AdminLayoutShell>} />
-            <Route path="/admin/loyalty" element={<AdminLayoutShell><AdminLoyalty /></AdminLayoutShell>} />
-            <Route path="/admin/coupons" element={<AdminLayoutShell><AdminCoupons /></AdminLayoutShell>} />
-            <Route path="/admin/offers" element={<AdminLayoutShell><AdminOfferSettings /></AdminLayoutShell>} />
-            <Route path="/admin/settings" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
-            <Route path="/admin/profile-settings" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
-            <Route path="/admin/profile" element={<AdminLayoutShell><AdminProfileSettings /></AdminLayoutShell>} />
+
+            <Route element={<AdminLayoutShell />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/orders" element={<AdminOrderBoard />} />
+              <Route path="/admin/products" element={<AdminProducts />} />
+              <Route path="/admin/customers" element={<AdminCustomers />} />
+              <Route path="/admin/loyalty" element={<AdminLoyalty />} />
+              <Route path="/admin/coupons" element={<AdminCoupons />} />
+              <Route path="/admin/offers" element={<AdminOfferSettings />} />
+              <Route path="/admin/settings" element={<AdminProfileSettings />} />
+              <Route path="/admin/profile-settings" element={<AdminProfileSettings />} />
+              <Route path="/admin/profile" element={<AdminProfileSettings />} />
+            </Route>
 
             {/* Customer Routes */}
             <Route path="/" element={<CustomerLayoutShell><CustomerHome /></CustomerLayoutShell>} />
