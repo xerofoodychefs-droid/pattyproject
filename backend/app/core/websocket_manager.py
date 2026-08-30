@@ -54,6 +54,7 @@ class ConnectionManager:
         self._connections: Dict[WebSocket, AdminConnectionInfo] = {}
         self._product_connections: Dict[WebSocket, ProductConnectionInfo] = {}
         self._lock = asyncio.Lock()
+        self._main_loop: Optional[asyncio.AbstractEventLoop] = None
 
     @property
     def active_connections_count(self) -> int:
@@ -66,6 +67,10 @@ class ConnectionManager:
     async def connect_products(self, websocket: WebSocket) -> None:
         """Accepts and registers a customer read-only product availability WebSocket connection."""
         await websocket.accept()
+        try:
+            self._main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
         async with self._lock:
             self._product_connections[websocket] = ProductConnectionInfo()
         logger.info(
@@ -138,19 +143,32 @@ class ConnectionManager:
     ) -> None:
         """
         Synchronous wrapper allowing synchronous endpoints to trigger the async product broadcast safely.
+        Uses main ASGI event loop via run_coroutine_threadsafe when called from thread pools.
         """
+        coro = self.broadcast_product_availability(product_id, is_out_of_stock)
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self.broadcast_product_availability(product_id, is_out_of_stock))
+            if loop.is_running():
+                loop.create_task(coro)
+                return
         except RuntimeError:
+            pass
+
+        if self._main_loop and self._main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self._main_loop)
+        else:
             try:
-                asyncio.run(self.broadcast_product_availability(product_id, is_out_of_stock))
+                asyncio.run(coro)
             except Exception as e:
-                logger.error(f"[WS_PRODUCT_SYNC_ERR] Failed to run product broadcast in new event loop: {e}")
+                logger.error(f"[WS_PRODUCT_SYNC_ERR] Failed to run product broadcast: {e}")
 
     async def connect(self, websocket: WebSocket, user_id: str, role: str, branch_ids: Set[str]) -> None:
         """Accepts and registers a verified admin WebSocket connection."""
         await websocket.accept()
+        try:
+            self._main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
         async with self._lock:
             self._connections[websocket] = AdminConnectionInfo(
                 user_id=user_id,
@@ -240,13 +258,20 @@ class ConnectionManager:
         Synchronous wrapper allowing background DB hooks / synchronous endpoints to trigger
         the async broadcast safely without blocking the event loop.
         """
+        coro = self.broadcast_order_event(event_type, order_data, branch_id)
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self.broadcast_order_event(event_type, order_data, branch_id))
+            if loop.is_running():
+                loop.create_task(coro)
+                return
         except RuntimeError:
-            # In non-async threads/contexts (e.g. background threads)
+            pass
+
+        if self._main_loop and self._main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self._main_loop)
+        else:
             try:
-                asyncio.run(self.broadcast_order_event(event_type, order_data, branch_id))
+                asyncio.run(coro)
             except Exception as e:
                 logger.error(f"[WS_SYNC_BROADCAST_ERR] Failed to run broadcast in new event loop: {e}")
 

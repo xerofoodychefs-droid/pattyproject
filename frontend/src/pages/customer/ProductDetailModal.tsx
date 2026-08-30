@@ -132,7 +132,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
   const unitPrice = product.base_price + modTotal + choiceTotal;
   const totalPrice = unitPrice * quantity;
 
-  const isProductOutOfStock = product.is_available === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
+  const isProductOutOfStock = product.is_out_of_stock === true || product.is_available === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
 
   const handleAddToCart = () => {
     if (isProductOutOfStock || quantity < 1 || !isChoiceRequirementSatisfied) return;

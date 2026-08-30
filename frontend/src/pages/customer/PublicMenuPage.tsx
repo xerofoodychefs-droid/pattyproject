@@ -26,13 +26,15 @@ export const PublicMenuPage: React.FC = () => {
 
   useProductRealtime({
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId) return p;
           return {
             ...p,
-            is_out_of_stock: isOutOfStock,
-            is_available: isOutOfStock ? false : (p.is_available ?? true),
+            is_out_of_stock: boolOutOfStock,
+            is_available: !boolOutOfStock,
+            stock_quantity: boolOutOfStock ? 0 : (p.stock_quantity && p.stock_quantity > 0 ? p.stock_quantity : 100),
           };
         })
       );

@@ -470,6 +470,7 @@ def test_12_multiple_connected_clients_and_resilient_broadcast():
         assert ws1.receive_json()["type"] == "CONNECTED"
         assert ws2.receive_json()["type"] == "CONNECTED"
 
+        # Broadcast True
         client.patch(
             "/api/v1/admin/products/prod-mc-project/availability",
             headers=super_headers,
@@ -480,3 +481,106 @@ def test_12_multiple_connected_clients_and_resilient_broadcast():
         ev2 = ws2.receive_json()
         assert ev1["product_id"] == "prod-mc-project" and ev1["is_out_of_stock"] is True
         assert ev2["product_id"] == "prod-mc-project" and ev2["is_out_of_stock"] is True
+
+        # Broadcast False
+        client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": False}
+        )
+
+        ev1_back = ws1.receive_json()
+        ev2_back = ws2.receive_json()
+        assert ev1_back["product_id"] == "prod-mc-project" and ev1_back["is_out_of_stock"] is False
+        assert ev2_back["product_id"] == "prod-mc-project" and ev2_back["is_out_of_stock"] is False
+
+
+def test_13_single_product_change_does_not_affect_other_products():
+    """TEST 13: Changing one product's availability broadcasts that product specifically and leaves other products untouched."""
+    super_headers = get_token_header("user-super-admin-001", "superadmin@pattyproject.co.uk", UserRole.SUPER_ADMIN)
+
+    # Ensure a second product exists in DB
+    db = TestingSessionLocal()
+    cat = db.query(Category).first()
+    p2 = db.query(Product).filter(Product.id == "prod-second-test").first()
+    if not p2:
+        p2 = Product(
+            id="prod-second-test",
+            name="Second Burger",
+            sku="SKU-2ND",
+            base_price=9.99,
+            category_id=cat.id if cat else "cat-main",
+            is_active=True,
+            is_out_of_stock=False
+        )
+        db.add(p2)
+        db.commit()
+    target_id = "prod-mc-project"
+    other_id = "prod-second-test"
+    other_initial_state = False
+    db.close()
+
+    with client.websocket_connect("/api/v1/ws/products") as ws:
+        assert ws.receive_json()["type"] == "CONNECTED"
+
+        # Patch target product
+        patch_res = client.patch(
+            f"/api/v1/admin/products/{target_id}/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": True}
+        )
+        assert patch_res.status_code == 200
+
+        ev = ws.receive_json()
+        assert ev["type"] == "product_availability_changed"
+        assert ev["product_id"] == target_id
+        assert ev["is_out_of_stock"] is True
+
+        # Verify other product was NOT changed in DB or REST
+        db2 = TestingSessionLocal()
+        other_db = db2.query(Product).filter(Product.id == other_id).first()
+        assert other_db.is_out_of_stock == other_initial_state
+        db2.close()
+
+        res_other = client.get(f"/api/v1/products/{other_id}").json()
+        assert res_other["is_out_of_stock"] == other_initial_state
+
+
+def test_14_database_state_matches_broadcast_state_end_to_end():
+    """TEST 14: End-to-end verification that database state matches broadcast state for both true and false."""
+    super_headers = get_token_header("user-super-admin-001", "superadmin@pattyproject.co.uk", UserRole.SUPER_ADMIN)
+
+    with client.websocket_connect("/api/v1/ws/products") as ws:
+        assert ws.receive_json()["type"] == "CONNECTED"
+
+        # Step 1: Set Out of Stock = True
+        res1 = client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": True}
+        )
+        assert res1.status_code == 200
+        ev1 = ws.receive_json()
+
+        db1 = TestingSessionLocal()
+        prod1 = db1.query(Product).filter(Product.id == "prod-mc-project").first()
+        assert prod1.is_out_of_stock is True
+        assert ev1["is_out_of_stock"] is True
+        assert ev1["product_id"] == prod1.id
+        db1.close()
+
+        # Step 2: Set Out of Stock = False (Available)
+        res2 = client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": False}
+        )
+        assert res2.status_code == 200
+        ev2 = ws.receive_json()
+
+        db2 = TestingSessionLocal()
+        prod2 = db2.query(Product).filter(Product.id == "prod-mc-project").first()
+        assert prod2.is_out_of_stock is False
+        assert ev2["is_out_of_stock"] is False
+        assert ev2["product_id"] == prod2.id
+        db2.close()

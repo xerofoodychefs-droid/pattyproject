@@ -16,12 +16,14 @@ export const ProductDetailPage: React.FC = () => {
   useProductRealtime({
     onProductAvailabilityChange: (id: string, isOutOfStock: boolean) => {
       if (productId === id) {
+        const boolOutOfStock = Boolean(isOutOfStock);
         setProduct((prev) =>
           prev
             ? {
                 ...prev,
-                is_out_of_stock: isOutOfStock,
-                is_available: isOutOfStock ? false : (prev.is_available ?? true),
+                is_out_of_stock: boolOutOfStock,
+                is_available: !boolOutOfStock,
+                stock_quantity: boolOutOfStock ? 0 : (prev.stock_quantity && prev.stock_quantity > 0 ? prev.stock_quantity : 100),
               }
             : null
         );

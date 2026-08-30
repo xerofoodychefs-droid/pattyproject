@@ -54,13 +54,15 @@ export const CustomerHome: React.FC = () => {
   // Realtime product availability subscription
   useProductRealtime({
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId) return p;
           return {
             ...p,
-            is_out_of_stock: isOutOfStock,
-            is_available: isOutOfStock ? false : (p.is_available ?? true),
+            is_out_of_stock: boolOutOfStock,
+            is_available: !boolOutOfStock,
+            stock_quantity: boolOutOfStock ? 0 : (p.stock_quantity && p.stock_quantity > 0 ? p.stock_quantity : 100),
           };
         })
       );
@@ -69,8 +71,9 @@ export const CustomerHome: React.FC = () => {
           prev
             ? {
                 ...prev,
-                is_out_of_stock: isOutOfStock,
-                is_available: isOutOfStock ? false : (prev.is_available ?? true),
+                is_out_of_stock: boolOutOfStock,
+                is_available: !boolOutOfStock,
+                stock_quantity: boolOutOfStock ? 0 : (prev.stock_quantity && prev.stock_quantity > 0 ? prev.stock_quantity : 100),
               }
             : null
         );

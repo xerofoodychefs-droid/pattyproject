@@ -151,7 +151,7 @@ def list_products(
     db: Session = Depends(get_db)
 ):
     """Returns active products filtered by category and populated with branch inventory availability, using eager modifier loading."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     query = db.query(Product).options(
         selectinload(Product.modifiers),
         selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
@@ -514,11 +514,13 @@ def delete_product(
         prod.is_active = False
         db.query(Inventory).filter(Inventory.product_id == product_id).update({Inventory.is_available: False})
         db.commit()
+        manager.sync_broadcast_product_availability(product_id=product_id, is_out_of_stock=True)
         return {"message": "Product archived successfully", "id": product_id, "archived": True}
     else:
         # Hard delete if no historical orders exist for this product
         db.delete(prod)
         db.commit()
+        manager.sync_broadcast_product_availability(product_id=product_id, is_out_of_stock=True)
         return {"message": "Product deleted successfully", "id": product_id, "deleted": True}
 
 # ==========================================

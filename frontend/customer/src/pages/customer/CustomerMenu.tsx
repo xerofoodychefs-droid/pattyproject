@@ -41,13 +41,15 @@ export const CustomerMenu: React.FC = () => {
   // Realtime product availability subscription (Zero-refresh immediate update)
   useProductRealtime({
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId) return p;
           return {
             ...p,
-            is_out_of_stock: isOutOfStock,
-            is_available: isOutOfStock ? false : (p.is_available ?? true),
+            is_out_of_stock: boolOutOfStock,
+            is_available: !boolOutOfStock,
+            stock_quantity: boolOutOfStock ? 0 : (p.stock_quantity && p.stock_quantity > 0 ? p.stock_quantity : 100),
           };
         })
       );
@@ -55,14 +57,15 @@ export const CustomerMenu: React.FC = () => {
         if (!prev || prev.id !== productId) return prev;
         return {
           ...prev,
-          is_out_of_stock: isOutOfStock,
-          is_available: isOutOfStock ? false : (prev.is_available ?? true),
+          is_out_of_stock: boolOutOfStock,
+          is_available: !boolOutOfStock,
+          stock_quantity: boolOutOfStock ? 0 : (prev.stock_quantity && prev.stock_quantity > 0 ? prev.stock_quantity : 100),
         };
       });
     },
     onReconnect: () => {
       const currentBranch = useCartStore.getState().selectedBranch;
-      const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}` : '';
+      const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
       api.get<Product[]>(`/products${branchParam}`).then((data) => {
         if (data && Array.isArray(data)) {
           setProducts((prev) => {
