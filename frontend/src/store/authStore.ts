@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { API_BASE, getSafeStorage, setSafeStorage, removeSafeStorage } from '../api/client';
+import { useCartStore } from './cartStore';
 
 interface AuthState {
   token: string | null;
@@ -25,6 +26,7 @@ export const useAuthStore = create<AuthState>((set) => {
   // Synchronize state when session expires in API client
   if (typeof window !== 'undefined') {
     window.addEventListener('patty:auth_session_expired', () => {
+      useCartStore.getState().resetCartOnLogout();
       set({ token: null, refreshToken: null, user: null });
     });
   }
@@ -40,6 +42,8 @@ export const useAuthStore = create<AuthState>((set) => {
         setSafeStorage('patty_refresh_token', refreshToken);
       }
       set({ token, user, refreshToken: refreshToken || getSafeStorage('patty_refresh_token') });
+      // Trigger cart migration / hydration
+      useCartStore.getState().onAuthChange(user);
     },
     setToken: (token, refreshToken) => {
       setSafeStorage('patty_token', token);
@@ -62,6 +66,7 @@ export const useAuthStore = create<AuthState>((set) => {
       removeSafeStorage('patty_token');
       removeSafeStorage('patty_refresh_token');
       removeSafeStorage('patty_user');
+      useCartStore.getState().resetCartOnLogout();
       set({ token: null, refreshToken: null, user: null });
     },
   };

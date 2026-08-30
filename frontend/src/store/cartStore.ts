@@ -1,10 +1,15 @@
 import { create } from 'zustand';
-import { CartItem, Product, ProductModifier, SelectedChoice, Branch } from '../types';
+import { CartItem, Product, ProductModifier, SelectedChoice, Branch, User } from '../types';
+import { api, getSafeStorage, setSafeStorage, removeSafeStorage } from '../api/client';
 
 export const MIN_DELIVERY_SUBTOTAL = 15.00;
 
+export interface ExtendedCartItem extends CartItem {
+  id?: string; // Server CartItem ID
+}
+
 interface CartState {
-  items: CartItem[];
+  items: ExtendedCartItem[];
   orderType: 'DELIVERY' | 'COLLECTION';
   selectedBranch: Branch | null;
   nearestBranchForCollection: Branch | null;
@@ -16,7 +21,13 @@ interface CartState {
   couponCode: string | null;
   discountAmount: number;
   isProductModalOpen: boolean;
+  isLoading: boolean;
   
+  initCart: () => Promise<void>;
+  fetchCart: () => Promise<void>;
+  onAuthChange: (user: User | null) => Promise<void>;
+  resetCartOnLogout: () => void;
+
   setOrderType: (type: 'DELIVERY' | 'COLLECTION') => void;
   setSelectedBranch: (
     branch: Branch | null,
@@ -30,12 +41,12 @@ interface CartState {
   setUserCoords: (coords: { lat: number; lng: number; accuracy?: number } | null, postcode?: string | null) => void;
   setLocationErrorMsg: (msg: string | null) => void;
   setProductModalOpen: (open: boolean) => void;
-  addItem: (product: Product, quantity: number, selectedModifiers: ProductModifier[], removedIngredients?: string[], selectedChoices?: SelectedChoice[]) => void;
-  updateQuantity: (index: number, quantity: number) => void;
-  removeItem: (index: number) => void;
+  addItem: (product: Product, quantity: number, selectedModifiers: ProductModifier[], removedIngredients?: string[], selectedChoices?: SelectedChoice[]) => Promise<void>;
+  updateQuantity: (index: number, quantity: number) => Promise<void>;
+  removeItem: (index: number) => Promise<void>;
   applyCoupon: (code: string, discount: number) => void;
   removeCoupon: () => void;
-  clearCart: () => void;
+  clearCart: () => Promise<void>;
   reconcileActiveBranches: (activeBranches: Branch[]) => void;
   
   getSubtotal: () => number;
@@ -47,7 +58,36 @@ interface CartState {
   getDeliveryShortfall: () => number;
 }
 
-import { getSafeStorage, setSafeStorage, removeSafeStorage } from '../api/client';
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function getOrInitGuestSessionId(): string {
+  let sid = getSafeStorage('patty_guest_session_id');
+  if (!sid || sid.trim() === '') {
+    sid = generateUUID();
+    setSafeStorage('patty_guest_session_id', sid);
+  }
+  return sid;
+}
+
+export function getCartHeaders(): Record<string, string> {
+  const token = getSafeStorage('patty_token');
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    headers['X-Guest-Session-ID'] = getOrInitGuestSessionId();
+  }
+  return headers;
+}
 
 const safeGetStorage = <T>(key: string, fallback: T): T => {
   try {
@@ -68,14 +108,53 @@ const safeSetStorage = (key: string, value: any) => {
   } catch {}
 };
 
+function mapServerCartResponse(data: any): ExtendedCartItem[] {
+  if (!data || !Array.isArray(data.items)) return [];
+  return data.items.map((i: any) => {
+    const product: Product = {
+      id: i.product?.id || i.product_id,
+      name: i.product?.name || 'Product',
+      sku: i.product?.sku || '',
+      base_price: i.product?.base_price ?? 0,
+      image_url: i.product?.image_url,
+      is_active: i.product?.is_active ?? true,
+      category_id: i.product?.category_id || '',
+      rating: 5,
+      reviews_count: 0,
+      is_bestseller: false,
+      has_tax: true,
+      has_service_charge: false,
+      vat_category: 'STANDARD',
+      modifiers: []
+    };
+
+    const selectedModifiers: ProductModifier[] = (i.selected_modifiers || []).map((m: any) => ({
+      id: m.name,
+      name: m.name,
+      price: Number(m.price) || 0,
+      is_required: false,
+      is_active: true
+    }));
+
+    return {
+      id: i.id,
+      product,
+      quantity: i.quantity,
+      selectedModifiers,
+      selectedChoices: i.selected_choices || [],
+      removedIngredients: i.removed_ingredients || [],
+      lineTotal: i.line_total ?? (i.unit_price ? i.unit_price * i.quantity : product.base_price * i.quantity)
+    };
+  });
+}
+
 const initialBranch = safeGetStorage<Branch | null>('patty_selected_branch', null);
-const initialItems = safeGetStorage<CartItem[]>('patty_cart_items', []);
 const initialOrderType = safeGetStorage<'DELIVERY' | 'COLLECTION'>('patty_order_type', 'COLLECTION');
 const initialCoords = safeGetStorage<{ lat: number; lng: number; accuracy?: number } | null>('patty_user_coords', null);
 const initialPostcode = safeGetStorage<string | null>('patty_user_postcode', null);
 
 export const useCartStore = create<CartState>((set, get) => ({
-  items: initialItems,
+  items: [],
   orderType: initialOrderType,
   selectedBranch: initialBranch,
   nearestBranchForCollection: initialBranch,
@@ -87,6 +166,76 @@ export const useCartStore = create<CartState>((set, get) => ({
   couponCode: null,
   discountAmount: 0,
   isProductModalOpen: false,
+  isLoading: false,
+
+  initCart: async () => {
+    await get().fetchCart();
+  },
+
+  fetchCart: async () => {
+    try {
+      set({ isLoading: true });
+      const headers = getCartHeaders();
+      const res: any = await api.get('/cart', { headers });
+      if (res) {
+        const mapped = mapServerCartResponse(res);
+        set({
+          items: mapped,
+          couponCode: res.coupon_code || get().couponCode,
+          orderType: (res.order_type as any) || get().orderType,
+          isLoading: false
+        });
+      }
+    } catch (err) {
+      console.warn('[CartStore] Failed to fetch server cart:', err);
+      set({ isLoading: false });
+    }
+  },
+
+  onAuthChange: async (user: User | null) => {
+    if (user) {
+      // Authenticated login / merge flow
+      const guestSessionId = getSafeStorage('patty_guest_session_id');
+      try {
+        if (guestSessionId) {
+          const token = getSafeStorage('patty_token');
+          await api.post(
+            '/cart/merge',
+            { guest_session_id: guestSessionId },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'X-Guest-Session-ID': guestSessionId
+              }
+            }
+          );
+          removeSafeStorage('patty_guest_session_id');
+        }
+      } catch (err) {
+        console.warn('[CartStore] Merge failed or not needed:', err);
+      }
+      await get().fetchCart();
+    } else {
+      get().resetCartOnLogout();
+    }
+  },
+
+  resetCartOnLogout: () => {
+    // 1. Clear in-memory cart
+    set({
+      items: [],
+      couponCode: null,
+      discountAmount: 0
+    });
+
+    // 2. Remove all generic and user-scoped storage items
+    removeSafeStorage('patty_cart_items');
+    removeSafeStorage('patty_guest_cart_cache');
+
+    // 3. Generate a brand new, unguessable guest session ID
+    const newGuestSessionId = generateUUID();
+    setSafeStorage('patty_guest_session_id', newGuestSessionId);
+  },
 
   setOrderType: (type) => {
     const { isDeliveryEligible, deliveryDistanceMiles, isDeliverySubtotalEligible, getDeliveryShortfall } = get();
@@ -108,6 +257,10 @@ export const useCartStore = create<CartState>((set, get) => ({
     }
     safeSetStorage('patty_order_type', type);
     set({ orderType: type, locationErrorMsg: null });
+
+    // Sync settings to server
+    const headers = getCartHeaders();
+    api.patch('/cart/settings', { order_type: type }, { headers }).catch(() => {});
   },
 
   setSelectedBranch: (branch, distanceMiles, isEligible, nearestBranch, locationMsg, coords, postcode) => {
@@ -129,6 +282,11 @@ export const useCartStore = create<CartState>((set, get) => ({
       userCoords: coords !== undefined ? coords : get().userCoords,
       userPostcode: postcode !== undefined ? postcode : get().userPostcode
     });
+
+    if (effectiveBranch?.id) {
+      const headers = getCartHeaders();
+      api.patch('/cart/settings', { branch_id: effectiveBranch.id }, { headers }).catch(() => {});
+    }
   },
 
   setUserCoords: (coords, postcode) => {
@@ -141,8 +299,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setProductModalOpen: (open) => set({ isProductModalOpen: open }),
 
-  addItem: (product, quantity, selectedModifiers, removedIngredients = [], selectedChoices = []) => {
-    const isOutOfStock = product.is_available === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
+  addItem: async (product, quantity, selectedModifiers, removedIngredients = [], selectedChoices = []) => {
+    const isOutOfStock = product.is_available === false || product.is_active === false || (product.stock_quantity !== undefined && product.stock_quantity <= 0);
     if (isOutOfStock) return;
 
     const modCost = (selectedModifiers || []).reduce((acc, m) => acc + m.price, 0);
@@ -150,42 +308,123 @@ export const useCartStore = create<CartState>((set, get) => ({
     const unitPrice = product.base_price + modCost + choiceCost;
     const lineTotal = unitPrice * quantity;
 
-    const newItems = [...get().items, { product, quantity, selectedModifiers, selectedChoices, removedIngredients, lineTotal }];
-    safeSetStorage('patty_cart_items', newItems);
-    set({ items: newItems });
+    // Optimistic update
+    const prevItems = get().items;
+    const optimisticItem: ExtendedCartItem = {
+      product,
+      quantity,
+      selectedModifiers,
+      selectedChoices,
+      removedIngredients,
+      lineTotal
+    };
+    set({ items: [...prevItems, optimisticItem] });
+
+    try {
+      const headers = getCartHeaders();
+      const payload = {
+        product_id: product.id,
+        quantity,
+        selected_modifiers: (selectedModifiers || []).map((m) => ({ name: m.name, price: m.price })),
+        selected_choices: (selectedChoices || []).map((c) => ({
+          group_id: c.group_id,
+          group_name: c.group_name,
+          option_id: c.option_id,
+          option_name: c.option_name,
+          price_delta: c.price_delta
+        })),
+        removed_ingredients: removedIngredients || []
+      };
+      const res: any = await api.post('/cart/items', payload, { headers });
+      if (res) {
+        set({ items: mapServerCartResponse(res) });
+      }
+    } catch (err) {
+      console.error('[CartStore] Failed to add item to server cart:', err);
+      // Revert to fetched state
+      await get().fetchCart();
+    }
   },
 
-  updateQuantity: (index, quantity) => {
+  updateQuantity: async (index, quantity) => {
+    const currentItems = [...get().items];
+    const item = currentItems[index];
+    if (!item) return;
+
     if (quantity <= 0) {
-      get().removeItem(index);
+      await get().removeItem(index);
       return;
     }
-    const newItems = [...get().items];
-    const item = newItems[index];
-    if (!item) return;
+
     const modCost = (item.selectedModifiers || []).reduce((acc, m) => acc + m.price, 0);
     const choiceCost = (item.selectedChoices || []).reduce((acc, c) => acc + c.price_delta, 0);
     const unitPrice = item.product.base_price + modCost + choiceCost;
-    newItems[index] = {
+    currentItems[index] = {
       ...item,
       quantity,
       lineTotal: unitPrice * quantity
     };
-    safeSetStorage('patty_cart_items', newItems);
-    set({ items: newItems });
+    set({ items: currentItems });
+
+    try {
+      const headers = getCartHeaders();
+      if (item.id) {
+        const res: any = await api.patch(`/cart/items/${item.id}`, { quantity }, { headers });
+        if (res) {
+          set({ items: mapServerCartResponse(res) });
+        }
+      } else {
+        await get().fetchCart();
+      }
+    } catch (err) {
+      console.error('[CartStore] Failed to update item quantity:', err);
+      await get().fetchCart();
+    }
   },
 
-  removeItem: (index) => {
-    const newItems = get().items.filter((_, i) => i !== index);
-    safeSetStorage('patty_cart_items', newItems);
-    set({ items: newItems });
+  removeItem: async (index) => {
+    const currentItems = [...get().items];
+    const item = currentItems[index];
+    if (!item) return;
+
+    set({ items: currentItems.filter((_, i) => i !== index) });
+
+    try {
+      const headers = getCartHeaders();
+      if (item.id) {
+        const res: any = await api.delete(`/cart/items/${item.id}`, { headers });
+        if (res) {
+          set({ items: mapServerCartResponse(res) });
+        }
+      } else {
+        await get().fetchCart();
+      }
+    } catch (err) {
+      console.error('[CartStore] Failed to remove item from cart:', err);
+      await get().fetchCart();
+    }
   },
 
-  applyCoupon: (code, discount) => set({ couponCode: code, discountAmount: discount }),
-  removeCoupon: () => set({ couponCode: null, discountAmount: 0 }),
-  clearCart: () => {
-    safeSetStorage('patty_cart_items', []);
+  applyCoupon: (code, discount) => {
+    set({ couponCode: code, discountAmount: discount });
+    const headers = getCartHeaders();
+    api.patch('/cart/settings', { coupon_code: code }, { headers }).catch(() => {});
+  },
+
+  removeCoupon: () => {
+    set({ couponCode: null, discountAmount: 0 });
+    const headers = getCartHeaders();
+    api.patch('/cart/settings', { coupon_code: null }, { headers }).catch(() => {});
+  },
+
+  clearCart: async () => {
     set({ items: [], couponCode: null, discountAmount: 0 });
+    try {
+      const headers = getCartHeaders();
+      await api.delete('/cart', { headers });
+    } catch (err) {
+      console.warn('[CartStore] Failed to clear server cart:', err);
+    }
   },
 
   reconcileActiveBranches: (activeBranches) => {

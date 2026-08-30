@@ -33,6 +33,7 @@ class User(Base):
     cards = relationship("CustomerCard", back_populates="user", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="customer")
     loyalty_account = relationship("LoyaltyAccount", back_populates="user", uselist=False)
+    cart = relationship("Cart", back_populates="user", uselist=False, cascade="all, delete-orphan")
     auth_identities = relationship("UserAuthIdentity", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
     verification_challenges = relationship("EmailVerificationChallenge", back_populates="user", cascade="all, delete-orphan")

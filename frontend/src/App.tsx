@@ -12,6 +12,7 @@ import { Menu } from 'lucide-react';
 
 import { CustomerFooter } from './components/customer/CustomerFooter';
 import { useAuthStore } from './store/authStore';
+import { useCartStore } from './store/cartStore';
 
 // Dynamic Browser Title & Favicon Manager for Admin and Customer routes
 const DynamicTitleManager: React.FC = () => {
@@ -244,6 +245,10 @@ const CustomerLayoutShell: React.FC<{ children: React.ReactNode }> = ({ children
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    useCartStore.getState().initCart();
+  }, []);
 
   const orderingPortalPages = ['/order', '/cart', '/checkout', '/orders', '/profile', '/addresses', '/payment-methods', '/mock-checkout'];
   const isOrderingPortal = orderingPortalPages.includes(location.pathname) || location.pathname.startsWith('/order-confirmation') || location.pathname.startsWith('/mock-checkout');

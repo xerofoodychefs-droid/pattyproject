@@ -15,6 +15,7 @@ from app.models.loyalty import (
 from app.models.promotion import Coupon, OfferSetting
 from app.models.printer import Printer, PrintJob
 from app.models.audit import AuditLog
+from app.models.cart import Cart, CartItem
 
 __all__ = [
     "User", "UserRole", "CustomerAddress", "UserAuthIdentity", "AuthProvider", "AuthConsumedJti", "AuthSession",
@@ -27,5 +28,6 @@ __all__ = [
     "LoyaltyProgramConfig", "LoyaltyCampaign", "LoyaltyMilestone",
     "Coupon", "OfferSetting",
     "Printer", "PrintJob",
-    "AuditLog"
+    "AuditLog",
+    "Cart", "CartItem"
 ]
