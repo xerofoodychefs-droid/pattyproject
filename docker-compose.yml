@@ -90,6 +90,9 @@ services:
       SQUARE_WEBHOOK_SIGNATURE_KEY: ${SQUARE_WEBHOOK_SIGNATURE_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      CONTACT_EMAIL_FROM: ${CONTACT_EMAIL_FROM:-Patty Project <website@pattyproject.co.uk>}
+      CONTACT_EMAIL_TO: ${CONTACT_EMAIL_TO:-xerofoodychefs@gmail.com}
     volumes:
       - ./backend:/app
     depends_on:

@@ -378,3 +378,36 @@ def test_11_existing_verified_customer_accounts_remain_unchanged():
     assert res.status_code == 200
     assert "access_token" in res.json()
     assert res.json()["user"]["email_verified"] is True
+
+
+def test_12_provider_outage_returns_503_and_leaves_no_user_or_loyalty(monkeypatch):
+    """Requirement: Provider failure returns HTTP 503 and creates NO User, NO LoyaltyAccount, and cleans up challenge."""
+    from fastapi import HTTPException
+
+    def mock_send_fail(to_email, otp):
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery service is currently unavailable. Please try again later."
+        )
+
+    monkeypatch.setattr("app.api.endpoints.auth.send_verification_otp_email", mock_send_fail)
+
+    res = client.post("/api/v1/auth/register", json={
+        "full_name": "Failed Delivery",
+        "email": "provider.outage@example.com",
+        "password": "Password123!"
+    })
+    assert res.status_code == 503
+    assert "unavailable" in res.json()["detail"].lower()
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "provider.outage@example.com").first()
+        assert user is None, "User MUST NOT be created if email dispatch fails"
+
+        challenges = db.query(EmailVerificationChallenge).filter(
+            EmailVerificationChallenge.email == "provider.outage@example.com"
+        ).all()
+        assert len(challenges) == 0, "Challenge MUST be cleaned up if email dispatch fails"
+    finally:
+        db.close()

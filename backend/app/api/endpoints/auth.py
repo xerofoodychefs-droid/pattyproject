@@ -188,7 +188,16 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
 
     # 5. Dispatch verification code via Resend
-    send_verification_otp_email(to_email=email_clean, otp=otp)
+    try:
+        send_verification_otp_email(to_email=email_clean, otp=otp)
+    except Exception:
+        # If email delivery fails, clean up challenge so no orphaned un-emailed OTP exists
+        try:
+            db.delete(challenge)
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise
 
     return RegistrationResponse(
         message="Verification code sent to your email.",

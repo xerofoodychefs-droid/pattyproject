@@ -24,11 +24,12 @@ def list_customers(
     Authoritative list of registered customers with real database loyalty balances and order counts.
     Strictly branch-isolated for BRANCH_ADMIN and global for SUPER_ADMIN.
     """
-    # 1. Base query for customers (excluding admin accounts)
+    # 1. Base query for verified customers (excluding admin accounts)
     query = (
         db.query(User)
         .options(joinedload(User.loyalty_account))
         .filter(
+            User.email_verified.is_(True),
             or_(
                 func.upper(User.role) == UserRole.CUSTOMER,
                 User.role.is_(None),
@@ -123,6 +124,7 @@ def get_customer_detail(
         .options(joinedload(User.loyalty_account))
         .filter(
             User.id == customer_id,
+            User.email_verified.is_(True),
             ~func.upper(User.role).in_([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])
         )
         .first()

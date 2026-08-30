@@ -11,7 +11,7 @@ def setup_customer_test_data():
     reset_test_db()
     db = TestingSessionLocal()
 
-    # Customer 1: Has 1500 points, 2 orders
+    # Customer 1: Has 1500 points, 2 orders, verified
     cust1 = User(
         id="usr-cust-01",
         email="customer1@example.com",
@@ -19,7 +19,8 @@ def setup_customer_test_data():
         full_name="Alice Brown",
         phone="+44 7111 222333",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(cust1)
     db.flush()
@@ -61,7 +62,7 @@ def setup_customer_test_data():
     db.add(order1)
     db.add(order2)
 
-    # Customer 2: Has 0 points, no loyalty account row, 0 orders
+    # Customer 2: Has 0 points, no loyalty account row, 0 orders, verified
     cust2 = User(
         id="usr-cust-02",
         email="customer2@example.com",
@@ -69,9 +70,23 @@ def setup_customer_test_data():
         full_name="Bob Green",
         phone="+44 7444 555666",
         role=UserRole.CUSTOMER,
-        is_active=True
+        is_active=True,
+        email_verified=True
     )
     db.add(cust2)
+
+    # Customer 3: Unverified customer (MUST NOT appear in admin customers list)
+    cust3_unverified = User(
+        id="usr-cust-unverified-03",
+        email="unverified.user@example.com",
+        password_hash=get_password_hash("Pass123!"),
+        full_name="Unverified Charlie",
+        phone="+44 7999 111222",
+        role=UserRole.CUSTOMER,
+        is_active=True,
+        email_verified=False
+    )
+    db.add(cust3_unverified)
 
     db.commit()
     db.close()

@@ -159,7 +159,7 @@ def send_contact_email(
         if settings.is_production:
             logger.error("Contact email failed: RESEND_API_KEY is missing in production environment.")
             raise HTTPException(
-                status_code=502,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Email delivery service is currently unavailable. Please try again later."
             )
         logger.info("Dev/Test Mode: RESEND_API_KEY not set. Contact email simulated successfully to %s", to_address)
@@ -190,20 +190,20 @@ def send_contact_email(
             resp.text[:200]  # truncate error log to avoid leaking sensitive provider responses
         )
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Unable to deliver your message at this time. Please try again later."
         )
 
     except httpx.TimeoutException:
         logger.error("Contact email provider request timed out after %.1f seconds.", DEFAULT_TIMEOUT_SECONDS)
         raise HTTPException(
-            status_code=504,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Email service timed out. Please try again in a few moments."
         )
     except httpx.RequestError as exc:
         logger.error("Contact email network connection error: %s", type(exc).__name__)
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error connecting to email service. Please try again later."
         )
     except HTTPException:
@@ -332,7 +332,7 @@ def send_verification_otp_email(
         if settings.is_production:
             logger.error("OTP verification email failed: RESEND_API_KEY is missing in production environment.")
             raise HTTPException(
-                status_code=502,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Email delivery service is currently unavailable. Please try again later."
             )
         logger.info("Dev/Test Mode: RESEND_API_KEY not set. OTP verification email simulated to %s", to_clean)
@@ -362,20 +362,20 @@ def send_verification_otp_email(
             resp.text[:200]
         )
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Unable to deliver your verification code at this time. Please try again later."
         )
 
     except httpx.TimeoutException:
         logger.error("OTP verification email provider request timed out after %.1f seconds.", DEFAULT_TIMEOUT_SECONDS)
         raise HTTPException(
-            status_code=504,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Email service timed out. Please try again in a few moments."
         )
     except httpx.RequestError as exc:
         logger.error("OTP verification email network connection error: %s", type(exc).__name__)
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error connecting to email service. Please try again later."
         )
     except HTTPException:
