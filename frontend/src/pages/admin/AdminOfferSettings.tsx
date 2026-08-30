@@ -295,6 +295,25 @@ export const AdminOfferSettings: React.FC = () => {
     }
   };
 
+  const handleResetTodaysOffers = async () => {
+    if (!window.confirm("Are you sure you want to reset Today's Offers to the default configuration? This will restore the default images and titles.")) {
+      return;
+    }
+    setSaving(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const updated = await api.put<TodaysOffersConfig>('/promotions/settings/todays-offers', DEFAULT_TODAYS_CONFIG);
+      setTodaysConfig(updated || DEFAULT_TODAYS_CONFIG);
+      showNotification("Today's Offers reset to defaults and published!");
+    } catch (err: any) {
+      console.error(err);
+      showNotification(err?.message || "Failed to reset Today's Offers.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveOffersPage = async () => {
     setSaving(true);
     setErrorMsg(null);
@@ -558,8 +577,9 @@ export const AdminOfferSettings: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setTodaysConfig(DEFAULT_TODAYS_CONFIG)}
-                className="text-xs text-[#A1A1AA] hover:text-white flex items-center gap-1.5 px-3 py-2 bg-[#1A1A1A] hover:bg-[#262626] rounded-xl border border-[#2A2A2A] cursor-pointer"
+                onClick={handleResetTodaysOffers}
+                disabled={saving}
+                className="text-xs text-[#A1A1AA] hover:text-white flex items-center gap-1.5 px-3 py-2 bg-[#1A1A1A] hover:bg-[#262626] rounded-xl border border-[#2A2A2A] cursor-pointer disabled:opacity-50"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset Defaults</span>

@@ -12,47 +12,6 @@ from app.models.user import UserRole, User
 
 router = APIRouter()
 
-PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
-
-def normalize_promotion_payload(data: Any) -> Any:
-    """
-    Normalizes promotion payload data for client delivery:
-    - Replaces heavy data:image/...;base64,... strings with lightweight static URLs
-      to eliminate megabytes of base64 transfer over JSON APIs.
-    - Preserves all titles, subtitles, tags, badges, codes, and pricing without modifying database records.
-    """
-    if isinstance(data, dict):
-        cleaned = {}
-        for k, v in data.items():
-            if isinstance(v, str) and v.startswith("data:image/") and ";base64," in v:
-                title = str(data.get("title", "")).lower()
-                tag = str(data.get("tag", "")).lower()
-                name = str(data.get("name", "")).lower()
-                combined = f"{title} {tag} {name}"
-
-                if "wing" in combined:
-                    cleaned[k] = "https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=500&q=80"
-                elif "shake" in combined:
-                    cleaned[k] = "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80"
-                elif "student" in combined:
-                    cleaned[k] = "/offer_bg_3.png"
-                elif "feast" in combined:
-                    cleaned[k] = "/product_the_outlaw_project_.png"
-                elif "lunch" in combined:
-                    cleaned[k] = "/product_pastrami_burger_.png"
-                elif "chicken" in combined:
-                    cleaned[k] = "/product_buffalo_chicken_sando_.png"
-                elif "halloumi" in combined:
-                    cleaned[k] = "/product_the_halloumi_project_veg.png"
-                else:
-                    cleaned[k] = "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=500&q=80"
-            else:
-                cleaned[k] = normalize_promotion_payload(v)
-        return cleaned
-    elif isinstance(data, list):
-        return [normalize_promotion_payload(item) for item in data]
-    return data
-
 DEFAULT_TODAYS_OFFERS: Dict[str, Any] = {
     "section_title": "TODAY'S OFFERS",
     "view_all_link": "/offers",
@@ -440,19 +399,20 @@ def delete_coupon(
 
 @router.get("/settings/todays-offers")
 def get_todays_offers_settings(response: Response, db: Session = Depends(get_db)):
-    """Fetch active Today's Offers configuration for home page with fallback (lightweight normalized payload)."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    """Fetch active Today's Offers configuration for home page with fallback."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     setting = db.query(OfferSetting).filter(OfferSetting.key == "todays_offers").first()
-    data = setting.data if (setting and setting.data) else DEFAULT_TODAYS_OFFERS
-    return normalize_promotion_payload(data)
+    if setting and setting.data:
+        return setting.data
+    return DEFAULT_TODAYS_OFFERS
 
 @router.put("/settings/todays-offers")
 def update_todays_offers_settings(
     payload: Dict[str, Any] = Body(...),
-    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
     db: Session = Depends(get_db)
 ):
-    """Super Admin / Branch Admin update Today's Offers configuration."""
+    """Super Admin update Today's Offers configuration."""
     setting = db.query(OfferSetting).filter(OfferSetting.key == "todays_offers").first()
     if not setting:
         setting = OfferSetting(key="todays_offers", data=payload)
@@ -466,19 +426,20 @@ def update_todays_offers_settings(
 
 @router.get("/settings/offers-page")
 def get_offers_page_settings(response: Response, db: Session = Depends(get_db)):
-    """Fetch active Offers Page configuration with fallback (lightweight normalized payload)."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    """Fetch active Offers Page configuration with fallback."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     setting = db.query(OfferSetting).filter(OfferSetting.key == "offers_page").first()
-    data = setting.data if (setting and setting.data) else DEFAULT_OFFERS_PAGE
-    return normalize_promotion_payload(data)
+    if setting and setting.data:
+        return setting.data
+    return DEFAULT_OFFERS_PAGE
 
 @router.put("/settings/offers-page")
 def update_offers_page_settings(
     payload: Dict[str, Any] = Body(...),
-    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
     db: Session = Depends(get_db)
 ):
-    """Super Admin / Branch Admin update Offers Page configuration."""
+    """Super Admin update Offers Page configuration."""
     setting = db.query(OfferSetting).filter(OfferSetting.key == "offers_page").first()
     if not setting:
         setting = OfferSetting(key="offers_page", data=payload)
@@ -492,19 +453,20 @@ def update_offers_page_settings(
 
 @router.get("/settings/combo-deals")
 def get_combo_deals_settings(response: Response, db: Session = Depends(get_db)):
-    """Fetch active Combo Deals configuration (read-only for customer performance)."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    """Fetch active Combo Deals configuration."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     setting = db.query(OfferSetting).filter(OfferSetting.key == "combo_deals").first()
-    data = setting.data if (setting and setting.data) else DEFAULT_COMBO_DEALS
-    return normalize_promotion_payload(data)
+    if setting and setting.data:
+        return setting.data
+    return DEFAULT_COMBO_DEALS
 
 @router.put("/settings/combo-deals")
 def update_combo_deals_settings(
     payload: Dict[str, Any] = Body(...),
-    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN])),
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
     db: Session = Depends(get_db)
 ):
-    """Super Admin / Branch Admin update Combo Deals configuration and sync to menu products."""
+    """Super Admin update Combo Deals configuration and sync to menu products."""
     setting = db.query(OfferSetting).filter(OfferSetting.key == "combo_deals").first()
     if not setting:
         setting = OfferSetting(key="combo_deals", data=payload)
