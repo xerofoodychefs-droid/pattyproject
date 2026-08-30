@@ -14,6 +14,7 @@ import {
 import { api } from '../../api/client';
 import { Product, Category } from '../../types';
 import { useCartStore } from '../../store/cartStore';
+import { useProductRealtime } from '../../hooks/useProductRealtime';
 
 export const PublicMenuPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +23,24 @@ export const PublicMenuPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useCartStore();
+
+  useProductRealtime({
+    onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== productId) return p;
+          return {
+            ...p,
+            is_out_of_stock: isOutOfStock,
+            is_available: isOutOfStock ? false : (p.is_available ?? true),
+          };
+        })
+      );
+    },
+    onReconnect: () => {
+      fetchData();
+    },
+  });
 
   useEffect(() => {
     fetchData();

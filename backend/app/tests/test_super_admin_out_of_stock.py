@@ -415,3 +415,68 @@ def test_9_customer_cannot_toggle_product_out_of_stock():
         json={"is_out_of_stock": True}
     )
     assert patch_res.status_code == 403
+
+
+def test_10_customer_websocket_connect():
+    """TEST 10: Customer can connect to /api/v1/ws/products and receives CONNECTED message."""
+    with client.websocket_connect("/api/v1/ws/products") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "CONNECTED"
+        assert msg["channel"] == "products"
+
+
+def test_11_product_availability_realtime_broadcast():
+    """TEST 11: When Super Admin toggles product availability, connected customer receives product_availability_changed event."""
+    super_headers = get_token_header("user-super-admin-001", "superadmin@pattyproject.co.uk", UserRole.SUPER_ADMIN)
+
+    with client.websocket_connect("/api/v1/ws/products") as ws:
+        connected_msg = ws.receive_json()
+        assert connected_msg["type"] == "CONNECTED"
+
+        # Super Admin toggles Out of Stock -> True
+        patch_res = client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": True}
+        )
+        assert patch_res.status_code == 200
+
+        # Customer WebSocket receives realtime event
+        event1 = ws.receive_json()
+        assert event1["type"] == "product_availability_changed"
+        assert event1["product_id"] == "prod-mc-project"
+        assert event1["is_out_of_stock"] is True
+
+        # Super Admin restores availability -> False
+        patch_res2 = client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": False}
+        )
+        assert patch_res2.status_code == 200
+
+        event2 = ws.receive_json()
+        assert event2["type"] == "product_availability_changed"
+        assert event2["product_id"] == "prod-mc-project"
+        assert event2["is_out_of_stock"] is False
+
+
+def test_12_multiple_connected_clients_and_resilient_broadcast():
+    """TEST 12: Multiple customer clients receive broadcasts. Disconnected client does not break broadcasting."""
+    super_headers = get_token_header("user-super-admin-001", "superadmin@pattyproject.co.uk", UserRole.SUPER_ADMIN)
+
+    with client.websocket_connect("/api/v1/ws/products") as ws1, \
+         client.websocket_connect("/api/v1/ws/products") as ws2:
+        assert ws1.receive_json()["type"] == "CONNECTED"
+        assert ws2.receive_json()["type"] == "CONNECTED"
+
+        client.patch(
+            "/api/v1/admin/products/prod-mc-project/availability",
+            headers=super_headers,
+            json={"is_out_of_stock": True}
+        )
+
+        ev1 = ws1.receive_json()
+        ev2 = ws2.receive_json()
+        assert ev1["product_id"] == "prod-mc-project" and ev1["is_out_of_stock"] is True
+        assert ev2["product_id"] == "prod-mc-project" and ev2["is_out_of_stock"] is True

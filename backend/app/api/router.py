@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api.endpoints import (
     auth, branches, products, orders, payments, loyalty,
-    promotions, addresses, payment_methods, customers, admin_ws, contact, cart
+    promotions, addresses, payment_methods, customers, admin_ws, customer_ws, contact, cart
 )
 
 api_router = APIRouter()
@@ -18,4 +18,5 @@ api_router.include_router(addresses.router, prefix="/addresses", tags=["Addresse
 api_router.include_router(payment_methods.router, prefix="/payment-methods", tags=["Payment Methods"])
 api_router.include_router(customers.router, prefix="/customers", tags=["Customers"])
 api_router.include_router(admin_ws.router, prefix="/admin/ws", tags=["Admin WebSocket"])
+api_router.include_router(customer_ws.router, prefix="/ws", tags=["Customer WebSocket"])
 api_router.include_router(contact.router, prefix="/contact", tags=["Contact"])

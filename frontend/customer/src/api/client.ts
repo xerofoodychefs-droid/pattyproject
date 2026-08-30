@@ -44,6 +44,20 @@ export const getApiBase = (): string => {
 
 export const API_BASE = getApiBase();
 
+const RAW_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://pattyproject.co.uk' : '');
+
+export function getProductWebSocketUrl(): string {
+  let wsHost = '';
+  if (RAW_BASE) {
+    wsHost = RAW_BASE.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+  } else if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsHost = `${protocol}//${window.location.host}`;
+  }
+  const cleanBase = wsHost.replace(/\/+$/, '');
+  return `${cleanBase}/api/v1/ws/products`;
+}
+
 let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {

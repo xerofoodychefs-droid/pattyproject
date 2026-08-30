@@ -6,6 +6,7 @@ import { Product } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { CustomerFooter } from '../../components/customer/CustomerFooter';
 import { useCartStore } from '../../store/cartStore';
+import { useProductRealtime } from '../../hooks/useProductRealtime';
 import categoryBannerImg from '../../assets/categories_showcase_banner.png';
 import categoryBannerMobileImg from '../../assets/categories_showcase_mobile.png';
 import offerBg1 from '../../assets/offer_bg_1.png';
@@ -49,6 +50,36 @@ export const CustomerHome: React.FC = () => {
   });
   const navigate = useNavigate();
   const { selectedBranch, setOrderType } = useCartStore();
+
+  // Realtime product availability subscription
+  useProductRealtime({
+    onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== productId) return p;
+          return {
+            ...p,
+            is_out_of_stock: isOutOfStock,
+            is_available: isOutOfStock ? false : (p.is_available ?? true),
+          };
+        })
+      );
+      if (selectedProduct && selectedProduct.id === productId) {
+        setSelectedProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_out_of_stock: isOutOfStock,
+                is_available: isOutOfStock ? false : (prev.is_available ?? true),
+              }
+            : null
+        );
+      }
+    },
+    onReconnect: () => {
+      fetchProducts();
+    },
+  });
 
   useEffect(() => {
     fetchProducts();

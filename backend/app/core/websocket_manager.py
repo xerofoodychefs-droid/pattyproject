@@ -18,6 +18,11 @@ class AdminConnectionInfo:
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+@dataclass
+class ProductConnectionInfo:
+    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 def format_order_payload(order: Order) -> Dict[str, Any]:
     """
     Constructs a minimal, secure order payload for real-time admin notifications.
@@ -40,18 +45,108 @@ def format_order_payload(order: Order) -> Dict[str, Any]:
 
 class ConnectionManager:
     """
-    Thread-safe, branch-isolated WebSocket connection manager for Patty Project Admins.
-    Guarantees strict branch data isolation between Super Admins and Branch Admins,
-    resilient multi-client delivery, and automatic cleanup of disconnected sockets.
+    Thread-safe WebSocket connection manager for Patty Project:
+    - Admin order event channels with strict branch isolation.
+    - Customer product availability channels for real-time out-of-stock updates.
     """
 
     def __init__(self):
         self._connections: Dict[WebSocket, AdminConnectionInfo] = {}
+        self._product_connections: Dict[WebSocket, ProductConnectionInfo] = {}
         self._lock = asyncio.Lock()
 
     @property
     def active_connections_count(self) -> int:
         return len(self._connections)
+
+    @property
+    def active_product_connections_count(self) -> int:
+        return len(self._product_connections)
+
+    async def connect_products(self, websocket: WebSocket) -> None:
+        """Accepts and registers a customer read-only product availability WebSocket connection."""
+        await websocket.accept()
+        async with self._lock:
+            self._product_connections[websocket] = ProductConnectionInfo()
+        logger.info(
+            f"[WS_PRODUCT_CONNECT] active_product_connections={len(self._product_connections)}"
+        )
+
+    async def disconnect_products(self, websocket: WebSocket) -> None:
+        """Unregisters a product WebSocket connection safely."""
+        async with self._lock:
+            info = self._product_connections.pop(websocket, None)
+        if info:
+            logger.info(
+                f"[WS_PRODUCT_DISCONNECT] active_product_connections={len(self._product_connections)}"
+            )
+
+    async def broadcast_product_availability(
+        self,
+        product_id: str,
+        is_out_of_stock: bool
+    ) -> None:
+        """
+        Broadcasts product availability changes to all connected customer browsers in real-time.
+        Minimal, non-sensitive payload.
+        Isolates failures so a broken socket never interrupts delivery to other clients.
+        """
+        payload = {
+            "type": "product_availability_changed",
+            "product_id": str(product_id),
+            "is_out_of_stock": bool(is_out_of_stock),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+        async with self._lock:
+            recipients = list(self._product_connections.keys())
+
+        if not recipients:
+            logger.debug(f"[WS_PRODUCT_BROADCAST_NOOP] No active customer sockets for product={product_id}")
+            return
+
+        dead_sockets = []
+        delivered_count = 0
+
+        for ws in recipients:
+            try:
+                await ws.send_json(payload)
+                delivered_count += 1
+            except (WebSocketDisconnect, ConnectionResetError, RuntimeError) as exc:
+                logger.warning(f"[WS_PRODUCT_DELIVERY_FAIL] Socket disconnected during send: {type(exc).__name__}")
+                dead_sockets.append(ws)
+            except Exception as exc:
+                logger.error(f"[WS_PRODUCT_DELIVERY_ERROR] Unexpected send error: {exc}")
+                dead_sockets.append(ws)
+
+        # Clean up any dead sockets detected during broadcast
+        if dead_sockets:
+            async with self._lock:
+                for ws in dead_sockets:
+                    self._product_connections.pop(ws, None)
+            logger.info(f"[WS_PRODUCT_CLEANUP] Pruned {len(dead_sockets)} dead sockets. Remaining: {len(self._product_connections)}")
+
+        logger.info(
+            f"[WS_PRODUCT_BROADCAST] product_id={product_id} is_out_of_stock={is_out_of_stock} "
+            f"delivered={delivered_count} pruned={len(dead_sockets)}"
+        )
+
+    def sync_broadcast_product_availability(
+        self,
+        product_id: str,
+        is_out_of_stock: bool
+    ) -> None:
+        """
+        Synchronous wrapper allowing synchronous endpoints to trigger the async product broadcast safely.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.broadcast_product_availability(product_id, is_out_of_stock))
+        except RuntimeError:
+            try:
+                asyncio.run(self.broadcast_product_availability(product_id, is_out_of_stock))
+            except Exception as e:
+                logger.error(f"[WS_PRODUCT_SYNC_ERR] Failed to run product broadcast in new event loop: {e}")
 
     async def connect(self, websocket: WebSocket, user_id: str, role: str, branch_ids: Set[str]) -> None:
         """Accepts and registers a verified admin WebSocket connection."""

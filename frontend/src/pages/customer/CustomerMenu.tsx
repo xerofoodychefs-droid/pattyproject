@@ -13,6 +13,7 @@ import { api } from '../../api/client';
 import { Product, Category, Branch } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { useCartStore } from '../../store/cartStore';
+import { useProductRealtime } from '../../hooks/useProductRealtime';
 
 interface OfferCard {
   id: string;
@@ -36,6 +37,45 @@ export const CustomerMenu: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const { selectedBranch, setSelectedBranch } = useCartStore();
+
+  // Realtime product availability subscription (Zero-refresh immediate update)
+  useProductRealtime({
+    onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== productId) return p;
+          return {
+            ...p,
+            is_out_of_stock: isOutOfStock,
+            is_available: isOutOfStock ? false : (p.is_available ?? true),
+          };
+        })
+      );
+      setSelectedProduct((prev) => {
+        if (!prev || prev.id !== productId) return prev;
+        return {
+          ...prev,
+          is_out_of_stock: isOutOfStock,
+          is_available: isOutOfStock ? false : (prev.is_available ?? true),
+        };
+      });
+    },
+    onReconnect: () => {
+      const currentBranch = useCartStore.getState().selectedBranch;
+      const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}` : '';
+      api.get<Product[]>(`/products${branchParam}`).then((data) => {
+        if (data && Array.isArray(data)) {
+          setProducts((prev) => {
+            const map = new Map(data.map((item) => [item.id, item]));
+            return prev.map((p) => {
+              const updated = map.get(p.id);
+              return updated ? { ...p, ...updated } : p;
+            });
+          });
+        }
+      }).catch(() => {});
+    },
+  });
 
   useEffect(() => {
     let isMounted = true;

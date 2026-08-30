@@ -14,6 +14,7 @@ from app.schemas.product import (
 )
 from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
+from app.core.websocket_manager import manager
 
 router = APIRouter()
 
@@ -125,6 +126,14 @@ def update_category_availability(
         Product.is_out_of_stock: request.is_out_of_stock
     })
     db.commit()
+
+    # Realtime notification: broadcast availability update for every product in category
+    cat_prod_ids = db.query(Product.id).filter(Product.category_id == category_id).all()
+    for (p_id,) in cat_prod_ids:
+        manager.sync_broadcast_product_availability(
+            product_id=p_id,
+            is_out_of_stock=request.is_out_of_stock
+        )
 
     action_str = "out of stock" if request.is_out_of_stock else "available"
     return CategoryAvailabilityResponse(
@@ -420,6 +429,13 @@ def update_product(
                 db.add(opt)
 
     db.commit()
+
+    if request.is_out_of_stock is not None:
+        manager.sync_broadcast_product_availability(
+            product_id=prod.id,
+            is_out_of_stock=prod.is_out_of_stock
+        )
+
     prod = db.query(Product).options(
         selectinload(Product.modifiers),
         selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
@@ -445,6 +461,12 @@ def update_product_availability(
     prod.is_out_of_stock = request.is_out_of_stock
     db.commit()
     db.refresh(prod)
+
+    # Realtime notification: broadcast availability update only after successful commit
+    manager.sync_broadcast_product_availability(
+        product_id=prod.id,
+        is_out_of_stock=prod.is_out_of_stock
+    )
 
     return ProductResponse(
         id=prod.id,

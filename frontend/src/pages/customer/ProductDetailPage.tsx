@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { Product } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { useCartStore } from '../../store/cartStore';
+import { useProductRealtime } from '../../hooks/useProductRealtime';
 
 export const ProductDetailPage: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
@@ -11,6 +12,25 @@ export const ProductDetailPage: React.FC = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useCartStore();
+
+  useProductRealtime({
+    onProductAvailabilityChange: (id: string, isOutOfStock: boolean) => {
+      if (productId === id) {
+        setProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_out_of_stock: isOutOfStock,
+                is_available: isOutOfStock ? false : (prev.is_available ?? true),
+              }
+            : null
+        );
+      }
+    },
+    onReconnect: () => {
+      if (productId) fetchProduct(productId);
+    },
+  });
 
   useEffect(() => {
     if (productId) {

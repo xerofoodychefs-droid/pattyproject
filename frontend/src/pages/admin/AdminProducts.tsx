@@ -5,6 +5,7 @@ import { Product, Category, Branch } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { AdminAddEditProductModal } from './AdminAddEditProductModal';
 import { AdminCategoryModal } from './AdminCategoryModal';
+import { useProductRealtime } from '../../hooks/useProductRealtime';
 
 interface InventoryItem {
   id: string;
@@ -32,6 +33,21 @@ export const AdminProducts: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [categoryToggling, setCategoryToggling] = useState(false);
+
+  useProductRealtime({
+    onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId
+            ? { ...p, is_out_of_stock: isOutOfStock, is_available: !isOutOfStock }
+            : p
+        )
+      );
+    },
+    onReconnect: () => {
+      fetchInitialData();
+    },
+  });
 
   useEffect(() => {
     fetchInitialData();
