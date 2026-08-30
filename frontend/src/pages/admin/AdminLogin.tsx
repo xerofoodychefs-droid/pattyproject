@@ -15,15 +15,17 @@ export const AdminLogin: React.FC = () => {
   const { token, user, setAuth } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
-  const targetDestination = from === '/admin' || from === '/admin/login' ? '/admin/dashboard' : from;
+  const from = (location.state as any)?.from?.pathname || '/admin';
+  const targetDestination = from === '/admin/login' || from === '/admin/dashboard' ? '/admin' : from;
 
   // If already authenticated as an admin, automatically redirect to target destination
   useEffect(() => {
     if (token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN')) {
-      navigate(targetDestination, { replace: true });
+      if (targetDestination !== '/admin' || location.pathname !== '/admin') {
+        navigate(targetDestination, { replace: true });
+      }
     }
-  }, [token, user, navigate, targetDestination]);
+  }, [token, user, navigate, targetDestination, location.pathname]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

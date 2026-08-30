@@ -64,7 +64,7 @@ export const OrderingHeader: React.FC<Props> = ({ onOpenLocationModal }) => {
             </Link>
           ) : user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN') ? (
             <Link
-              to="/admin/dashboard"
+              to="/admin"
               className="flex items-center gap-2 text-xs font-bold text-white hover:text-[#FF5500] transition-colors bg-[#141414] border border-[#262626] px-3 sm:px-3.5 py-1.5 rounded-xl"
             >
               <User className="w-3.5 h-3.5 text-[#FF5500]" />

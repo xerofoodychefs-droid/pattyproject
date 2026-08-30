@@ -15,7 +15,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 
 const lazyPreloadMap: Record<string, () => Promise<any>> = {
-  '/admin/dashboard': () => import('../../pages/admin/AdminDashboard'),
+  '/admin': () => import('../../pages/admin/AdminDashboard'),
   '/admin/orders': () => import('../../pages/admin/AdminOrderBoard'),
   '/admin/products': () => import('../../pages/admin/AdminProducts'),
   '/admin/customers': () => import('../../pages/admin/AdminCustomers'),
@@ -43,7 +43,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   };
 
   const allNavItems = [
-    { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+    { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { label: 'Orders', path: '/admin/orders', icon: ClipboardList },
     { label: 'Products & Stock', path: '/admin/products', icon: Package },
     { label: 'Customers', path: '/admin/customers', icon: Users },
@@ -101,6 +101,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/admin'}
                 onClick={() => {
                   if (typeof window !== 'undefined' && window.innerWidth < 1024 && onToggleCollapse && !isCollapsed) {
                     onToggleCollapse();

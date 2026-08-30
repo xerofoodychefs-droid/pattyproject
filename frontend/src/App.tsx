@@ -35,10 +35,10 @@ const DynamicTitleManager: React.FC = () => {
     updateFavicon();
 
     const path = location.pathname;
-    if (path === '/admin' || path === '/admin/login') {
-      document.title = 'Patty Project Admin | Login';
-    } else if (path === '/admin/dashboard') {
-      document.title = 'Patty Project Admin | Dashboard';
+    if (path === '/admin' || path === '/admin/login' || path === '/admin/dashboard') {
+      const { token, user } = useAuthStore.getState();
+      const isAdmin = token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN');
+      document.title = isAdmin ? 'Patty Project Admin | Dashboard' : 'Patty Project Admin | Login';
     } else if (path === '/admin/orders') {
       document.title = 'Patty Project Admin | Orders Management';
     } else if (path === '/admin/products') {
@@ -170,6 +170,9 @@ const AdminLayoutShell: React.FC = () => {
   const isAdmin = token && user && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_ADMIN');
 
   if (!isAdmin) {
+    if (location.pathname === '/admin') {
+      return <AdminLogin />;
+    }
     return <Navigate to="/admin" state={{ from: location }} replace />;
   }
 
@@ -347,11 +350,11 @@ export function App() {
         <React.Suspense fallback={<RouteLoadingSpinner />}>
           <Routes>
             {/* Admin Routes with Persistent Layout Shell */}
-            <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin/login" element={<Navigate to="/admin" replace />} />
+            <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
 
             <Route element={<AdminLayoutShell />}>
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrderBoard />} />
               <Route path="/admin/products" element={<AdminProducts />} />
               <Route path="/admin/customers" element={<AdminCustomers />} />
