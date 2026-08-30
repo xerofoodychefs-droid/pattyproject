@@ -9,6 +9,7 @@ from app.models.product import Product, Inventory
 from app.schemas.order import OrderCreateRequest, OrderResponse, StatusUpdateRequest
 from app.services.pricing_service import calculate_order_totals
 from app.services.payment_service import payment_provider
+from app.services.availability_service import validate_order_items_availability
 from app.api.endpoints.auth import require_role, get_current_user, get_optional_current_user
 from app.models.user import UserRole, User
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
@@ -181,6 +182,14 @@ def create_order(
         }
         for item in request.items
     ]
+
+    # Mandatory availability check: product active, stock available, and category schedule currently open
+    validate_order_items_availability(
+        db=db,
+        items=items_input,
+        branch_id=branch_to_use.id if branch_to_use else None
+    )
+
     totals = calculate_order_totals(
         db=db,
         items=items_input,

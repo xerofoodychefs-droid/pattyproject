@@ -13,6 +13,9 @@ class Category(Base):
     icon = Column(String(50), nullable=True)
     display_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+    schedule_enabled = Column(Boolean, default=False, nullable=False)
+    schedule_start_time = Column(String(5), nullable=True)  # "HH:MM" e.g. "08:00"
+    schedule_end_time = Column(String(5), nullable=True)    # "HH:MM" e.g. "12:00"
 
     products = relationship("Product", back_populates="category")
 

@@ -8,13 +8,18 @@ from app.models.product import Category, Product, ProductModifier, Inventory, Pr
 from app.models.branch import Branch
 from app.schemas.product import (
     CategoryResponse, CategoryCreateRequest, CategoryReorderRequest,
-    CategoryAvailabilityUpdateRequest, CategoryAvailabilityResponse,
+    CategoryAvailabilityUpdateRequest, CategoryAvailabilityResponse, CategoryScheduleUpdateRequest,
     ProductResponse, ProductCreateRequest, ProductUpdateRequest, ProductAvailabilityUpdateRequest,
     InventoryResponse, InventoryUpdateRequest, InventoryToggleRequest
 )
 from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
 from app.core.websocket_manager import manager
+from app.services.availability_service import (
+    is_category_schedule_open,
+    get_category_schedule_status,
+    parse_time_string
+)
 
 router = APIRouter()
 
@@ -22,9 +27,23 @@ PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate
 
 @router.get("/categories", response_model=List[CategoryResponse])
 def list_categories(response: Response, db: Session = Depends(get_db)):
-    """Returns active menu categories sorted by display order with caching."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
-    return db.query(Category).filter(Category.is_active == True).order_by(Category.display_order.asc()).all()
+    """Returns active menu categories sorted by display order with dynamic schedule status."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    cats = db.query(Category).filter(Category.is_active == True).order_by(Category.display_order.asc()).all()
+    return [
+        CategoryResponse(
+            id=c.id,
+            name=c.name,
+            slug=c.slug,
+            icon=c.icon,
+            display_order=c.display_order,
+            schedule_enabled=bool(getattr(c, "schedule_enabled", False)),
+            schedule_start_time=getattr(c, "schedule_start_time", None),
+            schedule_end_time=getattr(c, "schedule_end_time", None),
+            schedule_status=get_category_schedule_status(c)
+        )
+        for c in cats
+    ]
 
 @router.post("/categories", response_model=CategoryResponse)
 def create_category(
@@ -53,9 +72,23 @@ def create_category(
         existing.display_order = request.display_order if request.display_order is not None else max_order
         if request.icon:
             existing.icon = request.icon
+        if request.schedule_enabled is not None:
+            existing.schedule_enabled = request.schedule_enabled
+            existing.schedule_start_time = request.schedule_start_time
+            existing.schedule_end_time = request.schedule_end_time
         db.commit()
         db.refresh(existing)
-        return existing
+        return CategoryResponse(
+            id=existing.id,
+            name=existing.name,
+            slug=existing.slug,
+            icon=existing.icon,
+            display_order=existing.display_order,
+            schedule_enabled=bool(getattr(existing, "schedule_enabled", False)),
+            schedule_start_time=getattr(existing, "schedule_start_time", None),
+            schedule_end_time=getattr(existing, "schedule_end_time", None),
+            schedule_status=get_category_schedule_status(existing)
+        )
 
     max_order = db.query(Category).filter(Category.is_active == True).count()
 
@@ -64,12 +97,25 @@ def create_category(
         slug=slug_val,
         icon=request.icon or "hamburger",
         display_order=request.display_order if request.display_order is not None else max_order,
-        is_active=True
+        is_active=True,
+        schedule_enabled=bool(request.schedule_enabled),
+        schedule_start_time=request.schedule_start_time,
+        schedule_end_time=request.schedule_end_time
     )
     db.add(category)
     db.commit()
     db.refresh(category)
-    return category
+    return CategoryResponse(
+        id=category.id,
+        name=category.name,
+        slug=category.slug,
+        icon=category.icon,
+        display_order=category.display_order,
+        schedule_enabled=bool(getattr(category, "schedule_enabled", False)),
+        schedule_start_time=getattr(category, "schedule_start_time", None),
+        schedule_end_time=getattr(category, "schedule_end_time", None),
+        schedule_status=get_category_schedule_status(category)
+    )
 
 @router.put("/categories/reorder", response_model=List[CategoryResponse])
 def reorder_categories(
@@ -83,7 +129,21 @@ def reorder_categories(
         if cat:
             cat.display_order = item.display_order
     db.commit()
-    return db.query(Category).filter(Category.is_active == True).order_by(Category.display_order.asc()).all()
+    cats = db.query(Category).filter(Category.is_active == True).order_by(Category.display_order.asc()).all()
+    return [
+        CategoryResponse(
+            id=c.id,
+            name=c.name,
+            slug=c.slug,
+            icon=c.icon,
+            display_order=c.display_order,
+            schedule_enabled=bool(getattr(c, "schedule_enabled", False)),
+            schedule_start_time=getattr(c, "schedule_start_time", None),
+            schedule_end_time=getattr(c, "schedule_end_time", None),
+            schedule_status=get_category_schedule_status(c)
+        )
+        for c in cats
+    ]
 
 @router.delete("/categories/{category_id}")
 def delete_category(
@@ -105,6 +165,58 @@ def delete_category(
     db.delete(cat)
     db.commit()
     return {"message": "Category deleted successfully", "id": category_id}
+
+@router.put("/categories/{category_id}/schedule", response_model=CategoryResponse)
+@router.patch("/admin/categories/{category_id}/schedule", response_model=CategoryResponse)
+@router.patch("/categories/{category_id}/schedule", response_model=CategoryResponse)
+def update_category_schedule(
+    category_id: str,
+    request: CategoryScheduleUpdateRequest,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Super Admin configure daily category serving hours."""
+    cat = db.query(Category).filter(Category.id == category_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    if request.schedule_enabled:
+        start_str = (request.schedule_start_time or "").strip()
+        end_str = (request.schedule_end_time or "").strip()
+        if not start_str or not end_str:
+            raise HTTPException(status_code=400, detail="Start time and end time are required when scheduling is enabled.")
+
+        start_t = parse_time_string(start_str)
+        end_t = parse_time_string(end_str)
+        if start_t is None or end_t is None:
+            raise HTTPException(status_code=400, detail="Invalid time format. Please use HH:MM (e.g. 08:00).")
+
+        if start_t == end_t:
+            raise HTTPException(status_code=400, detail="Start time and end time cannot be equal.")
+
+        cat.schedule_enabled = True
+        cat.schedule_start_time = start_str
+        cat.schedule_end_time = end_str
+    else:
+        cat.schedule_enabled = False
+        if request.schedule_start_time:
+            cat.schedule_start_time = request.schedule_start_time.strip()
+        if request.schedule_end_time:
+            cat.schedule_end_time = request.schedule_end_time.strip()
+
+    db.commit()
+    db.refresh(cat)
+    return CategoryResponse(
+        id=cat.id,
+        name=cat.name,
+        slug=cat.slug,
+        icon=cat.icon,
+        display_order=cat.display_order,
+        schedule_enabled=bool(getattr(cat, "schedule_enabled", False)),
+        schedule_start_time=getattr(cat, "schedule_start_time", None),
+        schedule_end_time=getattr(cat, "schedule_end_time", None),
+        schedule_status=get_category_schedule_status(cat)
+    )
 
 @router.patch("/admin/categories/{category_id}/availability", response_model=CategoryAvailabilityResponse)
 @router.patch("/categories/{category_id}/availability", response_model=CategoryAvailabilityResponse)
@@ -154,7 +266,8 @@ def list_products(
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     query = db.query(Product).options(
         selectinload(Product.modifiers),
-        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options),
+        selectinload(Product.category)
     ).filter(Product.is_active == True)
     if category_id:
         query = query.filter(Product.category_id == category_id)
@@ -170,9 +283,10 @@ def list_products(
     for p in prods:
         inv = inv_map.get(p.id)
         is_out_of_stock = bool(getattr(p, 'is_out_of_stock', False))
-        if is_out_of_stock:
+        cat_schedule_open = is_category_schedule_open(p.category) if p.category else True
+        if is_out_of_stock or not cat_schedule_open:
             is_avail = False
-            stock_qty = 0
+            stock_qty = 0 if is_out_of_stock else (inv.stock_quantity if (inv and inv.stock_quantity is not None) else 100)
         elif inv is not None:
             is_avail = bool(inv.is_available) and (inv.stock_quantity is None or inv.stock_quantity > 0)
             stock_qty = inv.stock_quantity if inv.stock_quantity is not None else 100
@@ -217,15 +331,21 @@ def get_product_details(
     """Returns detailed product model with add-ons, modifiers, choice groups, and branch inventory availability."""
     prod = db.query(Product).options(
         selectinload(Product.modifiers),
-        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options),
+        selectinload(Product.category)
     ).filter(Product.id == product_id, Product.is_active == True).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
     is_out_of_stock = bool(getattr(prod, 'is_out_of_stock', False))
-    if is_out_of_stock:
+    cat_schedule_open = is_category_schedule_open(prod.category) if prod.category else True
+    if is_out_of_stock or not cat_schedule_open:
         is_avail = False
-        stock_qty = 0
+        stock_qty = 0 if is_out_of_stock else 100
+        if branch_id and branch_id != "ALL":
+            inv = db.query(Inventory).filter(Inventory.branch_id == branch_id, Inventory.product_id == product_id).first()
+            if inv and inv.stock_quantity is not None:
+                stock_qty = 0 if is_out_of_stock else inv.stock_quantity
     else:
         is_avail = bool(getattr(prod, 'is_available', True)) and bool(prod.is_active)
         stock_qty = 100

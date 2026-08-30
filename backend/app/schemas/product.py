@@ -41,6 +41,10 @@ class CategoryResponse(BaseModel):
     slug: str
     icon: Optional[str] = None
     display_order: int
+    schedule_enabled: bool = False
+    schedule_start_time: Optional[str] = None
+    schedule_end_time: Optional[str] = None
+    schedule_status: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -49,6 +53,14 @@ class CategoryCreateRequest(BaseModel):
     name: str
     icon: Optional[str] = None
     display_order: Optional[int] = 0
+    schedule_enabled: Optional[bool] = False
+    schedule_start_time: Optional[str] = None
+    schedule_end_time: Optional[str] = None
+
+class CategoryScheduleUpdateRequest(BaseModel):
+    schedule_enabled: bool
+    schedule_start_time: Optional[str] = None
+    schedule_end_time: Optional[str] = None
 
 class CategoryReorderItem(BaseModel):
     id: str

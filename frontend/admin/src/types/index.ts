@@ -76,6 +76,10 @@ export interface Category {
   slug: string;
   icon?: string;
   display_order: number;
+  schedule_enabled?: boolean;
+  schedule_start_time?: string;
+  schedule_end_time?: string;
+  schedule_status?: 'OPEN' | 'CLOSED' | 'DISABLED';
 }
 
 export interface CartItem {

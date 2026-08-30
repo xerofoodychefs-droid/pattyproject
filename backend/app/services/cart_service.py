@@ -2,7 +2,7 @@ import uuid
 import json
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 
@@ -15,6 +15,7 @@ from app.schemas.cart import (
     CartProductOut,
     CartItemCreateRequest
 )
+from app.services.availability_service import is_product_effective_available
 
 
 def _normalize_configuration(
@@ -108,9 +109,17 @@ def add_item_to_cart(
     if quantity <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be at least 1")
 
-    product = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
+    product = db.query(Product).options(selectinload(Product.category)).filter(Product.id == product_id, Product.is_active == True).first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or currently unavailable")
+
+    branch_id_to_check = getattr(cart, "branch_id", None)
+    is_avail, reason = is_product_effective_available(product, branch_id=branch_id_to_check, db=db)
+    if not is_avail:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=reason or f"This item is currently unavailable because its category is outside its serving hours."
+        )
 
     target_mod_sig, target_choice_sig, target_rem_sig = _normalize_configuration(modifiers, choices, removed_ingredients)
 
