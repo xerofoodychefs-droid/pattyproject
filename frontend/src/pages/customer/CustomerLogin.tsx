@@ -24,10 +24,14 @@ export const CustomerLogin: React.FC = () => {
   // Status states
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const googleStateRef = useRef<{ nonce: string; state_token: string } | null>(null);
+  const googleConfigRef = useRef<{ client_id: string } | null>(null);
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  const isInitializingGisRef = useRef(false);
 
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
@@ -49,49 +53,6 @@ export const CustomerLogin: React.FC = () => {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const setupGoogleAuth = async () => {
-      try {
-        const config: any = await api.get('/auth/google/config');
-        const nonceData: any = await api.get('/auth/google/nonce');
-        
-        if (!isMounted || !config?.client_id) return;
-        googleStateRef.current = nonceData;
-
-        const initializeGis = () => {
-          if ((window as any).google?.accounts?.id && googleStateRef.current) {
-            (window as any).google.accounts.id.initialize({
-              client_id: config.client_id,
-              nonce: googleStateRef.current.nonce,
-              callback: handleGoogleCredentialResponse,
-            });
-          }
-        };
-
-        if (!document.getElementById('google-gsi-client')) {
-          const script = document.createElement('script');
-          script.id = 'google-gsi-client';
-          script.src = 'https://accounts.google.com/gsi/client';
-          script.async = true;
-          script.defer = true;
-          script.onload = initializeGis;
-          document.body.appendChild(script);
-        } else {
-          initializeGis();
-        }
-      } catch (e) {
-        console.warn('Google OAuth initialization skipped / unavailable:', e);
-      }
-    };
-
-    setupGoogleAuth();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const handleGoogleCredentialResponse = async (response: any) => {
     if (!response?.credential || !googleStateRef.current) {
       setError('Unable to complete sign in with Google. Please use your standard login method.');
@@ -109,33 +70,99 @@ export const CustomerLogin: React.FC = () => {
         navigate(redirectPath, { replace: true });
       } else {
         setError('Unable to complete sign in with Google. Please use your standard login method.');
+        setupGoogleAuth();
       }
     } catch (err: any) {
       setError(err?.message || 'Unable to complete sign in with Google. Please use your standard login method.');
+      setupGoogleAuth();
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  const handleGoogleButtonClick = () => {
-    resetFormState();
-    const googleAccounts = (window as any).google?.accounts?.id;
-    if (!googleAccounts) {
-      setError('Google Sign-In is initializing. Please try again in a moment or use email login.');
-      return;
-    }
+  const setupGoogleAuth = async () => {
+    if (isInitializingGisRef.current) return;
+    isInitializingGisRef.current = true;
 
     try {
-      googleAccounts.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.warn('One Tap not displayed, reason:', notification.getNotDisplayedReason?.() || notification.getSkippedReason?.());
+      if (!googleConfigRef.current) {
+        const config: any = await api.get('/auth/google/config');
+        if (config?.client_id) {
+          googleConfigRef.current = config;
         }
-      });
-    } catch (err: any) {
-      console.warn('Google prompt exception:', err);
-      setError('Unable to open Google Sign-In prompt. Please use email and password.');
+      }
+
+      if (!googleConfigRef.current?.client_id) {
+        isInitializingGisRef.current = false;
+        return;
+      }
+
+      const nonceData: any = await api.get('/auth/google/nonce');
+      if (!nonceData?.nonce) {
+        isInitializingGisRef.current = false;
+        return;
+      }
+      googleStateRef.current = nonceData;
+
+      const renderGis = () => {
+        const google = (window as any).google;
+        if (!google?.accounts?.id || !googleStateRef.current || !googleConfigRef.current) return;
+
+        google.accounts.id.initialize({
+          client_id: googleConfigRef.current.client_id,
+          nonce: googleStateRef.current.nonce,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        if (googleBtnRef.current) {
+          googleBtnRef.current.innerHTML = '';
+          google.accounts.id.renderButton(googleBtnRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            type: 'standard',
+            shape: 'rectangular',
+            text: 'continue_with',
+            logo_alignment: 'left',
+            width: 380,
+          });
+          setGoogleReady(true);
+        }
+      };
+
+      if (!document.getElementById('google-gsi-client')) {
+        const script = document.createElement('script');
+        script.id = 'google-gsi-client';
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          renderGis();
+        };
+        document.body.appendChild(script);
+      } else {
+        renderGis();
+      }
+    } catch (e) {
+      console.warn('Google OAuth initialization skipped / unavailable:', e);
+    } finally {
+      isInitializingGisRef.current = false;
     }
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    if (mode === 'login') {
+      setupGoogleAuth();
+    }
+    return () => {
+      isMounted = false;
+      try {
+        (window as any).google?.accounts?.id?.cancel();
+      } catch {}
+    };
+  }, [mode]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -561,29 +588,29 @@ export const CustomerLogin: React.FC = () => {
 
                 {/* Social Login Buttons */}
                 <div className="space-y-3">
-                  <button
-                    type="button"
-                    disabled={googleLoading || loading}
-                    onClick={handleGoogleButtonClick}
-                    className="w-full bg-[#181818] hover:bg-[#222222] border border-[#282828] text-white font-semibold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {googleLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
-                        <span>Signing in with Google...</span>
-                      </>
-                    ) : (
-                      <>
+                  <div className="w-full flex justify-center overflow-hidden rounded-xl bg-[#131314] border border-[#282828] min-h-[44px]">
+                    <div
+                      ref={googleBtnRef}
+                      className="w-full flex justify-center items-center py-0.5"
+                    />
+                    {!googleReady && !googleLoading && (
+                      <div className="w-full py-3 px-4 flex items-center justify-center gap-2.5 text-white font-semibold text-xs animate-pulse">
                         <svg className="w-4 h-4" viewBox="0 0 24 24">
                           <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
                           <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
                           <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12.5s.7 2.8 1.9 5.2l3.7-2.9z" />
                           <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 17C3.7 20.7 7.5 24 12 24z" />
                         </svg>
-                        <span>Continue with Google</span>
-                      </>
+                        <span>Loading Google Sign-In...</span>
+                      </div>
                     )}
-                  </button>
+                    {googleLoading && (
+                      <div className="w-full py-3 px-4 flex items-center justify-center gap-2.5 text-[#FF5500] font-semibold text-xs">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
+                        <span>Signing in with Google...</span>
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"

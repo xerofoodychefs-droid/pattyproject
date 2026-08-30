@@ -234,11 +234,13 @@ def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) ->
         return user
     except (IntegrityError, IdentityConflictError):
         db.rollback()
-        # Concurrent race condition: Winning thread already persisted the identity
-        winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
-        if winning_identity:
-            winning_user = db.query(User).filter(User.id == winning_identity.user_id).first()
-            if winning_user and winning_user.is_active:
-                return winning_user
+        # Concurrent race condition: Winning thread is persisting or already persisted the identity
+        for _ in range(10):
+            time.sleep(0.05)
+            winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
+            if winning_identity:
+                winning_user = db.query(User).filter(User.id == winning_identity.user_id).first()
+                if winning_user and winning_user.is_active:
+                    return winning_user
 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
