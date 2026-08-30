@@ -24,10 +24,14 @@ export const CustomerLogin: React.FC = () => {
   // Status states
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const googleStateRef = useRef<{ nonce: string; state_token: string } | null>(null);
+  const googleConfigRef = useRef<{ client_id: string } | null>(null);
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  const isInitializingGisRef = useRef(false);
 
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
@@ -49,49 +53,6 @@ export const CustomerLogin: React.FC = () => {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const setupGoogleAuth = async () => {
-      try {
-        const config: any = await api.get('/auth/google/config');
-        const nonceData: any = await api.get('/auth/google/nonce');
-        
-        if (!isMounted || !config?.client_id) return;
-        googleStateRef.current = nonceData;
-
-        const initializeGis = () => {
-          if ((window as any).google?.accounts?.id && googleStateRef.current) {
-            (window as any).google.accounts.id.initialize({
-              client_id: config.client_id,
-              nonce: googleStateRef.current.nonce,
-              callback: handleGoogleCredentialResponse,
-            });
-          }
-        };
-
-        if (!document.getElementById('google-gsi-client')) {
-          const script = document.createElement('script');
-          script.id = 'google-gsi-client';
-          script.src = 'https://accounts.google.com/gsi/client';
-          script.async = true;
-          script.defer = true;
-          script.onload = initializeGis;
-          document.body.appendChild(script);
-        } else {
-          initializeGis();
-        }
-      } catch (e) {
-        console.warn('Google OAuth initialization skipped / unavailable:', e);
-      }
-    };
-
-    setupGoogleAuth();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const handleGoogleCredentialResponse = async (response: any) => {
     if (!response?.credential || !googleStateRef.current) {
       setError('Unable to complete sign in with Google. Please use your standard login method.');
@@ -109,33 +70,102 @@ export const CustomerLogin: React.FC = () => {
         navigate(redirectPath, { replace: true });
       } else {
         setError('Unable to complete sign in with Google. Please use your standard login method.');
+        setupGoogleAuth();
       }
     } catch (err: any) {
       setError(err?.message || 'Unable to complete sign in with Google. Please use your standard login method.');
+      setupGoogleAuth();
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  const handleGoogleButtonClick = () => {
-    resetFormState();
-    const googleAccounts = (window as any).google?.accounts?.id;
-    if (!googleAccounts) {
-      setError('Google Sign-In is initializing. Please try again in a moment or use email login.');
-      return;
-    }
+  const setupGoogleAuth = async () => {
+    if (isInitializingGisRef.current) return;
+    isInitializingGisRef.current = true;
 
     try {
-      googleAccounts.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.warn('One Tap not displayed, reason:', notification.getNotDisplayedReason?.() || notification.getSkippedReason?.());
+      if (!googleConfigRef.current) {
+        const config: any = await api.get('/auth/google/config');
+        if (config?.client_id) {
+          googleConfigRef.current = config;
         }
-      });
-    } catch (err: any) {
-      console.warn('Google prompt exception:', err);
-      setError('Unable to open Google Sign-In prompt. Please use email and password.');
+      }
+
+      if (!googleConfigRef.current?.client_id) {
+        isInitializingGisRef.current = false;
+        return;
+      }
+
+      const nonceData: any = await api.get('/auth/google/nonce');
+      if (!nonceData?.nonce) {
+        isInitializingGisRef.current = false;
+        return;
+      }
+      googleStateRef.current = nonceData;
+
+      const renderGis = () => {
+        const google = (window as any).google;
+        if (!google?.accounts?.id || !googleStateRef.current || !googleConfigRef.current) return;
+
+        google.accounts.id.initialize({
+          client_id: googleConfigRef.current.client_id,
+          nonce: googleStateRef.current.nonce,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        if (googleBtnRef.current) {
+          googleBtnRef.current.innerHTML = '';
+          const containerWidth = googleBtnRef.current.parentElement?.clientWidth || googleBtnRef.current.clientWidth || 380;
+          const btnWidth = Math.min(Math.max(Math.floor(containerWidth), 200), 400);
+
+          google.accounts.id.renderButton(googleBtnRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            type: 'standard',
+            shape: 'rectangular',
+            text: 'continue_with',
+            logo_alignment: 'left',
+            width: btnWidth,
+          });
+          setGoogleReady(true);
+        }
+      };
+
+      if (!document.getElementById('google-gsi-client')) {
+        const script = document.createElement('script');
+        script.id = 'google-gsi-client';
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          renderGis();
+        };
+        document.body.appendChild(script);
+      } else {
+        renderGis();
+      }
+    } catch (e) {
+      console.warn('Google OAuth initialization skipped / unavailable:', e);
+    } finally {
+      isInitializingGisRef.current = false;
     }
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    if (mode === 'login') {
+      setupGoogleAuth();
+    }
+    return () => {
+      isMounted = false;
+      try {
+        (window as any).google?.accounts?.id?.cancel();
+      } catch {}
+    };
+  }, [mode]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -552,39 +582,43 @@ export const CustomerLogin: React.FC = () => {
 
                 {/* Social Login Buttons */}
                 <div className="space-y-3">
-                  <button
-                    type="button"
-                    disabled={googleLoading || loading}
-                    onClick={handleGoogleButtonClick}
-                    className="w-full bg-[#181818] hover:bg-[#222222] border border-[#282828] text-white font-semibold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {googleLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
-                        <span>Signing in with Google...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  {/* Google CTA Container */}
+                  <div className="w-full flex justify-center items-center min-h-[44px] relative">
+                    <div
+                      ref={googleBtnRef}
+                      className={`w-full flex justify-center items-center ${
+                        !googleReady || googleLoading ? 'hidden' : 'block'
+                      }`}
+                    />
+                    {!googleReady && !googleLoading && (
+                      <div className="w-full max-w-[400px] h-[44px] rounded-lg bg-[#131314] border border-[#2E2E2E] flex items-center justify-center gap-3 px-4 text-[#D1D5DB] text-xs font-medium select-none shadow-sm animate-pulse">
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                           <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
                           <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
                           <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12.5s.7 2.8 1.9 5.2l3.7-2.9z" />
                           <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 17C3.7 20.7 7.5 24 12 24z" />
                         </svg>
-                        <span>Continue with Google</span>
-                      </>
+                        <span className="truncate">Continue with Google</span>
+                      </div>
                     )}
-                  </button>
+                    {googleLoading && (
+                      <div className="w-full max-w-[400px] h-[44px] rounded-lg bg-[#131314] border border-[#FF5500]/40 flex items-center justify-center gap-3 px-4 text-[#FF5500] text-xs font-semibold shadow-sm">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
+                        <span>Signing in with Google...</span>
+                      </div>
+                    )}
+                  </div>
 
+                  {/* Apple CTA Button */}
                   <button
                     type="button"
                     onClick={() => setError('Apple sign-in is coming soon.')}
-                    className="w-full bg-[#181818] hover:bg-[#222222] border border-[#282828] text-white font-semibold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2.5 transition-colors cursor-pointer"
+                    className="w-full max-w-[400px] mx-auto h-[44px] bg-[#181818] hover:bg-[#202020] active:bg-[#252525] border border-[#282828] hover:border-[#383838] text-white font-medium text-xs rounded-lg flex items-center justify-center gap-3 px-4 transition-colors cursor-pointer"
                   >
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 170 170">
+                    <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 170 170">
                       <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.84.13-9.66-1.94-14.47-6.23-3.21-2.77-7.14-7.46-11.79-14.07-5.91-8.39-10.74-17.78-14.48-28.18-3.75-10.4-5.63-20.47-5.63-30.22 0-14.67 3.77-26.69 11.31-36.06 7.54-9.37 17.02-14.16 28.44-14.37 4.71 0 9.87 1.16 15.48 3.49 5.61 2.33 9.49 3.49 11.64 3.49 1.83 0 5.86-1.22 12.09-3.67 6.23-2.45 11.58-3.56 16.05-3.32 12.02.57 21.65 4.97 28.89 13.2-10.59 6.42-15.77 15.44-15.54 27.06.23 9.17 3.78 16.8 10.65 22.88 6.87 6.08 15.02 9.61 24.45 10.59-2.58 7.74-6.07 15.65-10.48 23.73zM119.22 31.84c0-7.07 2.58-13.91 7.75-20.52 5.17-6.61 11.63-10.68 19.38-12.22.23 1.02.35 1.93.35 2.73 0 6.94-2.59 13.78-7.77 20.52-5.18 6.74-11.75 10.9-19.71 12.49-.12-.8-.18-1.8-.18-3z" />
                     </svg>
-                    <span>Continue with Apple</span>
+                    <span className="truncate">Continue with Apple</span>
                   </button>
                 </div>
 
