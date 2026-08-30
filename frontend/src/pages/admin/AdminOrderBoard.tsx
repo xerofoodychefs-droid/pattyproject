@@ -48,6 +48,22 @@ export const AdminOrderBoard: React.FC = () => {
     }
   }, [user]);
 
+  // Dedicated Unfiltered Active Alert Reconciliation for SuperAdmin & BranchAdmin
+  const reconcileActiveAlerts = useCallback(async () => {
+    try {
+      let url = '/orders?status=INCOMING';
+      if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids[0]) {
+        url += `&branch_id=${user.branch_ids[0]}`;
+      }
+      const data: Order[] = await api.get(url);
+      if (Array.isArray(data)) {
+        syncAlerts(data);
+      }
+    } catch (err) {
+      console.warn('[AdminOrderBoard] Failed to reconcile active alerts:', err);
+    }
+  }, [user, syncAlerts]);
+
   const fetchOrders = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
@@ -64,14 +80,18 @@ export const AdminOrderBoard: React.FC = () => {
       const data: Order[] = await api.get(url);
       if (Array.isArray(data)) {
         setOrders(data);
-        syncAlerts(data);
+        if (filterBranch === 'ALL' && filterStatus === 'ALL') {
+          syncAlerts(data);
+        } else {
+          reconcileActiveAlerts();
+        }
       }
     } catch (err) {
       console.error('Failed to load orders', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [filterBranch, filterStatus, user, syncAlerts]);
+  }, [filterBranch, filterStatus, user, syncAlerts, reconcileActiveAlerts]);
 
   // Realtime WebSocket integration
   useAdminOrderWebSocket({
@@ -126,6 +146,7 @@ export const AdminOrderBoard: React.FC = () => {
     },
     onReconnect: () => {
       fetchOrders(true);
+      reconcileActiveAlerts();
     },
   });
 
@@ -135,12 +156,14 @@ export const AdminOrderBoard: React.FC = () => {
 
   useEffect(() => {
     fetchOrders(false);
+    reconcileActiveAlerts();
     // Realtime authoritative polling fallback every 5 seconds
     const interval = setInterval(() => {
       fetchOrders(true);
+      reconcileActiveAlerts();
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, [fetchOrders, reconcileActiveAlerts]);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -239,15 +262,17 @@ export const AdminOrderBoard: React.FC = () => {
         {lastAnnouncement}
       </div>
 
-      {/* Browser Autoplay Blocked Banner */}
+      {/* Browser Autoplay Blocked / Permission Recovery Banner */}
       {audioState.isBlockedByBrowser && (
-        <div className="bg-[#FF5A00]/15 border border-[#FF5A00]/50 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-pulse">
+        <div className="bg-[#FF5A00]/15 border-2 border-[#FF5A00] rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm shadow-lg shadow-[#FF5A00]/10 animate-pulse">
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-[#FF5A00] shrink-0" />
+            <div className="w-10 h-10 rounded-full bg-[#FF5A00]/20 border border-[#FF5A00] flex items-center justify-center text-[#FF5A00] shrink-0">
+              <VolumeX className="w-5 h-5" />
+            </div>
             <div>
-              <p className="font-bold text-white">Order Alert Audio Waiting for Permission</p>
-              <p className="text-xs text-[#D4D4D8]">
-                Your browser requires a user click to play high-volume sound alerts when new orders arrive.
+              <p className="font-bold text-white tracking-wide">Audio alerts are paused by your browser.</p>
+              <p className="text-xs text-[#E4E4E7] mt-0.5">
+                Click below to enable high-volume continuous kitchen sound when new orders arrive.
               </p>
             </div>
           </div>

@@ -64,7 +64,7 @@ export const useAdminOrderWebSocket = ({
         wasConnectedRef.current = true;
         reconnectAttemptsRef.current = 0;
 
-        // Periodic 20s heartbeat ping to keep connection healthy
+        // 20-second heartbeat keepalive
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'PING' }));
@@ -97,7 +97,7 @@ export const useAdminOrderWebSocket = ({
           if (type === 'ORDER_INCOMING') {
             const orderData = data.order;
             if (orderData && orderData.id) {
-              // Strictly enforce branch isolation on frontend
+              // SuperAdmin processes all branches; BranchAdmin checks branch isolation
               if (
                 user.role === 'BRANCH_ADMIN' &&
                 user.branch_ids &&
@@ -118,9 +118,12 @@ export const useAdminOrderWebSocket = ({
           if (type === 'ORDER_STATUS_CHANGED') {
             const orderData = data.order;
             if (orderData && orderData.id) {
+              // When order is accepted or reached terminal state, remove active alert
               if (
                 orderData.status === 'ACCEPTED' ||
-                ['CANCELLED', 'REJECTED', 'DELIVERED', 'COLLECTED'].includes(orderData.status)
+                ['CANCELLED', 'REJECTED', 'DELIVERED', 'COLLECTED', 'READY', 'PREPARING'].includes(
+                  orderData.status
+                )
               ) {
                 removeAlert(orderData.id);
               }
@@ -150,19 +153,19 @@ export const useAdminOrderWebSocket = ({
           return;
         }
 
-        // Exponential backoff reconnect
-        if (token && isMountedRef.current) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 15000);
-          reconnectAttemptsRef.current += 1;
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (isMountedRef.current && token) {
-              connect();
-            }
-          }, delay);
-        }
+        // Exponential backoff reconnect with randomized jitter: 1s, 2s, 4s up to 10s max
+        const attempts = reconnectAttemptsRef.current;
+        const delay = Math.min(1000 * Math.pow(2, attempts), 10000) + Math.random() * 500;
+        reconnectAttemptsRef.current += 1;
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            connect();
+          }
+        }, delay);
       };
-    } catch (err) {
-      console.warn('[AdminWS] Socket instantiation failed:', err);
+    } catch (e) {
+      console.warn('[AdminWS] Connection initialization error:', e);
     }
   }, [token, user, addAlert, removeAlert, setWsConnected, clearTimers]);
 
@@ -177,11 +180,6 @@ export const useAdminOrderWebSocket = ({
         wsRef.current.close();
         wsRef.current = null;
       }
-      setWsConnected(false);
     };
-  }, [connect, clearTimers, setWsConnected]);
-
-  return {
-    wsRef,
-  };
+  }, [connect, clearTimers]);
 };

@@ -534,3 +534,175 @@ def test_reconnect_resynchronization_via_rest():
     camden_orders = [o for o in orders_list if o["id"] == "order-rt-001"]
     assert len(camden_orders) == 1
     assert camden_orders[0]["status"] == OrderStatus.INCOMING
+
+
+def test_multi_order_alert_flow_sequential_accept():
+    """
+    Validates the end-to-end alert life cycle for multiple concurrent orders:
+    1. Three orders arrive and transition to INCOMING + PAID.
+    2. SuperAdmin receives all 3 ORDER_INCOMING WebSocket events.
+    3. Orders are accepted one by one; each emits ORDER_STATUS_CHANGED.
+    """
+    db = TestingSessionLocal()
+    order_ids = ["order-multi-001", "order-multi-002", "order-multi-003"]
+    for i, oid in enumerate(order_ids, start=1):
+        ord_obj = Order(
+            id=oid,
+            order_number=f"#PP800{i}",
+            customer_name=f"Customer {i}",
+            customer_email=f"cust{i}@example.com",
+            customer_phone=f"+44710000000{i}",
+            branch_id="branch-camden-001",
+            order_type=OrderType.DELIVERY,
+            status=OrderStatus.PENDING_PAYMENT,
+            subtotal=20.0 + i,
+            total_amount=20.0 + i,
+            payment_status=PaymentStatus.PENDING
+        )
+        db.add(ord_obj)
+        pm = Payment(
+            id=f"pm-multi-00{i}",
+            order_id=oid,
+            provider=PaymentProvider.MOCK,
+            transaction_id=f"TXN_MULTI_00{i}",
+            amount=20.0 + i,
+            currency="GBP",
+            status=PaymentStatus.PENDING
+        )
+        db.add(pm)
+    db.commit()
+    db.close()
+
+    token_super = create_access_token(subject="user-superadmin-001", roles=[UserRole.SUPER_ADMIN])
+    headers = {"Authorization": f"Bearer {token_super}"}
+
+    with client.websocket_connect(f"/api/v1/admin/ws/orders?token={token_super}") as ws:
+        assert ws.receive_json()["type"] == "CONNECTED"
+
+        # 1. Trigger payment confirmations for all 3 orders
+        for i, oid in enumerate(order_ids, start=1):
+            db_s = TestingSessionLocal()
+            evt = NormalizedPaymentEvent(
+                event_id=f"evt_multi_pay_00{i}",
+                provider=PaymentProvider.MOCK,
+                event_type="SUCCESS",
+                order_id=oid,
+                transaction_id=f"TXN_MULTI_00{i}",
+                amount=20.0 + i,
+                currency="GBP"
+            )
+            res = process_payment_event(db=db_s, event=evt)
+            db_s.close()
+            assert res["status"] == "SUCCESS"
+
+            msg = ws.receive_json()
+            assert msg["type"] == "ORDER_INCOMING"
+            assert msg["order"]["id"] == oid
+            assert msg["order"]["status"] == OrderStatus.INCOMING
+            assert msg["order"]["payment_status"] == PaymentStatus.PAID
+
+        # 2. Sequentially accept order 1, order 2, order 3
+        for oid in order_ids:
+            accept_res = client.patch(
+                f"/api/v1/orders/{oid}/status",
+                json={"status": "ACCEPTED", "notes": f"Accepted {oid}"},
+                headers=headers
+            )
+            assert accept_res.status_code == 200
+            assert accept_res.json()["status"] == OrderStatus.ACCEPTED
+
+            status_msg = ws.receive_json()
+            assert status_msg["type"] == "ORDER_STATUS_CHANGED"
+            assert status_msg["order"]["id"] == oid
+            assert status_msg["order"]["status"] == OrderStatus.ACCEPTED
+
+
+def test_super_admin_receives_multi_branch_orders_unhindered():
+    """
+    Validates that SuperAdmin receives ORDER_INCOMING events across ALL branches
+    without branch filtering interference.
+    """
+    token_super = create_access_token(subject="user-superadmin-001", roles=[UserRole.SUPER_ADMIN])
+
+    with client.websocket_connect(f"/api/v1/admin/ws/orders?token={token_super}") as ws:
+        assert ws.receive_json()["type"] == "CONNECTED"
+
+        # Broadcast from Camden
+        manager.sync_broadcast_order_event(
+            event_type="ORDER_INCOMING",
+            order_data={"id": "ord-cam-1", "branch_id": "branch-camden-001", "status": "INCOMING"},
+            branch_id="branch-camden-001"
+        )
+        msg1 = ws.receive_json()
+        assert msg1["type"] == "ORDER_INCOMING"
+        assert msg1["order"]["branch_id"] == "branch-camden-001"
+
+        # Broadcast from Westfield
+        manager.sync_broadcast_order_event(
+            event_type="ORDER_INCOMING",
+            order_data={"id": "ord-west-1", "branch_id": "branch-westfield-002", "status": "INCOMING"},
+            branch_id="branch-westfield-002"
+        )
+        msg2 = ws.receive_json()
+        assert msg2["type"] == "ORDER_INCOMING"
+        assert msg2["order"]["branch_id"] == "branch-westfield-002"
+
+
+def test_order_rejection_emits_status_changed():
+    """
+    Validates that rejecting or cancelling an incoming order emits ORDER_STATUS_CHANGED,
+    which allows the frontend to remove the alert and stop the alarm.
+    """
+    db = TestingSessionLocal()
+    order = Order(
+        id="order-reject-001",
+        order_number="#PP8099",
+        customer_name="Reject Customer",
+        customer_email="rej@example.com",
+        customer_phone="+447100000099",
+        branch_id="branch-camden-001",
+        order_type=OrderType.DELIVERY,
+        status=OrderStatus.INCOMING,
+        subtotal=30.0,
+        total_amount=30.0,
+        payment_status=PaymentStatus.PAID
+    )
+    db.add(order)
+    db.commit()
+    db.close()
+
+    token_super = create_access_token(subject="user-superadmin-001", roles=[UserRole.SUPER_ADMIN])
+    headers = {"Authorization": f"Bearer {token_super}"}
+
+    with client.websocket_connect(f"/api/v1/admin/ws/orders?token={token_super}") as ws:
+        assert ws.receive_json()["type"] == "CONNECTED"
+
+        res = client.patch(
+            "/api/v1/orders/order-reject-001/status",
+            json={"status": "REJECTED", "notes": "Kitchen out of stock"},
+            headers=headers
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == OrderStatus.REJECTED
+
+        msg = ws.receive_json()
+        assert msg["type"] == "ORDER_STATUS_CHANGED"
+        assert msg["order"]["id"] == "order-reject-001"
+        assert msg["order"]["status"] == OrderStatus.REJECTED
+
+
+def test_unfiltered_incoming_orders_reconciliation():
+    """
+    Validates that GET /api/v1/orders?status=INCOMING returns all active unaccepted paid orders
+    for authoritative alert state reconciliation.
+    """
+    token_super = create_access_token(subject="user-superadmin-001", roles=[UserRole.SUPER_ADMIN])
+    headers = {"Authorization": f"Bearer {token_super}"}
+
+    res = client.get("/api/v1/orders?status=INCOMING", headers=headers)
+    assert res.status_code == 200
+    orders = res.json()
+    assert isinstance(orders, list)
+    # All returned orders must have status == 'INCOMING'
+    for o in orders:
+        assert o["status"] == OrderStatus.INCOMING
