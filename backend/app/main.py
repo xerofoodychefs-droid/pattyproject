@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.router import api_router
+from app.api.endpoints import (
+    auth, branches, products, orders, payments, loyalty,
+    promotions, addresses, payment_methods, customers, admin_ws, customer_ws, contact, cart
+)
 from app.db.seed import seed_db
 
 app = FastAPI(
@@ -42,10 +45,24 @@ def root():
         "version": "1.0.0"
     }
 
-app.include_router(api_router, prefix=settings.API_V1_STR)
+# Register all API endpoints directly with API prefix to ensure flat, unnested route registration
+# across all FastAPI/Starlette versions (avoiding opaque _IncludedRouter wrapper issues)
+prefix = settings.API_V1_STR
+app.include_router(auth.router, prefix=f"{prefix}/auth", tags=["Authentication"])
+app.include_router(cart.router, prefix=f"{prefix}/cart", tags=["Cart"])
+app.include_router(branches.router, prefix=f"{prefix}/branches", tags=["Branches"])
+app.include_router(products.router, prefix=f"{prefix}", tags=["Products & Categories"])
+app.include_router(orders.router, prefix=f"{prefix}/orders", tags=["Orders"])
+app.include_router(payments.router, prefix=f"{prefix}/payments", tags=["Payments"])
+app.include_router(loyalty.router, prefix=f"{prefix}/loyalty", tags=["Loyalty"])
+app.include_router(promotions.router, prefix=f"{prefix}/promotions", tags=["Promotions"])
+app.include_router(addresses.router, prefix=f"{prefix}/addresses", tags=["Addresses"])
+app.include_router(payment_methods.router, prefix=f"{prefix}/payment-methods", tags=["Payment Methods"])
+app.include_router(customers.router, prefix=f"{prefix}/customers", tags=["Customers"])
+app.include_router(admin_ws.router, prefix=f"{prefix}/admin/ws", tags=["Admin WebSocket"])
+app.include_router(customer_ws.router, prefix=f"{prefix}/ws", tags=["Customer WebSocket"])
+app.include_router(contact.router, prefix=f"{prefix}/contact", tags=["Contact"])
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
-
-# Deployment pipeline test
