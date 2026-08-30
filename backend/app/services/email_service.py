@@ -2,7 +2,7 @@ import html
 import logging
 from typing import Optional
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from app.core.config import settings
 
 logger = logging.getLogger("patty_project.email_service")

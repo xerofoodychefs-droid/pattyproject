@@ -387,7 +387,7 @@ def test_12_provider_outage_returns_503_and_leaves_no_user_or_loyalty(monkeypatc
     def mock_send_fail(to_email, otp):
         raise HTTPException(
             status_code=503,
-            detail="Email delivery service is currently unavailable. Please try again later."
+            detail="Unable to deliver your verification code at this time. Please try again later."
         )
 
     monkeypatch.setattr("app.api.endpoints.auth.send_verification_otp_email", mock_send_fail)
@@ -398,7 +398,7 @@ def test_12_provider_outage_returns_503_and_leaves_no_user_or_loyalty(monkeypatc
         "password": "Password123!"
     })
     assert res.status_code == 503
-    assert "unavailable" in res.json()["detail"].lower()
+    assert "unable to deliver" in res.json()["detail"].lower()
 
     db = TestingSessionLocal()
     try:
@@ -411,3 +411,62 @@ def test_12_provider_outage_returns_503_and_leaves_no_user_or_loyalty(monkeypatc
         assert len(challenges) == 0, "Challenge MUST be cleaned up if email dispatch fails"
     finally:
         db.close()
+
+
+def test_13_send_verification_otp_email_handles_resend_422_without_nameerror(monkeypatch):
+    """Requirement A: Resend 422 validation error raises HTTP 503 without NameError."""
+    from app.services.email_service import send_verification_otp_email
+    from fastapi import HTTPException
+    import httpx
+
+    class Mock422Response:
+        status_code = 422
+        text = '{"statusCode":422,"name":"validation_error","message":"Invalid to field"}'
+
+    class MockHttpxClient:
+        def post(self, *args, **kwargs):
+            return Mock422Response()
+
+    monkeypatch.setattr("app.core.config.settings.RESEND_API_KEY", "re_test_dummy_key_123")
+
+    with pytest.raises(HTTPException) as exc_info:
+        send_verification_otp_email(
+            to_email="test.invalid@example.com",
+            otp="123456",
+            client=MockHttpxClient()
+        )
+    assert exc_info.value.status_code == 503
+    assert "unable to deliver" in exc_info.value.detail.lower()
+
+
+def test_14_send_verification_otp_email_handles_timeouts_and_network_errors(monkeypatch):
+    """Requirement B & C: Timeouts and network errors raise HTTP 503 without NameError."""
+    from app.services.email_service import send_verification_otp_email
+    from fastapi import HTTPException
+    import httpx
+
+    class TimeoutClient:
+        def post(self, *args, **kwargs):
+            raise httpx.TimeoutException("Connection timed out")
+
+    class RequestErrorClient:
+        def post(self, *args, **kwargs):
+            raise httpx.RequestError("Connection refused")
+
+    monkeypatch.setattr("app.core.config.settings.RESEND_API_KEY", "re_test_dummy_key_123")
+
+    with pytest.raises(HTTPException) as exc_info:
+        send_verification_otp_email(
+            to_email="test.timeout@example.com",
+            otp="123456",
+            client=TimeoutClient()
+        )
+    assert exc_info.value.status_code == 503
+
+    with pytest.raises(HTTPException) as exc_info2:
+        send_verification_otp_email(
+            to_email="test.neterr@example.com",
+            otp="123456",
+            client=RequestErrorClient()
+        )
+    assert exc_info2.value.status_code == 503
