@@ -324,17 +324,22 @@ export const CustomerLogin: React.FC = () => {
     e.preventDefault();
     resetFormState();
 
-    if (!email.trim() || !email.includes('@')) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       setError('Please enter a valid email address.');
       return;
     }
 
     setLoading(true);
 
-    setTimeout(() => {
+    try {
+      await api.post('/auth/forgot-password', { email: cleanEmail });
+      setSuccessMessage('Check your email for a password reset link.');
+    } catch (err: any) {
+      setError(err?.message || 'Unable to request password reset. Please try again.');
+    } finally {
       setLoading(false);
-      setSuccessMessage('Password reset instructions have been sent to your email.');
-    }, 1000);
+    }
   };
 
   const maskEmail = (str: string) => {

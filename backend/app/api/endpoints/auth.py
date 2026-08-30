@@ -12,14 +12,16 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User, UserRole, CustomerAddress, AuthSession
-from app.models.verification import EmailVerificationChallenge
+from app.models.verification import EmailVerificationChallenge, PasswordResetChallenge
 from app.models.loyalty import LoyaltyAccount
 from app.schemas.auth import (
     LoginRequest, RegisterRequest, SocialLoginRequest, Token, UserResponse,
     GoogleAuthRequest, GoogleNonceResponse, GoogleConfigResponse, ChangePasswordRequest,
     RefreshTokenRequest, LogoutRequest,
-    VerifyEmailRequest, ResendVerificationRequest, RegistrationResponse
+    VerifyEmailRequest, ResendVerificationRequest, RegistrationResponse,
+    ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest, ResetPasswordResponse
 )
+from app.core.rate_limiter import password_reset_rate_limiter
 from app.services.customer_service import create_customer_with_loyalty
 from app.services.google_auth_service import (
     generate_nonce_and_state_token,
@@ -33,7 +35,18 @@ from app.services.otp_service import (
     check_resend_cooldown,
     OTP_MAX_ATTEMPTS
 )
-from app.services.email_service import send_verification_otp_email
+from app.services.password_reset_service import (
+    create_password_reset_challenge,
+    consume_password_reset_token,
+    get_frontend_base_url
+)
+from app.services.email_service import (
+    send_verification_otp_email,
+    send_password_reset_email
+)
+import logging
+
+logger = logging.getLogger("patty_project.auth")
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -555,3 +568,116 @@ def change_password(
 
     db.commit()
     return {"message": "Password updated successfully"}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(
+    request: ForgotPasswordRequest,
+    http_req: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint to initiate a password reset challenge:
+    - Enforces IP and per-email rate limiting.
+    - Prevents account enumeration by returning an identical generic response
+      regardless of whether the account exists in the database.
+    - If user exists and is active:
+      - Invalidates any prior active reset challenges.
+      - Generates a high-entropy 256-bit URL-safe token.
+      - Stores only the SHA-256 hash with a 30-minute expiry.
+      - Dispatches branded email via Resend with the single-use reset URL.
+    - Never logs or exposes raw tokens or complete reset URLs.
+    """
+    password_reset_rate_limiter.check_forgot_password(request=http_req, email=request.email)
+    email_clean = request.email.strip().lower()
+
+    user = db.query(User).filter(User.email == email_clean).first()
+
+    generic_response = ForgotPasswordResponse(
+        message="If an account exists with that email address, password reset instructions have been sent."
+    )
+
+    if not user or not user.is_active:
+        # Generic response for account enumeration mitigation
+        return generic_response
+
+    try:
+        challenge, raw_token = create_password_reset_challenge(db=db, user=user)
+        base_url = get_frontend_base_url(http_req)
+        reset_url = f"{base_url}/reset-password?token={raw_token}"
+
+        send_password_reset_email(to_email=user.email, reset_url=reset_url)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("Password reset email dispatch error: %s", type(exc).__name__)
+        if settings.is_production:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery service is currently unavailable. Please try again later."
+            )
+
+    return generic_response
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+def reset_password(
+    request: ResetPasswordRequest,
+    http_req: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint to complete a password reset:
+    - Enforces rate limiting on token submission.
+    - Validates token hash, expiry, single-use, and active user state.
+    - Enforces minimum 8-character password strength.
+    - Atomically consumes token (concurrency-safe against race conditions).
+    - Hashes new password with Argon2id.
+    - Does NOT modify email_verified or is_active (preserves OTP verification state).
+    - Revokes all existing user sessions in AuthSession.
+    - Invalidates all other active reset challenges for the user.
+    """
+    password_reset_rate_limiter.check_reset_password(request=http_req)
+
+    # Validate and atomically consume token (raises 400 if invalid/expired/used)
+    challenge, user = consume_password_reset_token(db=db, token=request.token)
+
+    new_pwd = request.new_password.strip()
+    if len(new_pwd) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long"
+        )
+
+    if user.password_hash and verify_password(new_pwd, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from your current password"
+        )
+
+    # Securely hash new password with Argon2id
+    user.password_hash = get_password_hash(new_pwd)
+
+    # CRITICAL: Preserve email_verified and is_active (DO NOT alter)
+
+    # Revoke all existing sessions for this user
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id,
+        AuthSession.is_revoked == False
+    ).update({"is_revoked": True})
+
+    # Invalidate any other active reset challenges for this user
+    now = datetime.now(timezone.utc)
+    db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.user_id == user.id,
+        PasswordResetChallenge.used_at == None
+    ).update({"used_at": now})
+
+    db.commit()
+
+    return ResetPasswordResponse(
+        message="Your password has been successfully reset. You can now sign in with your new password."
+    )

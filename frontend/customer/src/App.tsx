@@ -21,6 +21,7 @@ import { CustomerPaymentMethods } from './pages/customer/CustomerPaymentMethods'
 import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { SelectLocationPage } from './pages/customer/SelectLocationPage';
 import { CustomerLogin } from './pages/customer/CustomerLogin';
+import { ResetPasswordPage } from './pages/customer/ResetPasswordPage';
 import { CustomerOffers } from './pages/customer/CustomerOffers';
 import { CustomerContact } from './pages/customer/CustomerContact';
 import { CustomerAbout } from './pages/customer/CustomerAbout';
@@ -155,6 +156,7 @@ export function App() {
           <Route path="/addresses" element={<CustomerLayoutShell><CustomerAddresses /></CustomerLayoutShell>} />
           <Route path="/payment-methods" element={<CustomerLayoutShell><CustomerPaymentMethods /></CustomerLayoutShell>} />
           <Route path="/login" element={<CustomerLogin />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

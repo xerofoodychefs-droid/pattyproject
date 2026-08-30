@@ -100,6 +100,7 @@ const CustomerPaymentMethods = React.lazy(() => import('./pages/customer/Custome
 const ProductDetailPage = React.lazy(() => import('./pages/customer/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
 const SelectLocationPage = React.lazy(() => import('./pages/customer/SelectLocationPage').then(m => ({ default: m.SelectLocationPage })));
 const CustomerLogin = React.lazy(() => import('./pages/customer/CustomerLogin').then(m => ({ default: m.CustomerLogin })));
+const ResetPasswordPage = React.lazy(() => import('./pages/customer/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const CustomerOffers = React.lazy(() => import('./pages/customer/CustomerOffers').then(m => ({ default: m.CustomerOffers })));
 const CustomerContact = React.lazy(() => import('./pages/customer/CustomerContact').then(m => ({ default: m.CustomerContact })));
 const CustomerAbout = React.lazy(() => import('./pages/customer/CustomerAbout').then(m => ({ default: m.CustomerAbout })));
@@ -399,6 +400,7 @@ export function App() {
             <Route path="/addresses" element={<CustomerLayoutShell><CustomerAddresses /></CustomerLayoutShell>} />
             <Route path="/payment-methods" element={<CustomerLayoutShell><CustomerPaymentMethods /></CustomerLayoutShell>} />
             <Route path="/login" element={<CustomerLogin />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

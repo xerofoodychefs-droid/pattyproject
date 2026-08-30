@@ -93,4 +93,29 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        v_clean = v.strip()
+        if len(v_clean) < 8:
+            raise ValueError("New password must be at least 8 characters long.")
+        return v_clean
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str
+
+
 Token.model_rebuild()

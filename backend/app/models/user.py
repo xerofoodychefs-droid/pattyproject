@@ -37,6 +37,7 @@ class User(Base):
     auth_identities = relationship("UserAuthIdentity", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
     verification_challenges = relationship("EmailVerificationChallenge", back_populates="user", cascade="all, delete-orphan")
+    password_reset_challenges = relationship("PasswordResetChallenge", back_populates="user", cascade="all, delete-orphan")
 
 class UserAuthIdentity(Base):
     __tablename__ = "user_auth_identities"
