@@ -478,7 +478,10 @@ export const CustomerCheckout: React.FC = () => {
   const delivery = getDeliveryFee();
   const loyaltyDiscount = redeemPoints > 0 ? redeemPoints / 1000 : 0;
   const effectiveDiscount = Math.min(subtotal, discountAmount + loyaltyDiscount);
-  const total = Math.max(0, subtotal - effectiveDiscount + delivery + getServiceFee());
+  const gross = Math.max(0, Math.round((subtotal - effectiveDiscount) * 100) / 100);
+  const vat = Math.round((gross * 20 / 120) * 100) / 100;
+  const net = Math.round((gross - vat) * 100) / 100;
+  const total = Math.max(0, Math.round((gross + delivery + getServiceFee()) * 100) / 100);
 
   // Initialize Square payments client singleton when in Step 2
   useEffect(() => {
@@ -1262,12 +1265,14 @@ export const CustomerCheckout: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex justify-between text-[#A1A1AA]">
-                <span>Service fee</span>
-                <span className="font-mono text-[#F5F5F5]">
-                  £{getServiceFee().toFixed(2)}
-                </span>
-              </div>
+              {getServiceFee() > 0 && (
+                <div className="flex justify-between text-[#A1A1AA]">
+                  <span>Service fee</span>
+                  <span className="font-mono text-[#F5F5F5]">
+                    £{getServiceFee().toFixed(2)}
+                  </span>
+                </div>
+              )}
 
               {discountAmount > 0 && (
                 <div className="flex justify-between text-[#22C55E]">
@@ -1283,8 +1288,21 @@ export const CustomerCheckout: React.FC = () => {
                 </div>
               )}
 
+              <div className="flex justify-between text-[#71717A] pt-1">
+                <span>Net Amount</span>
+                <span className="font-mono text-[#A1A1AA]">£{net.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-[#71717A]">
+                <span>VAT (20% Included)</span>
+                <span className="font-mono text-[#A1A1AA]">£{vat.toFixed(2)}</span>
+              </div>
+
               <div className="border-t border-[#242424] pt-3 flex justify-between items-baseline">
-                <span className="text-sm font-bold text-[#F5F5F5]">Total</span>
+                <div>
+                  <span className="text-sm font-bold text-[#F5F5F5]">Total</span>
+                  <p className="text-[10px] text-[#71717A]">VAT included in gross amount.</p>
+                </div>
                 <span className="text-xl font-black text-[#FF5A00] font-mono">
                   £{total.toFixed(2)}
                 </span>

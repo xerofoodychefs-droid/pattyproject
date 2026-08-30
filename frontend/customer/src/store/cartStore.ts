@@ -41,6 +41,7 @@ interface CartState {
   getSubtotal: () => number;
   getDeliveryFee: () => number;
   getServiceFee: () => number;
+  getNetAmount: () => number;
   getVatAmount: () => number;
   getTotal: () => number;
   isDeliverySubtotalEligible: () => boolean;
@@ -242,16 +243,25 @@ export const useCartStore = create<CartState>((set, get) => ({
   getVatAmount: () => {
     const subtotal = get().getSubtotal();
     const discount = get().discountAmount;
-    const taxableSubtotal = Math.max(0, subtotal - discount);
-    return Math.round(taxableSubtotal * 0.20 * 100) / 100;
+    const gross = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    return Math.round((gross * 20 / 120) * 100) / 100;
+  },
+
+  getNetAmount: () => {
+    const subtotal = get().getSubtotal();
+    const discount = get().discountAmount;
+    const gross = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const vat = Math.round((gross * 20 / 120) * 100) / 100;
+    return Math.round((gross - vat) * 100) / 100;
   },
 
   getTotal: () => {
     const subtotal = get().getSubtotal();
     const discount = get().discountAmount;
-    const taxableSubtotal = Math.max(0, subtotal - discount);
-    const vat = Math.round(taxableSubtotal * 0.20 * 100) / 100;
-    return Math.round((taxableSubtotal + vat) * 100) / 100;
+    const gross = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const delivery = get().getDeliveryFee();
+    const service = get().getServiceFee();
+    return Math.round((gross + delivery + service) * 100) / 100;
   },
 
   isDeliverySubtotalEligible: () => {

@@ -66,6 +66,8 @@ class OrderResponse(BaseModel):
     delivery_fee: float
     service_fee: float
     discount_amount: float
+    net_amount: Optional[float] = None
+    gross_amount: Optional[float] = None
     vat_amount: float
     total_amount: float
     payment_method: str

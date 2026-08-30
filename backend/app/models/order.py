@@ -75,6 +75,12 @@ class Order(Base):
     print_jobs = relationship("PrintJob", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan", order_by="Payment.created_at.desc()")
 
+    @property
+    def net_amount(self) -> float:
+        """Deterministic extracted net amount: (subtotal - discount) - vat_amount."""
+        gross = max(0.0, round(float(self.subtotal or 0.0) - float(self.discount_amount or 0.0), 2))
+        return round(gross - float(self.vat_amount or 0.0), 2)
+
 class OrderItem(Base):
     __tablename__ = "order_items"
 

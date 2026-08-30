@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, MapPin, CreditCard, ShoppingBag, AlertTriangle } from 'lucide-react';
+import { X, User, MapPin, CreditCard, ShoppingBag, AlertTriangle, Printer } from 'lucide-react';
 import { Order } from '../../types';
 import { api } from '../../api/client';
 
@@ -12,6 +12,7 @@ interface Props {
 export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpdateStatus }) => {
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [loading, setLoading] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   useEffect(() => {
     const orig = document.body.style.overflow;
@@ -57,13 +58,22 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
               {order.status}
             </span>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close modal"
-            className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowReceiptModal(true)}
+              className="px-2.5 py-1 bg-[#1C1C1C] hover:bg-[#252525] border border-[#333333] text-[#F5F5F5] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-[#FF5A00]" />
+              <span>Print Bill</span>
+            </button>
+            <button
+              onClick={onClose}
+              aria-label="Close modal"
+              className="p-1 text-[#A1A1AA] hover:text-[#F5F5F5] rounded-lg transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-5 pr-1">
@@ -151,15 +161,47 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
               )}
             </div>
 
-            <div className="pt-3 border-t border-[#242424] space-y-1.5 text-xs text-[#A1A1AA]">
-              <div className="flex justify-between"><span>Subtotal</span><span>£{order.subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Delivery Fee</span><span>£{order.delivery_fee.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Service Fee</span><span>£{order.service_fee.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm font-semibold text-[#F5F5F5] pt-2 border-t border-[#242424]">
-                <span>Total Amount</span>
-                <span className="text-[#FF5A00] font-bold">£{order.total_amount.toFixed(2)}</span>
-              </div>
-            </div>
+            {(() => {
+              const subtotalVal = Number(order.subtotal || 0);
+              const discountVal = Number(order.discount_amount || 0);
+              const vatVal = Number(order.vat_amount || 0);
+              const grossVal = Math.max(0, Number((subtotalVal - discountVal).toFixed(2)));
+              const netVal = Math.max(0, Number((grossVal - vatVal).toFixed(2)));
+              const totalVal = Number(order.total_amount || 0);
+
+              return (
+                <div className="pt-3 border-t border-[#242424] space-y-1.5 text-xs text-[#A1A1AA]">
+                  <div className="flex justify-between"><span>Subtotal</span><span>£{subtotalVal.toFixed(2)}</span></div>
+                  {discountVal > 0 && (
+                    <div className="flex justify-between text-[#10B981]">
+                      <span>Discount {order.coupon_code ? `(${order.coupon_code})` : ''}</span>
+                      <span>-£{discountVal.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-[#71717A]">
+                    <span>Net Amount</span>
+                    <span>£{netVal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[#71717A]">
+                    <span>VAT (20% Included)</span>
+                    <span>£{vatVal.toFixed(2)}</span>
+                  </div>
+                  {Number(order.delivery_fee) > 0 && (
+                    <div className="flex justify-between"><span>Delivery Fee</span><span>£{Number(order.delivery_fee).toFixed(2)}</span></div>
+                  )}
+                  {Number(order.service_fee) > 0 && (
+                    <div className="flex justify-between"><span>Service Fee</span><span>£{Number(order.service_fee).toFixed(2)}</span></div>
+                  )}
+                  <div className="flex justify-between text-sm font-semibold text-[#F5F5F5] pt-2 border-t border-[#242424]">
+                    <div>
+                      <span>Total Amount</span>
+                      <p className="text-[10px] font-normal text-[#71717A]">VAT included in gross • VAT NO: 525 5772 74</p>
+                    </div>
+                    <span className="text-[#FF5A00] font-bold text-base">£{totalVal.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Payment & Status Control */}
@@ -276,6 +318,113 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
         </div>
         </div>
       </div>
+
+      {/* Printable Official Receipt Modal */}
+      {showReceiptModal && (() => {
+        const subtotalVal = Number(order.subtotal || 0);
+        const discountVal = Number(order.discount_amount || 0);
+        const vatVal = Number(order.vat_amount || 0);
+        const grossVal = Math.max(0, Number((subtotalVal - discountVal).toFixed(2)));
+        const netVal = Math.max(0, Number((grossVal - vatVal).toFixed(2)));
+        const totalVal = Number(order.total_amount || 0);
+        const totalItemsCount = (order.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-black">
+            <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4 font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b border-black pb-2">
+                <div className="text-left">
+                  <h3 className="font-extrabold text-sm tracking-wider uppercase">PATTY PROJECT UK</h3>
+                  <p className="text-[10px] text-zinc-600">Order: {order.order_number}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReceiptModal(false)}
+                  className="p-1 hover:bg-zinc-200 rounded text-black cursor-pointer print:hidden"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-center font-bold tracking-widest text-sm border-b border-dashed border-zinc-400 py-1">
+                BILL
+              </div>
+
+              <div className="space-y-1.5 py-1">
+                {order.items && order.items.length > 0 ? (
+                  order.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-start">
+                      <span className="truncate max-w-[240px]">
+                        {item.quantity}  {item.product_name}
+                      </span>
+                      <span className="font-semibold shrink-0">
+                        £{Number(item.total_price || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p>1  Standard Order  £{subtotalVal.toFixed(2)}</p>
+                )}
+              </div>
+
+              <div className="border-t border-zinc-400 pt-1.5 flex justify-between font-bold">
+                <span>{totalItemsCount}  ITEM(S)</span>
+                <span>£{subtotalVal.toFixed(2)}</span>
+              </div>
+
+              {discountVal > 0 && (
+                <div className="flex justify-between text-zinc-800">
+                  <span>   Discount</span>
+                  <span>-£{discountVal.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="border-t border-zinc-400 pt-1.5 flex justify-between font-extrabold text-sm">
+                <span>   AMOUNT DUE</span>
+                <span>£{totalVal.toFixed(2)}</span>
+              </div>
+
+              <div className="border-t border-dashed border-zinc-400 pt-3 space-y-1">
+                <div className="grid grid-cols-4 font-bold text-[11px] pb-1 border-b border-zinc-300">
+                  <span>Rate</span>
+                  <span className="text-right">Net</span>
+                  <span className="text-right">Tax</span>
+                  <span className="text-right">Gross</span>
+                </div>
+                <div className="grid grid-cols-4 text-[11px]">
+                  <span>20%</span>
+                  <span className="text-right">£{netVal.toFixed(2)}</span>
+                  <span className="text-right">£{vatVal.toFixed(2)}</span>
+                  <span className="text-right">£{grossVal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 text-center text-[10px] space-y-1 border-t border-zinc-300">
+                <p className="font-semibold">Tax are included in the Gross amount!</p>
+                <p className="font-bold tracking-wider">VAT NO: 525 5772 74</p>
+              </div>
+
+              <div className="pt-3 flex gap-2 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex-1 py-2 bg-black text-white rounded font-bold hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReceiptModal(false)}
+                  className="py-2 px-4 border border-zinc-400 rounded font-semibold hover:bg-zinc-100 cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -40,10 +40,9 @@ _db_lock = threading.RLock()
 def override_get_db():
     with _db_lock:
         db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        with _db_lock:
+        try:
+            yield db
+        finally:
             db.close()
 
 

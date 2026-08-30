@@ -94,6 +94,7 @@ export const CustomerCart: React.FC = () => {
     couponCode,
     discountAmount,
     getSubtotal,
+    getNetAmount,
     getVatAmount,
     getTotal
   } = useCartStore();
@@ -166,6 +167,7 @@ export const CustomerCart: React.FC = () => {
   };
 
   const subtotal = getSubtotal();
+  const net = getNetAmount();
   const vat = getVatAmount();
   const total = getTotal();
 
@@ -541,10 +543,6 @@ export const CustomerCart: React.FC = () => {
                   <span>Subtotal</span>
                   <span className="text-[#F5F5F5] font-medium">£{subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>VAT (20%)</span>
-                  <span className="text-[#F5F5F5] font-medium">£{vat.toFixed(2)}</span>
-                </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-[#22C55E] font-medium bg-[#22C55E]/10 p-2 rounded border border-[#22C55E]/20">
@@ -555,10 +553,23 @@ export const CustomerCart: React.FC = () => {
                     <span className="font-bold">-£{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
+
+                <div className="flex justify-between text-xs text-[#71717A] pt-1">
+                  <span>Net Amount</span>
+                  <span>£{net.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between text-xs text-[#71717A]">
+                  <span>VAT (20% Included)</span>
+                  <span>£{vat.toFixed(2)}</span>
+                </div>
               </div>
 
               <div className="pt-3.5 border-t border-[#242424] flex items-center justify-between">
-                <span className="text-base font-semibold text-[#F5F5F5]">Total</span>
+                <div>
+                  <span className="text-base font-semibold text-[#F5F5F5]">Total</span>
+                  <p className="text-[10px] text-[#71717A]">VAT included in gross amount.</p>
+                </div>
                 <div className="text-right">
                   <span className="text-xl font-bold text-[#FF5A00]">£{total.toFixed(2)}</span>
                   {discountAmount > 0 && (

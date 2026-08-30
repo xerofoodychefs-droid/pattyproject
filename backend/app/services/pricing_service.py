@@ -205,10 +205,11 @@ def calculate_order_totals(
 
     has_valid_promotion = is_coupon_applied or is_reward_applied or (discount_amount > 0)
     discount_amount = min(subtotal, round(discount_amount, 2))
-    taxable_amount = max(0.0, subtotal - discount_amount)
-    vat_amount = round(taxable_amount * 0.20, 2)  # Standard 20% UK VAT
+    gross_amount = max(0.0, round(subtotal - discount_amount, 2))
+    vat_amount = round(gross_amount * 20.0 / 120.0, 2)  # Standard 20% UK VAT extracted from VAT-inclusive gross
+    net_amount = round(gross_amount - vat_amount, 2)    # Deterministic reconciliation: net_amount + vat_amount == gross_amount
 
-    total_amount = round(taxable_amount + vat_amount, 2)
+    total_amount = round(gross_amount + delivery_fee + service_fee, 2)
 
     # 4. Authoritative server-side points calculation (1p = 1 pt with campaign multipliers)
     spend_calc = calculate_eligible_spend_and_points(
@@ -229,6 +230,8 @@ def calculate_order_totals(
         "delivery_fee": delivery_fee,
         "service_fee": service_fee,
         "discount_amount": discount_amount,
+        "gross_amount": gross_amount,
+        "net_amount": net_amount,
         "vat_amount": vat_amount,
         "total_amount": total_amount,
         "points_earned": points_earned,
