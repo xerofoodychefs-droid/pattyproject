@@ -85,6 +85,7 @@ export interface OrderItem {
   unit_price: number;
   total_price: number;
   selected_modifiers?: { name: string; price?: number }[];
+  image_url?: string;
 }
 
 export interface OrderStatusHistory {

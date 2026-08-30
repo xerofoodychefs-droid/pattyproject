@@ -34,6 +34,7 @@ class OrderItemResponse(BaseModel):
     total_price: float
     selected_modifiers: Optional[List[Dict[str, Any]]] = None
     selected_choices: Optional[List[Dict[str, Any]]] = None
+    image_url: Optional[str] = None
 
     class Config:
         from_attributes = True

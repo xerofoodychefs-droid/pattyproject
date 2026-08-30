@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, ForeignKey, JSON
 from sqlalchemy.orm import relationship
@@ -87,6 +88,11 @@ class OrderItem(Base):
     selected_modifiers = Column(JSON, nullable=True)  # List of selected add-on dicts
 
     order = relationship("Order", back_populates="items")
+    product = relationship("Product", foreign_keys=[product_id], lazy="select")
+
+    @property
+    def image_url(self) -> Optional[str]:
+        return self.product.image_url if self.product else None
 
 class OrderStatusHistory(Base):
     __tablename__ = "order_status_history"

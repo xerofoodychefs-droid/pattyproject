@@ -136,6 +136,7 @@ export interface OrderItem {
   total_price: number;
   selected_modifiers?: { name: string; price?: number; group_name?: string; option_name?: string; is_choice?: boolean }[];
   selected_choices?: SelectedChoice[];
+  image_url?: string;
 }
 
 export interface OrderStatusHistory {
