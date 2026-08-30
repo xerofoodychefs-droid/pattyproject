@@ -1,7 +1,7 @@
 import time
 import threading
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import Request, HTTPException
 
 # Rate limiting rules for public contact form
