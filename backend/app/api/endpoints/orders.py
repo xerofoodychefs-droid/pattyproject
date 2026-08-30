@@ -213,14 +213,19 @@ def create_order(
                 }
             )
 
-    # Check branch stock availability
+    # Check global product out-of-stock and branch stock availability
     for item in request.items:
+        prod = db.query(Product).filter(Product.id == item.product_id).first()
+        if prod and getattr(prod, "is_out_of_stock", False):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{prod.name}' is currently out of stock."
+            )
         inv = db.query(Inventory).filter(
             Inventory.branch_id == branch_to_use.id,
             Inventory.product_id == item.product_id
         ).first()
         if inv and (not inv.is_available or inv.stock_quantity <= 0):
-            prod = db.query(Product).filter(Product.id == item.product_id).first()
             prod_name = prod.name if prod else "Item"
             raise HTTPException(
                 status_code=400,

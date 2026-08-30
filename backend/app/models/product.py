@@ -38,6 +38,7 @@ class Product(Base):
     has_service_charge = Column(Boolean, default=False)
     vat_category = Column(String(50), default="STANDARD_20")  # STANDARD_20, REDUCED_5, ZERO_0
     is_active = Column(Boolean, default=True)
+    is_out_of_stock = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     category = relationship("Category", back_populates="products")

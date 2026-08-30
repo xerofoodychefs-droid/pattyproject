@@ -8,7 +8,7 @@ from app.models.product import Category, Product, ProductModifier, Inventory, Pr
 from app.models.branch import Branch
 from app.schemas.product import (
     CategoryResponse, CategoryCreateRequest, CategoryReorderRequest,
-    ProductResponse, ProductCreateRequest, ProductUpdateRequest,
+    ProductResponse, ProductCreateRequest, ProductUpdateRequest, ProductAvailabilityUpdateRequest,
     InventoryResponse, InventoryUpdateRequest, InventoryToggleRequest
 )
 from app.api.endpoints.auth import require_role
@@ -130,7 +130,11 @@ def list_products(
     res = []
     for p in prods:
         inv = inv_map.get(p.id)
-        if inv is not None:
+        is_out_of_stock = bool(getattr(p, 'is_out_of_stock', False))
+        if is_out_of_stock:
+            is_avail = False
+            stock_qty = 0
+        elif inv is not None:
             is_avail = bool(inv.is_available) and (inv.stock_quantity is None or inv.stock_quantity > 0)
             stock_qty = inv.stock_quantity if inv.stock_quantity is not None else 100
         else:
@@ -157,6 +161,7 @@ def list_products(
             "vat_category": p.vat_category,
             "is_active": p.is_active,
             "is_available": is_avail,
+            "is_out_of_stock": is_out_of_stock,
             "stock_quantity": stock_qty,
             "modifiers": p.modifiers or [],
             "choice_groups": p.choice_groups or []
@@ -178,13 +183,18 @@ def get_product_details(
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    is_avail = bool(getattr(prod, 'is_available', True)) and bool(prod.is_active)
-    stock_qty = 100
-    if branch_id and branch_id != "ALL":
-        inv = db.query(Inventory).filter(Inventory.branch_id == branch_id, Inventory.product_id == product_id).first()
-        if inv:
-            is_avail = bool(inv.is_available) and (inv.stock_quantity is None or inv.stock_quantity > 0)
-            stock_qty = inv.stock_quantity if inv.stock_quantity is not None else 100
+    is_out_of_stock = bool(getattr(prod, 'is_out_of_stock', False))
+    if is_out_of_stock:
+        is_avail = False
+        stock_qty = 0
+    else:
+        is_avail = bool(getattr(prod, 'is_available', True)) and bool(prod.is_active)
+        stock_qty = 100
+        if branch_id and branch_id != "ALL":
+            inv = db.query(Inventory).filter(Inventory.branch_id == branch_id, Inventory.product_id == product_id).first()
+            if inv:
+                is_avail = bool(inv.is_available) and (inv.stock_quantity is None or inv.stock_quantity > 0)
+                stock_qty = inv.stock_quantity if inv.stock_quantity is not None else 100
 
     p_dict = {
         "id": prod.id,
@@ -207,6 +217,7 @@ def get_product_details(
         "vat_category": prod.vat_category,
         "is_active": prod.is_active,
         "is_available": is_avail,
+        "is_out_of_stock": is_out_of_stock,
         "stock_quantity": stock_qty,
         "modifiers": prod.modifiers or [],
         "choice_groups": prod.choice_groups or []
@@ -240,7 +251,8 @@ def create_product(
         is_bestseller=request.is_bestseller,
         has_tax=request.has_tax,
         has_service_charge=request.has_service_charge,
-        is_active=True
+        is_active=True,
+        is_out_of_stock=bool(request.is_out_of_stock)
     )
     db.add(prod)
     db.flush()
@@ -334,6 +346,8 @@ def update_product(
         prod.has_service_charge = request.has_service_charge
     if request.is_active is not None:
         prod.is_active = request.is_active
+    if request.is_out_of_stock is not None:
+        prod.is_out_of_stock = request.is_out_of_stock
 
     if request.modifiers is not None:
         db.query(ProductModifier).filter(ProductModifier.product_id == prod.id).delete()
@@ -381,6 +395,53 @@ def update_product(
         selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
     ).filter(Product.id == prod.id).first()
     return prod
+
+@router.patch("/admin/products/{product_id}/availability", response_model=ProductResponse)
+@router.patch("/products/{product_id}/availability", response_model=ProductResponse)
+def update_product_availability(
+    product_id: str,
+    request: ProductAvailabilityUpdateRequest,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Super Admin manually toggle product In Stock (False) / Out of Stock (True)."""
+    prod = db.query(Product).options(
+        selectinload(Product.modifiers),
+        selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
+    ).filter(Product.id == product_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    prod.is_out_of_stock = request.is_out_of_stock
+    db.commit()
+    db.refresh(prod)
+
+    return ProductResponse(
+        id=prod.id,
+        category_id=prod.category_id,
+        name=prod.name,
+        sku=prod.sku,
+        short_description=prod.short_description,
+        full_description=prod.full_description,
+        allergens=prod.allergens,
+        ingredients=prod.ingredients,
+        image_url=prod.image_url,
+        images=prod.images or ([prod.image_url] if prod.image_url else []),
+        base_price=prod.base_price,
+        compare_at_price=prod.compare_at_price,
+        rating=prod.rating,
+        reviews_count=prod.reviews_count,
+        is_bestseller=prod.is_bestseller,
+        has_tax=prod.has_tax,
+        has_service_charge=prod.has_service_charge,
+        vat_category=prod.vat_category,
+        is_active=prod.is_active,
+        is_available=not prod.is_out_of_stock,
+        is_out_of_stock=prod.is_out_of_stock,
+        stock_quantity=0 if prod.is_out_of_stock else 100,
+        modifiers=prod.modifiers or [],
+        choice_groups=prod.choice_groups or []
+    )
 
 @router.delete("/products/{product_id}")
 def delete_product(

@@ -104,6 +104,7 @@ export interface Product {
   vat_category: string;
   is_active: boolean;
   is_available?: boolean;
+  is_out_of_stock?: boolean;
   modifiers: ProductModifier[];
   choice_groups?: ProductChoiceGroup[];
   stock_quantity?: number;

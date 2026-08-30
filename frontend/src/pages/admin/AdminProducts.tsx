@@ -30,6 +30,7 @@ export const AdminProducts: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInitialData();
@@ -95,51 +96,29 @@ export const AdminProducts: React.FC = () => {
     }
   };
 
-  const handleToggleStock = async (productId: string) => {
-    if (!selectedBranchId) return;
-    const currentInv = inventoryMap[productId];
-    const currentStatus = currentInv ? currentInv.is_available : true;
-    const newStatus = !currentStatus;
-
-    try {
-      const updated = await api.post<InventoryItem>('/inventory/toggle', {
-        branch_id: selectedBranchId,
-        product_id: productId,
-        is_available: newStatus
-      });
-      setInventoryMap((prev) => ({
-        ...prev,
-        [productId]: updated
-      }));
-    } catch (err) {
-      console.error('Failed to toggle stock availability:', err);
-      alert('Failed to update stock status. Please try again.');
-    }
-  };
-
-  const handleUpdateStockQuantity = async (productId: string, currentStock: number) => {
-    if (!selectedBranchId) return;
-    const newQtyStr = window.prompt(`Enter new stock quantity for this branch:`, String(currentStock));
-    if (newQtyStr === null) return;
-    const newQty = parseInt(newQtyStr, 10);
-    if (isNaN(newQty) || newQty < 0) {
-      alert('Please enter a valid non-negative number.');
+  const handleToggleProductOutOfStock = async (product: Product) => {
+    if (user?.role !== 'SUPER_ADMIN') {
+      alert('Only Super Administrators have permission to manage product out of stock status.');
       return;
     }
-
+    const newOutOfStock = !product.is_out_of_stock;
+    setTogglingId(product.id);
     try {
-      const updated = await api.post<InventoryItem>('/inventory/toggle', {
-        branch_id: selectedBranchId,
-        product_id: productId,
-        stock_quantity: newQty
+      const updatedProduct = await api.patch<Product>(`/admin/products/${product.id}/availability`, {
+        is_out_of_stock: newOutOfStock
       });
-      setInventoryMap((prev) => ({
-        ...prev,
-        [productId]: updated
-      }));
-    } catch (err) {
-      console.error('Failed to update stock quantity:', err);
-      alert('Failed to update stock quantity. Please try again.');
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id
+            ? { ...p, is_out_of_stock: updatedProduct.is_out_of_stock, is_available: updatedProduct.is_available }
+            : p
+        )
+      );
+    } catch (err: any) {
+      console.error('Failed to update product availability:', err);
+      alert(err?.response?.data?.detail || err?.message || 'Failed to update stock status. Please try again.');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -159,11 +138,20 @@ export const AdminProducts: React.FC = () => {
     }
   };
 
-  const filteredProducts = products.filter(
-    (p) =>
-      (selectedCategory === 'ALL' || p.category_id === selectedCategory) &&
-      (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredProducts = products.filter((p) => {
+    const matchesCategory =
+      selectedCategory === 'ALL'
+        ? true
+        : selectedCategory === 'OUT_OF_STOCK'
+        ? Boolean(p.is_out_of_stock)
+        : p.category_id === selectedCategory;
+
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.sku.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full max-w-[1680px] mx-auto space-y-6">
@@ -224,6 +212,7 @@ export const AdminProducts: React.FC = () => {
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
+            <option value="OUT_OF_STOCK">Out of Stock</option>
           </select>
 
           {/* Branch Stock Selector (Branch Admin only) */}
@@ -265,20 +254,23 @@ export const AdminProducts: React.FC = () => {
                 </>
               )}
               {user?.role === 'SUPER_ADMIN' && (
-                <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap">Actions</th>
+                <>
+                  <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap">Out of Stock</th>
+                  <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap">Actions</th>
+                </>
               )}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#262626]">
             {loading ? (
               <tr>
-                <td colSpan={user?.role === 'BRANCH_ADMIN' ? 6 : 5} className="px-6 py-8 text-center text-[#9CA3AF]">
+                <td colSpan={6} className="px-6 py-8 text-center text-[#9CA3AF]">
                   Loading products...
                 </td>
               </tr>
             ) : filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan={user?.role === 'BRANCH_ADMIN' ? 6 : 5} className="px-6 py-8 text-center text-[#9CA3AF]">
+                <td colSpan={6} className="px-6 py-8 text-center text-[#9CA3AF]">
                   No products found.
                 </td>
               </tr>
@@ -321,22 +313,14 @@ export const AdminProducts: React.FC = () => {
                     {user?.role === 'BRANCH_ADMIN' && (
                       <>
                         <td className="px-4 sm:px-5 py-3.5 text-right font-semibold whitespace-nowrap">
-                          <button
-                            onClick={() => handleUpdateStockQuantity(p.id, stockQty)}
-                            title="Click to update stock quantity"
-                            className="text-white hover:text-[#FF5500] transition-colors cursor-pointer underline decoration-dotted font-mono"
-                          >
-                            {stockQty}
-                          </button>
+                          <span className="font-mono text-white">{stockQty}</span>
                         </td>
                         <td className="px-4 sm:px-5 py-3.5 text-center whitespace-nowrap">
-                          <button
-                            onClick={() => handleToggleStock(p.id)}
-                            title={isAvailable ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1.5 ${
                               isAvailable
-                                ? 'bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 hover:bg-[#22C55E]/20'
-                                : 'bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/30 hover:bg-[#EF4444]/20'
+                                ? 'bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30'
+                                : 'bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/30'
                             }`}
                           >
                             {isAvailable ? (
@@ -350,9 +334,38 @@ export const AdminProducts: React.FC = () => {
                                 <span>Out of Stock</span>
                               </>
                             )}
-                          </button>
+                          </span>
                         </td>
                       </>
+                    )}
+
+                    {/* Out of Stock Toggle Column: ONLY SUPER ADMIN */}
+                    {user?.role === 'SUPER_ADMIN' && (
+                      <td className="px-4 sm:px-5 py-3.5 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleProductOutOfStock(p)}
+                          disabled={togglingId === p.id}
+                          title={p.is_out_of_stock ? 'Click to mark as Available' : 'Click to mark as Out of Stock'}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer inline-flex items-center gap-1.5 border select-none ${
+                            p.is_out_of_stock
+                              ? 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40 hover:bg-[#EF4444]/25'
+                              : 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/30 hover:bg-[#22C55E]/20'
+                          } ${togglingId === p.id ? 'opacity-50 cursor-wait' : ''}`}
+                        >
+                          {p.is_out_of_stock ? (
+                            <>
+                              <XCircle className="w-3 h-3 text-[#EF4444]" />
+                              <span>Out of Stock</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3 h-3 text-[#22C55E]" />
+                              <span>Available</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
                     )}
 
                     {/* Actions Column: SUPER ADMIN */}

@@ -78,6 +78,7 @@ class ProductResponse(BaseModel):
     vat_category: str
     is_active: bool
     is_available: bool = True
+    is_out_of_stock: bool = False
     stock_quantity: int = 100
     modifiers: List[ProductModifierResponse] = []
     choice_groups: List[ProductChoiceGroupResponse] = []
@@ -101,6 +102,7 @@ class ProductCreateRequest(BaseModel):
     is_bestseller: bool = False
     has_tax: bool = True
     has_service_charge: bool = False
+    is_out_of_stock: Optional[bool] = False
     stock_quantity: int = 100
     modifiers: List[dict] = []
     choice_groups: Optional[List[dict]] = None
@@ -122,8 +124,12 @@ class ProductUpdateRequest(BaseModel):
     has_tax: Optional[bool] = None
     has_service_charge: Optional[bool] = None
     is_active: Optional[bool] = None
+    is_out_of_stock: Optional[bool] = None
     modifiers: Optional[List[dict]] = None
     choice_groups: Optional[List[dict]] = None
+
+class ProductAvailabilityUpdateRequest(BaseModel):
+    is_out_of_stock: bool
 
 class InventoryResponse(BaseModel):
     id: str
