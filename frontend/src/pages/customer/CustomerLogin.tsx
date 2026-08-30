@@ -307,6 +307,13 @@ export const CustomerLogin: React.FC = () => {
     }, 1000);
   };
 
+  const maskEmail = (str: string) => {
+    if (!str || !str.includes('@')) return str;
+    const [userPart, domainPart] = str.split('@');
+    if (userPart.length <= 2) return `${userPart.charAt(0)}***@${domainPart}`;
+    return `${userPart.charAt(0)}***${userPart.charAt(userPart.length - 1)}@${domainPart}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#070707] text-white flex flex-col justify-between relative overflow-x-hidden">
       {/* Desktop Right Side Hero Burger Container */}
@@ -352,16 +359,18 @@ export const CustomerLogin: React.FC = () => {
               </div>
             )}
 
-            {/* OTP VERIFICATION MODE */}
+            {/* VERIFY EMAIL OTP MODE */}
             {mode === 'verify' && (
               <div>
-                <div>
-                  <div className="w-12 h-12 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center mx-auto mb-3">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FF5500]/10 border border-[#FF5500]/30 mx-auto flex items-center justify-center mb-3.5">
                     <KeyRound className="w-6 h-6 text-[#FF5500]" />
                   </div>
                   <h1 className="text-2xl font-extrabold text-white tracking-tight text-center">Verify Your Email</h1>
                   <p className="text-xs text-[#9CA3AF] text-center mt-2 leading-relaxed">
-                    We sent a 6-digit verification code to <span className="text-white font-semibold">{pendingVerificationEmail || email}</span>. Enter the code below to activate your account.
+                    We sent a 6-digit verification code to{' '}
+                    <span className="text-white font-semibold">{maskEmail(pendingVerificationEmail || email)}</span>.
+                    Enter the code below to activate your account.
                   </p>
                 </div>
 
@@ -399,7 +408,7 @@ export const CustomerLogin: React.FC = () => {
                         <span>VERIFYING CODE...</span>
                       </>
                     ) : (
-                      <span>VERIFY & ACTIVATE</span>
+                      <span>VERIFY EMAIL</span>
                     )}
                   </button>
                 </form>

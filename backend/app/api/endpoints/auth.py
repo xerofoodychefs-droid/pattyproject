@@ -156,33 +156,38 @@ def login(request: LoginRequest, http_req: Request, db: Session = Depends(get_db
 
 
 @router.post("/register", response_model=RegistrationResponse)
+@router.post("/register/request-otp", response_model=RegistrationResponse)
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
     email_clean = request.email.strip().lower()
-    existing = db.query(User).filter(User.email == email_clean).first()
-    if existing:
-        if existing.email_verified:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        # If existing unverified account, update details and issue fresh OTP challenge
-        existing.full_name = request.full_name.strip()
-        existing.password_hash = get_password_hash(request.password)
-        if request.phone:
-            existing.phone = request.phone.strip()
-        user = existing
-    else:
-        user, loyalty_acc = create_customer_with_loyalty(
-            db=db,
-            email=email_clean,
-            full_name=request.full_name,
-            password_hash=get_password_hash(request.password),
-            phone=request.phone,
-            welcome_points=100,
-            email_verified=False
-        )
 
-    challenge, otp = create_verification_challenge(db=db, user_id=user.id, email=email_clean)
+    # 1. Validate registration fields
+    if not request.full_name or not request.full_name.strip():
+        raise HTTPException(status_code=400, detail="Full name is required")
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(status_code=400, detail="Valid email is required")
+    if not request.password or len(request.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+
+    # 2. Check if a VERIFIED account already exists
+    existing = db.query(User).filter(User.email == email_clean).first()
+    if existing and existing.email_verified:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # 3. Securely hash password
+    pwd_hash = get_password_hash(request.password)
+
+    # 4. Create verification challenge WITHOUT creating permanent user in database
+    challenge, otp = create_verification_challenge(
+        db=db,
+        email=email_clean,
+        user_id=existing.id if existing else None,
+        full_name=request.full_name.strip(),
+        password_hash=pwd_hash,
+        phone=request.phone.strip() if request.phone else None
+    )
     db.commit()
 
-    # Dispatch verification code via Resend
+    # 5. Dispatch verification code via Resend
     send_verification_otp_email(to_email=email_clean, otp=otp)
 
     return RegistrationResponse(
@@ -193,6 +198,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/verify-email", response_model=Token)
+@router.post("/register/verify-otp", response_model=Token)
 def verify_email(request: VerifyEmailRequest, http_req: Request, db: Session = Depends(get_db)):
     email_clean = request.email.strip().lower()
     now = datetime.now(timezone.utc)
@@ -255,16 +261,43 @@ def verify_email(request: VerifyEmailRequest, http_req: Request, db: Session = D
     for ch in active_challenges:
         ch.used_at = now
 
-    user = db.query(User).filter(User.id == challenge.user_id).first()
+    # Check if user already exists in DB
+    user = None
+    if challenge.user_id:
+        user = db.query(User).filter(User.id == challenge.user_id).first()
     if not user:
         user = db.query(User).filter(User.email == email_clean).first()
 
-    if not user:
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+    if user:
+        # Existing unverified user being verified
+        user.email_verified = True
+        user.is_active = True
+        if challenge.full_name:
+            user.full_name = challenge.full_name
+        if challenge.password_hash:
+            user.password_hash = challenge.password_hash
+        if challenge.phone:
+            user.phone = challenge.phone
+        if not user.loyalty_account:
+            loyalty_acc = LoyaltyAccount(
+                user_id=user.id,
+                available_points=100,
+                lifetime_points=100
+            )
+            db.add(loyalty_acc)
+    else:
+        # BRAND NEW REGISTRATION: Create permanent CUSTOMER and 100 Welcome Points ONLY NOW
+        user, loyalty_acc = create_customer_with_loyalty(
+            db=db,
+            email=email_clean,
+            full_name=challenge.full_name or "Customer",
+            password_hash=challenge.password_hash,
+            phone=challenge.phone,
+            welcome_points=100,
+            email_verified=True
+        )
+        challenge.user_id = user.id
 
-    user.email_verified = True
-    user.is_active = True
     db.commit()
     db.refresh(user)
 
@@ -284,15 +317,28 @@ def resend_verification(request: ResendVerificationRequest, db: Session = Depend
             detail=f"Please wait {cooldown} seconds before requesting a new verification code."
         )
 
+    # Check if existing verified account
     user = db.query(User).filter(User.email == email_clean).first()
-    if not user:
+    if user and user.email_verified:
+        return {"message": "This account is already verified. Please sign in."}
+
+    # Find previous pending challenge data if any
+    latest_challenge = db.query(EmailVerificationChallenge).filter(
+        EmailVerificationChallenge.email == email_clean
+    ).order_by(EmailVerificationChallenge.created_at.desc()).first()
+
+    if not user and not latest_challenge:
         # Safe response to prevent account enumeration
         return {"message": "If an unverified account exists for this email, a verification code has been sent."}
 
-    if user.email_verified:
-        return {"message": "This account is already verified. Please sign in."}
-
-    challenge, otp = create_verification_challenge(db=db, user_id=user.id, email=email_clean)
+    challenge, otp = create_verification_challenge(
+        db=db,
+        email=email_clean,
+        user_id=user.id if user else None,
+        full_name=latest_challenge.full_name if latest_challenge else (user.full_name if user else None),
+        password_hash=latest_challenge.password_hash if latest_challenge else (user.password_hash if user else None),
+        phone=latest_challenge.phone if latest_challenge else (user.phone if user else None)
+    )
     db.commit()
 
     send_verification_otp_email(to_email=email_clean, otp=otp)

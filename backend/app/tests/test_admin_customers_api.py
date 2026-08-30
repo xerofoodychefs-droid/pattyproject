@@ -137,10 +137,10 @@ def test_search_customers_by_name_or_email():
 
 
 def test_newly_registered_customer_automatically_appears():
-    """When a new customer registers, they immediately appear in the admin customers list."""
+    """When a new customer registers, they appear in admin customers ONLY AFTER OTP verification."""
     admin_token = create_access_token(subject="user-superadmin-001", roles=[UserRole.SUPER_ADMIN])
 
-    # New customer registers
+    # 1. New customer requests registration
     reg_resp = client.post("/api/v1/auth/register", json={
         "email": "new.shopper@example.com",
         "full_name": "New Shopper",
@@ -149,12 +149,37 @@ def test_newly_registered_customer_automatically_appears():
     })
     assert reg_resp.status_code == 200
 
-    # Admin fetches customer list
-    list_resp = client.get("/api/v1/customers", headers={"Authorization": f"Bearer {admin_token}"})
-    assert list_resp.status_code == 200
-    data = list_resp.json()
+    # 2. Before OTP verification: customer MUST NOT appear in Admin Customers list
+    list_resp_before = client.get("/api/v1/customers", headers={"Authorization": f"Bearer {admin_token}"})
+    assert list_resp_before.status_code == 200
+    data_before = list_resp_before.json()
+    assert not any(c["email"] == "new.shopper@example.com" for c in data_before)
+
+    # 3. Simulate OTP verification
+    from app.services.otp_service import hash_otp
+    otp_test = "654321"
+    db = TestingSessionLocal()
+    try:
+        from app.models.verification import EmailVerificationChallenge
+        ch = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.email == "new.shopper@example.com").first()
+        assert ch is not None
+        ch.otp_hash = hash_otp(email="new.shopper@example.com", otp=otp_test, salt=ch.salt)
+        db.commit()
+    finally:
+        db.close()
+
+    verify_resp = client.post("/api/v1/auth/verify-email", json={
+        "email": "new.shopper@example.com",
+        "otp": otp_test
+    })
+    assert verify_resp.status_code == 200
+
+    # 4. After OTP verification: customer MUST appear in Admin Customers list
+    list_resp_after = client.get("/api/v1/customers", headers={"Authorization": f"Bearer {admin_token}"})
+    assert list_resp_after.status_code == 200
+    data_after = list_resp_after.json()
     
-    new_cust = next((c for c in data if c["email"] == "new.shopper@example.com"), None)
+    new_cust = next((c for c in data_after if c["email"] == "new.shopper@example.com"), None)
     assert new_cust is not None
     assert new_cust["name"] == "New Shopper"
     assert new_cust["points"] == 100  # Welcome points

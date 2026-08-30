@@ -33,19 +33,13 @@ def test_customer_registration_and_loyalty_account():
     # Verify database state & extract challenge OTP
     db = TestingSessionLocal()
     try:
+        # User and loyalty account must NOT be created yet prior to OTP verification
         user_in_db = db.query(User).filter(User.email == "alice.wonderland@example.com").first()
-        assert user_in_db is not None
-        assert user_in_db.full_name == "Alice Wonderland"
-        assert user_in_db.email_verified is False
+        assert user_in_db is None
 
-        # Verify loyalty account creation
-        loyalty_acc = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_in_db.id).first()
-        assert loyalty_acc is not None
-        assert loyalty_acc.available_points == 100
-        assert loyalty_acc.lifetime_points == 100
-
-        challenge = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.user_id == user_in_db.id).first()
+        challenge = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.email == "alice.wonderland@example.com").first()
         assert challenge is not None
+        assert challenge.full_name == "Alice Wonderland"
     finally:
         db.close()
 
@@ -55,7 +49,7 @@ def test_customer_registration_and_loyalty_account():
     otp_test = "123456"
     db = TestingSessionLocal()
     try:
-        ch = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.user_id == user_in_db.id).first()
+        ch = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.email == "alice.wonderland@example.com").first()
         ch.otp_hash = hash_otp(email="alice.wonderland@example.com", otp=otp_test, salt=ch.salt)
         db.commit()
     finally:
@@ -63,6 +57,22 @@ def test_customer_registration_and_loyalty_account():
 
     verify_resp = client.post("/api/v1/auth/verify-email", json={"email": "alice.wonderland@example.com", "otp": otp_test})
     assert verify_resp.status_code == 200
+
+    # Verify user and loyalty account are now created
+    db = TestingSessionLocal()
+    try:
+        user_in_db = db.query(User).filter(User.email == "alice.wonderland@example.com").first()
+        assert user_in_db is not None
+        assert user_in_db.full_name == "Alice Wonderland"
+        assert user_in_db.email_verified is True
+        assert user_in_db.role == UserRole.CUSTOMER
+
+        loyalty_acc = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user_in_db.id).first()
+        assert loyalty_acc is not None
+        assert loyalty_acc.available_points == 100
+        assert loyalty_acc.lifetime_points == 100
+    finally:
+        db.close()
     verify_data = verify_resp.json()
     assert "access_token" in verify_data
     assert verify_data["token_type"] == "bearer"

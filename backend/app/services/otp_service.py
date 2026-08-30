@@ -47,18 +47,21 @@ def verify_otp_hash(email: str, otp: str, salt: str, stored_hash: str) -> bool:
 
 def create_verification_challenge(
     db: Session,
-    user_id: str,
-    email: str
+    email: str,
+    user_id: Optional[str] = None,
+    full_name: Optional[str] = None,
+    password_hash: Optional[str] = None,
+    phone: Optional[str] = None
 ) -> Tuple[EmailVerificationChallenge, str]:
     """
-    Invalidates any previous active challenges for this email/user,
+    Invalidates any previous active challenges for this email,
     generates a secure 6-digit OTP, stores the hashed challenge,
     and returns the challenge model and the plaintext OTP (for immediate email dispatch only).
     """
     email_clean = email.strip().lower()
     now = datetime.now(timezone.utc)
 
-    # Invalidate previous unexpired/unused challenges for this user/email
+    # Invalidate previous unexpired/unused challenges for this email
     active_challenges = db.query(EmailVerificationChallenge).filter(
         EmailVerificationChallenge.email == email_clean,
         EmailVerificationChallenge.used_at == None
@@ -74,6 +77,9 @@ def create_verification_challenge(
     challenge = EmailVerificationChallenge(
         user_id=user_id,
         email=email_clean,
+        full_name=full_name.strip() if full_name else None,
+        password_hash=password_hash,
+        phone=phone.strip() if phone else None,
         otp_hash=otp_hashed,
         salt=salt,
         expires_at=expires_at,

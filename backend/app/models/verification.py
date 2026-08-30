@@ -9,8 +9,11 @@ class EmailVerificationChallenge(Base):
     __tablename__ = "email_verification_challenges"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     email = Column(String(255), nullable=False, index=True)
+    full_name = Column(String(255), nullable=True)
+    password_hash = Column(String(255), nullable=True)
+    phone = Column(String(50), nullable=True)
     otp_hash = Column(String(255), nullable=False)
     salt = Column(String(64), nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
