@@ -186,11 +186,18 @@ def verify_google_id_token(id_token: str, expected_nonce: str) -> Dict[str, Any]
 def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) -> User:
     """
     Resolves or creates the Patty Customer based on verified Google token claims:
-    - Step 1: Resolves existing UserAuthIdentity if found.
-    - Step 2: If no Google identity exists, checks for email collision with local accounts.
-              Strictly refuses automatic account takeover and raises generic 401 failure.
-    - Step 3: Atomically creates User + LoyaltyAccount (100 welcome points) + UserAuthIdentity.
-              Handles multi-thread concurrency race conditions cleanly without duplicate data.
+    - Step 1: Query canonical Google identity by stable `sub`. If found, authenticate that existing customer.
+    - Step 2: If no Google identity found by `sub`, search for an existing customer by verified Google email.
+              If found:
+                a) Verify that the existing customer is active.
+                b) Check if the existing customer is already linked to a DIFFERENT Google `sub`.
+                   If so, reject with a safe 409 Conflict error.
+                c) Safely link the Google `sub` to the existing customer account.
+                d) Preserve existing password_hash, loyalty account, points, orders, and profile data.
+                e) Set email_verified=True if not already set.
+                f) Commit and return the existing customer.
+    - Step 3: If no existing customer by email, atomically create User + LoyaltyAccount + UserAuthIdentity.
+              Handles multi-thread concurrency race conditions cleanly via database uniqueness constraints and deterministic rollback-requery.
     """
     sub = str(google_payload.get("sub", "")).strip()
     email = str(google_payload.get("email", "")).strip().lower()
@@ -199,7 +206,7 @@ def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) ->
     if not sub or not email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
 
-    # Step 1: Query canonical Google identity
+    # Step 1: Query canonical Google identity by stable `sub`
     existing_identity = find_identity(db, AuthProvider.GOOGLE, sub)
     if existing_identity:
         user = db.query(User).filter(User.id == existing_identity.user_id).first()
@@ -207,13 +214,51 @@ def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) ->
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
         return user
 
-    # Step 2: Check email collision with existing local password account
+    # Step 2: Search for existing customer by verified Google email (Account Linking)
     existing_user_by_email = db.query(User).filter(User.email == email).first()
     if existing_user_by_email:
-        # Anti-takeover rule: do NOT merge or overwrite
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
+        if not existing_user_by_email.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
 
-    # Step 3: Atomic creation of Customer + Loyalty + Google Identity
+        # Check if this existing customer already has a Google identity linked
+        existing_google_identities = [
+            ident for ident in existing_user_by_email.auth_identities
+            if ident.provider == AuthProvider.GOOGLE
+        ]
+        if existing_google_identities:
+            # If already linked to THIS sub, return the user
+            if any(ident.provider_subject == sub for ident in existing_google_identities):
+                return existing_user_by_email
+
+            # Different Google sub already linked to this profile - reject to prevent account conflict
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A different Google account is already linked to this profile. Please log in with your original credentials."
+            )
+
+        # Safely link Google identity to existing customer
+        try:
+            create_identity_for_user(
+                db=db,
+                user_id=existing_user_by_email.id,
+                provider=AuthProvider.GOOGLE,
+                provider_subject=sub
+            )
+            if not existing_user_by_email.email_verified:
+                existing_user_by_email.email_verified = True
+            db.commit()
+            db.refresh(existing_user_by_email)
+            return existing_user_by_email
+        except (IntegrityError, IdentityConflictError):
+            db.rollback()
+            # Concurrency race condition: winning thread already linked the identity
+            winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
+            if winning_identity and winning_identity.user_id == existing_user_by_email.id:
+                return existing_user_by_email
+
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
+
+    # Step 3: Atomic creation of brand new Customer + Loyalty + Google Identity
     try:
         user, loyalty = create_customer_with_loyalty(
             db=db,
@@ -234,13 +279,35 @@ def authenticate_google_customer(db: Session, google_payload: Dict[str, Any]) ->
         return user
     except (IntegrityError, IdentityConflictError):
         db.rollback()
-        # Concurrent race condition: Winning thread is persisting or already persisted the identity
-        for _ in range(10):
-            time.sleep(0.05)
+        # Concurrency race condition: Another thread created user or identity
+        # Deterministically check by identity first
+        winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
+        if winning_identity:
+            winning_user = db.query(User).filter(User.id == winning_identity.user_id).first()
+            if winning_user and winning_user.is_active:
+                return winning_user
+
+        # Deterministically check by email
+        winning_user_by_email = db.query(User).filter(User.email == email).first()
+        if winning_user_by_email and winning_user_by_email.is_active:
             winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
-            if winning_identity:
-                winning_user = db.query(User).filter(User.id == winning_identity.user_id).first()
-                if winning_user and winning_user.is_active:
-                    return winning_user
+            if winning_identity and winning_identity.user_id == winning_user_by_email.id:
+                return winning_user_by_email
+
+            try:
+                create_identity_for_user(
+                    db=db,
+                    user_id=winning_user_by_email.id,
+                    provider=AuthProvider.GOOGLE,
+                    provider_subject=sub
+                )
+                db.commit()
+                db.refresh(winning_user_by_email)
+                return winning_user_by_email
+            except (IntegrityError, IdentityConflictError):
+                db.rollback()
+                winning_identity = find_identity(db, AuthProvider.GOOGLE, sub)
+                if winning_identity and winning_identity.user_id == winning_user_by_email.id:
+                    return winning_user_by_email
 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_AUTH_ERROR_DETAIL)
