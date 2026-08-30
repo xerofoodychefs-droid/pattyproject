@@ -272,19 +272,28 @@ const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = 
             id="apple-pay-button"
             onClick={() => onApplePayPayment(applePayRef.current)}
             disabled={loading || paymentLoading}
-            className="w-full h-11 bg-black hover:bg-[#1A1A1A] border border-[#333333] rounded-lg text-white font-medium flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
+            className="w-full h-11 sm:h-12 bg-black hover:bg-[#111111] active:bg-[#1A1A1A] border border-[#333333] hover:border-[#444444] rounded-lg sm:rounded-xl text-white font-medium flex items-center justify-center cursor-pointer shadow-sm hover:shadow-md transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
             aria-label="Pay with Apple Pay"
           >
             {activePaymentMethod === 'APPLE_PAY' && paymentLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              <>
-                <svg className="h-5 w-auto fill-current" viewBox="0 0 170 85" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M150.37 39.26c-.08-11.66 9.53-17.27 9.97-17.55-5.43-7.94-13.88-9.03-16.89-9.15-7.19-.73-14.04 4.24-17.69 4.24-3.65 0-9.29-4.14-15.29-4.03-7.88.12-15.15 4.58-19.2 11.62-8.18 14.19-2.09 35.19 5.86 46.68 3.89 5.62 8.53 11.93 14.62 11.7 5.86-.23 8.08-3.79 15.17-3.79 7.09 0 9.08 3.79 15.25 3.67 6.28-.12 10.26-5.69 14.12-11.34 4.47-6.53 6.31-12.85 6.42-13.18-.14-.06-12.25-4.7-12.34-18.49zM138.83 17.5c3.24-3.93 5.43-9.39 4.83-14.86-4.68.19-10.35 3.12-13.7 7.05-2.93 3.4-5.5 8.94-4.81 14.28 5.23.41 10.45-2.54 13.68-6.47z" />
-                  <path d="M30.43 14.47h8.86v56.88h-8.86V14.47zM64.67 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82zM102.32 36.33h8.55v35.02h-8.55v-4.88c-2.48 3.58-6.84 5.65-11.75 5.65-8.86 0-16.14-7.23-16.14-18.06 0-10.88 7.28-18.11 16.14-18.11 4.91 0 9.27 2.07 11.75 5.65v-5.27zm-11.54 27.59c5.33 0 9.94-4.24 9.94-10.82 0-6.53-4.61-10.82-9.94-10.82-5.38 0-9.94 4.29-9.94 10.82 0 6.58 4.56 10.82 9.94 10.82z" />
-                </svg>
-                <span className="text-xs font-semibold">Pay</span>
-              </>
+              <svg
+                className="h-6 w-auto fill-current"
+                viewBox="0 0 60 25"
+                xmlns="http://www.w3.org/2000/svg"
+                role="img"
+                aria-label="Apple Pay"
+              >
+                {/* Apple Glyph */}
+                <path d="M14.5 11.4c-.01-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-2.9-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.7-.4 6.7 1.1 8.9.7 1.1 1.6 2.3 2.8 2.2 1.1 0 1.5-.7 2.9-.7 1.3 0 1.7.7 2.9.7 1.2 0 2-.1 2.7-2.2.8-1.2 1.2-2.5 1.2-2.5 0 0-2.3-.9-2.3-3.5zm-2.2-4.1c.6-.7 1-1.8.9-2.8-.9 0-2 .6-2.6 1.3-.5.6-1 1.7-.9 2.7 1 .1 2-.5 2.6-1.2z" />
+                {/* P */}
+                <path d="M22.7 7.4h4.1c2.7 0 4.4 1.5 4.4 3.9 0 2.4-1.7 4-4.4 4h-2.1v4.3h-2V7.4zm4 6.2c1.6 0 2.4-.9 2.4-2.3 0-1.4-.8-2.3-2.4-2.3h-2v4.6h2z" />
+                {/* a */}
+                <path d="M37.9 14.1v5.5h-1.9v-1.2c-.6.9-1.6 1.4-2.7 1.4-2 0-3.3-1.3-3.3-3.1 0-1.9 1.4-3.1 3.7-3.1h2.2v-.4c0-1.1-.7-1.8-2-1.8-1 0-1.9.4-2.4.9l-.8-1.2c.8-.8 2-1.3 3.4-1.3 2.3 0 3.8 1.3 3.8 3.3zm-1.9 2.6h-2c-1.3 0-2.1.6-2.1 1.6 0 1 .8 1.6 1.9 1.6 1.3 0 2.2-.8 2.2-2v-1.2z" />
+                {/* y */}
+                <path d="M40.2 9.9h2.1l2.8 7.3 2.8-7.3h2.1l-4.1 9.9c-.8 2-1.9 2.9-3.7 2.9-.6 0-1.2-.1-1.6-.3l.4-1.5c.3.1.7.2 1.1.2 1 0 1.7-.5 2.1-1.6l.3-.8-4.3-9.2z" />
+              </svg>
             )}
           </button>
         )}
