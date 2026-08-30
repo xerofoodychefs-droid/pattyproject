@@ -108,21 +108,15 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
     };
   }, [setProductModalOpen]);
 
-  // Fallback options list matching reference structure
-  const availableModifiers: (ProductModifier & { is_out_of_stock?: boolean; is_veg?: boolean })[] =
-    product.modifiers && product.modifiers.length > 0
-      ? product.modifiers
-      : [
-          { id: 'mod-1', name: 'Coke Zero', price: 0.00, is_required: false, is_active: true, is_out_of_stock: true, is_veg: true },
-          { id: 'mod-2', name: 'Coke', price: 1.50, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-3', name: 'Thums Up', price: 1.50, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-4', name: 'Lemon Flippinade', price: 2.00, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-5', name: 'Cranberry Flippinade', price: 2.00, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-6', name: 'Passionfruit Flippinade', price: 2.00, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-7', name: 'Fries', price: 2.50, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-8', name: 'Potato Wedges', price: 2.50, is_required: false, is_active: true, is_veg: true },
-          { id: 'mod-9', name: 'Peri Fries', price: 2.80, is_required: false, is_active: true, is_veg: true },
-        ];
+  // Modifiers configured by Admin for this specific product (no hardcoded fallbacks)
+  const availableModifiers = useMemo(() => {
+    if (!product.modifiers || !Array.isArray(product.modifiers)) {
+      return [];
+    }
+    return product.modifiers.filter(
+      (modifier) => modifier && modifier.is_active !== false
+    );
+  }, [product.modifiers]);
 
   const toggleModifier = (mod: ProductModifier & { is_out_of_stock?: boolean }) => {
     if (mod.is_out_of_stock) return;
@@ -509,66 +503,83 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
               </div>
             )}
 
-            {/* 2. ADD-ONS / MODIFIERS SECTION */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-xs text-[#F5F5F5] uppercase tracking-wider">
-                  Add Extras & Sides
-                </h4>
-              </div>
+            {/* 2. ADD-ONS / MODIFIERS SECTION (Rendered ONLY if admin configured modifiers for this product) */}
+            {availableModifiers.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs text-[#F5F5F5] uppercase tracking-wider">
+                    Add Extras & Sides
+                  </h4>
+                </div>
 
-              <div className="space-y-2">
-                {availableModifiers.map((mod) => {
-                  const isSelected = selectedModifiers.some((m) => m.id === mod.id);
-                  const isOutOfStock = mod.is_out_of_stock;
+                <div className="space-y-2">
+                  {availableModifiers.map((mod) => {
+                    const isSelected = selectedModifiers.some((m) => m.id === mod.id);
+                    const isOutOfStock = (mod as any).is_out_of_stock;
 
-                  return (
-                    <div
-                      key={mod.id}
-                      onClick={() => toggleModifier(mod)}
-                      className={`border rounded-xl p-3 min-h-[50px] flex items-center justify-between transition-all select-none ${
-                        isOutOfStock
-                          ? 'border-[#242424] bg-[#151515]/50 opacity-40 cursor-not-allowed'
-                          : isSelected
-                          ? 'border-[#6B2A0D] bg-[#241209] text-[#F5F5F5] cursor-pointer'
-                          : 'border-[#242424] bg-[#151515] hover:border-[#333333] hover:bg-[#181818] text-[#A1A1AA] cursor-pointer'
-                      }`}
-                    >
-                      {/* Left Option Info */}
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
-                            isSelected
-                              ? 'border-[#FF5A00] bg-[#FF5A00] text-white'
-                              : 'border-[#242424] bg-[#0D0D0D]'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                    return (
+                      <div
+                        key={mod.id}
+                        onClick={() => toggleModifier(mod)}
+                        className={`border rounded-xl p-3 min-h-[50px] flex items-center justify-between transition-all select-none ${
+                          isOutOfStock
+                            ? 'border-[#242424] bg-[#151515]/50 opacity-40 cursor-not-allowed'
+                            : isSelected
+                            ? 'border-[#6B2A0D] bg-[#241209] text-[#F5F5F5] cursor-pointer'
+                            : 'border-[#242424] bg-[#151515] hover:border-[#333333] hover:bg-[#181818] text-[#A1A1AA] cursor-pointer'
+                        }`}
+                      >
+                        {/* Left Option Info */}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                              isSelected
+                                ? 'border-[#FF5A00] bg-[#FF5A00] text-white'
+                                : 'border-[#242424] bg-[#0D0D0D]'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                          </div>
+
+                          <div>
+                            <p className={`text-sm font-medium ${isSelected ? 'text-[#F5F5F5]' : 'text-[#F5F5F5]'}`}>
+                              {mod.name}
+                            </p>
+                            {isOutOfStock && (
+                              <span className="text-[11px] font-semibold text-[#EF4444] block mt-0.5">
+                                OUT OF STOCK
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-[#F5F5F5]' : 'text-[#F5F5F5]'}`}>
-                            {mod.name}
-                          </p>
-                          {isOutOfStock && (
-                            <span className="text-[11px] font-semibold text-[#EF4444] block mt-0.5">
-                              OUT OF STOCK
-                            </span>
-                          )}
-                        </div>
+                        {/* Right Option Price */}
+                        {!isOutOfStock && mod.price > 0 && (
+                          <span className="text-xs font-semibold text-[#FF5A00] shrink-0">
+                            +£{mod.price.toFixed(2)}
+                          </span>
+                        )}
                       </div>
-
-                      {/* Right Option Price */}
-                      {!isOutOfStock && mod.price > 0 && (
-                        <span className="text-xs font-semibold text-[#FF5A00] shrink-0">
-                          +£{mod.price.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Empty Customization State (When item has no choices, ingredients, or modifiers) */}
+            {choiceGroups.length === 0 && ingredientOptions.length === 0 && availableModifiers.length === 0 && (
+              <div className="py-12 px-4 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-[#181818] border border-[#262626] flex items-center justify-center mx-auto text-[#FF5A00]">
+                  <Check className="w-6 h-6 stroke-[2.5]" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-white">Signature Recipe</p>
+                  <p className="text-xs text-[#71717A] max-w-xs mx-auto">
+                    This item is prepared fresh to our signature recipe with no additional customization required.
+                  </p>
+                </div>
+              </div>
+            )}
 
           </div>
 
