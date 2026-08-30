@@ -31,6 +31,7 @@ export const AdminProducts: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [categoryToggling, setCategoryToggling] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -122,6 +123,38 @@ export const AdminProducts: React.FC = () => {
     }
   };
 
+  const handleToggleCategoryAvailability = async () => {
+    if (user?.role !== 'SUPER_ADMIN' || !currentCategoryObj) return;
+
+    const targetOutOfStock = !isCategoryAllOutOfStock;
+    const categoryName = currentCategoryObj.name;
+
+    const confirmMsg = targetOutOfStock
+      ? `Mark all products in ${categoryName} as out of stock?\n\nThis will make all products in this category unavailable globally.`
+      : `Make all products in ${categoryName} available?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setCategoryToggling(true);
+    try {
+      await api.patch(`/admin/categories/${currentCategoryObj.id}/availability`, {
+        is_out_of_stock: targetOutOfStock
+      });
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.category_id === currentCategoryObj.id
+            ? { ...p, is_out_of_stock: targetOutOfStock, is_available: !targetOutOfStock }
+            : p
+        )
+      );
+    } catch (err: any) {
+      console.error('Failed to update category availability:', err);
+      alert(err?.response?.data?.detail || err?.message || 'Failed to update category stock status. Please try again.');
+    } finally {
+      setCategoryToggling(false);
+    }
+  };
+
   const handleDeleteProduct = async (id: string, name: string) => {
     if (user?.role !== 'SUPER_ADMIN') {
       alert('Only Super Administrators have permission to delete products.');
@@ -138,14 +171,13 @@ export const AdminProducts: React.FC = () => {
     }
   };
 
-  const filteredProducts = products.filter((p) => {
-    const matchesCategory =
-      selectedCategory === 'ALL'
-        ? true
-        : selectedCategory === 'OUT_OF_STOCK'
-        ? Boolean(p.is_out_of_stock)
-        : p.category_id === selectedCategory;
+  const currentCategoryObj = categories.find((c) => c.id === selectedCategory);
+  const selectedCategoryProducts = products.filter((p) => p.category_id === selectedCategory);
+  const isCategoryAllOutOfStock =
+    selectedCategoryProducts.length > 0 && selectedCategoryProducts.every((p) => p.is_out_of_stock);
 
+  const filteredProducts = products.filter((p) => {
+    const matchesCategory = selectedCategory === 'ALL' || p.category_id === selectedCategory;
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchQuery.toLowerCase());
@@ -212,8 +244,33 @@ export const AdminProducts: React.FC = () => {
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-            <option value="OUT_OF_STOCK">Out of Stock</option>
           </select>
+
+          {/* Category Action Button (Super Admin only when real category is selected) */}
+          {user?.role === 'SUPER_ADMIN' && selectedCategory !== 'ALL' && currentCategoryObj && (
+            <button
+              type="button"
+              onClick={handleToggleCategoryAvailability}
+              disabled={categoryToggling || selectedCategoryProducts.length === 0}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                isCategoryAllOutOfStock
+                  ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/30 hover:bg-[#22C55E]/20'
+                  : 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30 hover:bg-[#EF4444]/20'
+              } ${categoryToggling ? 'opacity-50 cursor-wait' : ''}`}
+            >
+              {isCategoryAllOutOfStock ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Make Category Available</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Mark Category Out of Stock</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Branch Stock Selector (Branch Admin only) */}
           {user?.role === 'BRANCH_ADMIN' && (

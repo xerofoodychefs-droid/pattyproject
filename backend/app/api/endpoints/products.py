@@ -8,6 +8,7 @@ from app.models.product import Category, Product, ProductModifier, Inventory, Pr
 from app.models.branch import Branch
 from app.schemas.product import (
     CategoryResponse, CategoryCreateRequest, CategoryReorderRequest,
+    CategoryAvailabilityUpdateRequest, CategoryAvailabilityResponse,
     ProductResponse, ProductCreateRequest, ProductUpdateRequest, ProductAvailabilityUpdateRequest,
     InventoryResponse, InventoryUpdateRequest, InventoryToggleRequest
 )
@@ -103,6 +104,35 @@ def delete_category(
     db.delete(cat)
     db.commit()
     return {"message": "Category deleted successfully", "id": category_id}
+
+@router.patch("/admin/categories/{category_id}/availability", response_model=CategoryAvailabilityResponse)
+@router.patch("/categories/{category_id}/availability", response_model=CategoryAvailabilityResponse)
+def update_category_availability(
+    category_id: str,
+    request: CategoryAvailabilityUpdateRequest,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db)
+):
+    """Super Admin bulk toggle all products in a category In Stock (False) / Out of Stock (True)."""
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    # Update all products belonging to this category without touching branch inventory
+    updated_count = db.query(Product).filter(
+        Product.category_id == category_id
+    ).update({
+        Product.is_out_of_stock: request.is_out_of_stock
+    })
+    db.commit()
+
+    action_str = "out of stock" if request.is_out_of_stock else "available"
+    return CategoryAvailabilityResponse(
+        category_id=category_id,
+        is_out_of_stock=request.is_out_of_stock,
+        updated_products_count=updated_count,
+        message=f"All {updated_count} products in '{category.name}' marked as {action_str}."
+    )
 
 @router.get("/products", response_model=List[ProductResponse])
 def list_products(

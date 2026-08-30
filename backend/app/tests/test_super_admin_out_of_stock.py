@@ -63,7 +63,6 @@ def get_token_header(user_id: str, email: str, role: str) -> dict:
 def test_1_super_admin_sets_product_out_of_stock_preserves_inventory_rows():
     """TEST 1: Super Admin sets product Out of Stock. Product.is_out_of_stock = true, no Inventory rows changed."""
     db = TestingSessionLocal()
-    # Record initial inventory states for prod-mc-project across all branches
     initial_invs = {inv.id: (inv.branch_id, inv.is_available, inv.stock_quantity) for inv in db.query(Inventory).filter(Inventory.product_id == "prod-mc-project").all()}
     db.close()
 
@@ -77,7 +76,6 @@ def test_1_super_admin_sets_product_out_of_stock_preserves_inventory_rows():
     assert patch_res.json()["is_out_of_stock"] is True
     assert patch_res.json()["is_available"] is False
 
-    # Check DB product table
     db2 = TestingSessionLocal()
     prod = db2.query(Product).filter(Product.id == "prod-mc-project").first()
     assert prod.is_out_of_stock is True
@@ -121,7 +119,6 @@ def test_3_and_4_hierarchical_branch_inventory_preservation():
     Set global product back Available -> Branch A remains unavailable, Branch B remains available.
     """
     db = TestingSessionLocal()
-    # Setup Branch A (Camden) as unavailable, Branch B (Westfield) as available
     inv_camden = db.query(Inventory).filter(Inventory.branch_id == "branch-camden-001", Inventory.product_id == "prod-mc-project").first()
     if not inv_camden:
         inv_camden = Inventory(id="inv-camden-test", branch_id="branch-camden-001", product_id="prod-mc-project", stock_quantity=50, is_available=False)
@@ -180,12 +177,127 @@ def test_3_and_4_hierarchical_branch_inventory_preservation():
     assert res_westfield2["is_available"] is True
 
 
+def test_category_level_out_of_stock_toggle_and_isolation():
+    """TEST: Super Admin can toggle an entire category Out of Stock and Available.
+    - All products in that category are updated.
+    - Products in other categories remain unchanged.
+    - Branch Inventory records are completely untouched.
+    """
+    db = TestingSessionLocal()
+    # Find a category with multiple products
+    cat = db.query(Category).first()
+    assert cat is not None
+    cat_id = cat.id
+
+    cat_prods = db.query(Product).filter(Product.category_id == cat_id).all()
+    other_prods = db.query(Product).filter(Product.category_id != cat_id).all()
+
+    # Reset all products in this category to Available (False)
+    for p in cat_prods:
+        p.is_out_of_stock = False
+    for p in other_prods:
+        p.is_out_of_stock = False
+    db.commit()
+
+    # Record snapshot of all inventory rows before category operation
+    initial_all_invs = {(inv.branch_id, inv.product_id): (inv.is_available, inv.stock_quantity) for inv in db.query(Inventory).all()}
+    db.close()
+
+    super_headers = get_token_header("user-super-admin-001", "superadmin@pattyproject.co.uk", UserRole.SUPER_ADMIN)
+
+    # 1. Super Admin marks category Out of Stock
+    cat_patch_res = client.patch(
+        f"/api/v1/admin/categories/{cat_id}/availability",
+        headers=super_headers,
+        json={"is_out_of_stock": True}
+    )
+    assert cat_patch_res.status_code == 200
+    res_json = cat_patch_res.json()
+    assert res_json["category_id"] == cat_id
+    assert res_json["is_out_of_stock"] is True
+    assert res_json["updated_products_count"] == len(cat_prods)
+
+    # Verify all products in the category have is_out_of_stock = True
+    db2 = TestingSessionLocal()
+    for p in db2.query(Product).filter(Product.category_id == cat_id).all():
+        assert p.is_out_of_stock is True
+
+    # Verify products in other categories are UNCHANGED (is_out_of_stock = False)
+    for p in db2.query(Product).filter(Product.category_id != cat_id).all():
+        assert p.is_out_of_stock is False
+
+    # Verify NO Inventory rows were modified anywhere in the database
+    current_all_invs = {(inv.branch_id, inv.product_id): (inv.is_available, inv.stock_quantity) for inv in db2.query(Inventory).all()}
+    assert current_all_invs == initial_all_invs
+    db2.close()
+
+    # 2. Super Admin marks category Available again
+    cat_patch_res2 = client.patch(
+        f"/api/v1/admin/categories/{cat_id}/availability",
+        headers=super_headers,
+        json={"is_out_of_stock": False}
+    )
+    assert cat_patch_res2.status_code == 200
+    assert cat_patch_res2.json()["is_out_of_stock"] is False
+
+    # Verify all products in the category have is_out_of_stock = False
+    db3 = TestingSessionLocal()
+    for p in db3.query(Product).filter(Product.category_id == cat_id).all():
+        assert p.is_out_of_stock is False
+
+    # Verify Inventory rows remain untouched
+    current_all_invs2 = {(inv.branch_id, inv.product_id): (inv.is_available, inv.stock_quantity) for inv in db3.query(Inventory).all()}
+    assert current_all_invs2 == initial_all_invs
+    db3.close()
+
+
+def test_category_availability_rbac():
+    """TEST: Only Super Admin can mutate category availability. Branch Admin & Customer receive 403, Anon receives 401."""
+    db = TestingSessionLocal()
+    cat = db.query(Category).first()
+    cat_id = cat.id
+    db.close()
+
+    branch_headers = get_token_header("user-branch-admin-001", "branchadmin@pattyproject.co.uk", UserRole.BRANCH_ADMIN)
+    customer_headers = get_token_header("user-customer-001", "customer@example.com", UserRole.CUSTOMER)
+
+    # Branch Admin -> 403 Forbidden
+    res_branch = client.patch(
+        f"/api/v1/admin/categories/{cat_id}/availability",
+        headers=branch_headers,
+        json={"is_out_of_stock": True}
+    )
+    assert res_branch.status_code == 403
+
+    # Customer -> 403 Forbidden
+    res_cust = client.patch(
+        f"/api/v1/admin/categories/{cat_id}/availability",
+        headers=customer_headers,
+        json={"is_out_of_stock": True}
+    )
+    assert res_cust.status_code == 403
+
+    # Unauthenticated -> 401 Unauthorized
+    res_anon = client.patch(
+        f"/api/v1/admin/categories/{cat_id}/availability",
+        json={"is_out_of_stock": True}
+    )
+    assert res_anon.status_code == 401
+
+
+def test_no_out_of_stock_category_exists():
+    """TEST: Verify no fake 'Out of Stock' category is stored or returned by /categories."""
+    cat_res = client.get("/api/v1/categories")
+    assert cat_res.status_code == 200
+    cat_names = [c["name"].lower() for c in cat_res.json()]
+    assert "out of stock" not in cat_names
+
+
 def test_5_global_out_of_stock_rejects_order():
     """TEST 5: Global product is Out of Stock. Attempt an order -> Order rejected."""
     db = TestingSessionLocal()
     prod = db.query(Product).filter(Product.id == "prod-mc-project").first()
     prod.is_out_of_stock = True
-    # Ensure branch inventory is available so failure is strictly due to global out-of-stock
     inv = db.query(Inventory).filter(Inventory.branch_id == "branch-camden-001", Inventory.product_id == "prod-mc-project").first()
     if inv:
         inv.is_available = True

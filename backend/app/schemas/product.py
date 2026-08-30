@@ -131,6 +131,15 @@ class ProductUpdateRequest(BaseModel):
 class ProductAvailabilityUpdateRequest(BaseModel):
     is_out_of_stock: bool
 
+class CategoryAvailabilityUpdateRequest(BaseModel):
+    is_out_of_stock: bool
+
+class CategoryAvailabilityResponse(BaseModel):
+    category_id: str
+    is_out_of_stock: bool
+    updated_products_count: int
+    message: str
+
 class InventoryResponse(BaseModel):
     id: str
     branch_id: str
