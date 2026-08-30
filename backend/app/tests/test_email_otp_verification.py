@@ -470,3 +470,95 @@ def test_14_send_verification_otp_email_handles_timeouts_and_network_errors(monk
             client=RequestErrorClient()
         )
     assert exc_info2.value.status_code == 503
+
+
+def test_15_login_before_otp_fails_and_user_does_not_exist():
+    """Phase 9I Test 5: Login before OTP verification returns HTTP 401 and confirms User does not exist."""
+    with patch("app.api.endpoints.auth.send_verification_otp_email", return_value=True):
+        client.post("/api/v1/auth/register", json={
+            "full_name": "Unverified Login Tester",
+            "email": "unverified.login@example.com",
+            "password": "Password123!"
+        })
+
+    # Attempt login before OTP verification
+    res = client.post("/api/v1/auth/login", json={
+        "email": "unverified.login@example.com",
+        "password": "Password123!"
+    })
+    assert res.status_code == 401
+    assert "incorrect" in res.json()["detail"].lower()
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(User).filter(User.email == "unverified.login@example.com").first() is None
+    finally:
+        db.close()
+
+
+def test_16_duplicate_registration_with_pending_challenge_creates_no_user():
+    """Phase 9I Test 8: Re-registering an unverified email updates challenge without creating a User."""
+    with patch("app.api.endpoints.auth.send_verification_otp_email", return_value=True):
+        res1 = client.post("/api/v1/auth/register", json={
+            "full_name": "Pending User",
+            "email": "pending.duplicate@example.com",
+            "password": "Password123!"
+        })
+        assert res1.status_code == 200
+
+        res2 = client.post("/api/v1/auth/register", json={
+            "full_name": "Pending User Updated",
+            "email": "pending.duplicate@example.com",
+            "password": "Password123!"
+        })
+        assert res2.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        # Zero User rows
+        assert db.query(User).filter(User.email == "pending.duplicate@example.com").first() is None
+        # Zero LoyaltyAccount rows
+        assert db.query(LoyaltyAccount).count() == 0
+    finally:
+        db.close()
+
+
+def test_17_double_otp_submission_creates_only_one_user_and_loyalty():
+    """Phase 9I Test 10: Submitting valid OTP twice creates exactly 1 User and 1 LoyaltyAccount without duplicates."""
+    with patch("app.api.endpoints.auth.send_verification_otp_email", return_value=True):
+        client.post("/api/v1/auth/register", json={
+            "full_name": "Double OTP Tester",
+            "email": "double.otp@example.com",
+            "password": "Password123!"
+        })
+
+    otp_test = "889900"
+    db = TestingSessionLocal()
+    try:
+        ch = db.query(EmailVerificationChallenge).filter(EmailVerificationChallenge.email == "double.otp@example.com").first()
+        ch.otp_hash = hash_otp(email="double.otp@example.com", otp=otp_test, salt=ch.salt)
+        db.commit()
+    finally:
+        db.close()
+
+    # First verification: succeeds
+    res1 = client.post("/api/v1/auth/verify-email", json={"email": "double.otp@example.com", "otp": otp_test})
+    assert res1.status_code == 200
+
+    # Second verification with same OTP: rejected
+    res2 = client.post("/api/v1/auth/verify-email", json={"email": "double.otp@example.com", "otp": otp_test})
+    assert res2.status_code == 400
+
+    # Verify DB: exactly 1 User and 1 LoyaltyAccount
+    db = TestingSessionLocal()
+    try:
+        users = db.query(User).filter(User.email == "double.otp@example.com").all()
+        assert len(users) == 1
+        assert users[0].email_verified is True
+        assert users[0].role == UserRole.CUSTOMER
+
+        loyalty = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == users[0].id).all()
+        assert len(loyalty) == 1
+        assert loyalty[0].available_points == 100
+    finally:
+        db.close()

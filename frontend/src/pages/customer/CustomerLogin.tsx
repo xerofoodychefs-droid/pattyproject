@@ -217,7 +217,7 @@ export const CustomerLogin: React.FC = () => {
         setOtp('');
         setResendCooldown(60);
         setMode('verify');
-        setSuccessMessage('Account created! Enter the 6-digit verification code sent to your email.');
+        setSuccessMessage('Verification code sent! Please enter the 6-digit code sent to your email to complete registration.');
       } else if (response && response.access_token && response.user) {
         setAuth(response.access_token, response.user, response.refresh_token);
         navigate('/loyalty', { replace: true });
