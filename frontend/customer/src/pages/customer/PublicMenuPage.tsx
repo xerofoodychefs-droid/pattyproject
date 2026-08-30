@@ -24,16 +24,57 @@ export const PublicMenuPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useCartStore();
 
+  const fetchData = async () => {
+    try {
+      const branchParam = selectedBranch?.id ? `?branch_id=${selectedBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
+      const [catData, prodData] = await Promise.all([
+        api.get<Category[]>(`/categories?_t=${Date.now()}`).catch(() => []),
+        api.get<Product[]>(`/products${branchParam}`).catch(() => [])
+      ]);
+      if (catData && Array.isArray(catData)) setCategories(catData);
+      if (prodData && Array.isArray(prodData)) setProducts(prodData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Periodic schedule revalidation (every 30s) + immediate revalidation when returning to tab
+  useEffect(() => {
+    fetchData();
+
+    const intervalId = setInterval(() => {
+      fetchData();
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedBranch?.id]);
+
   useProductRealtime({
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId) return p;
+          const cat = categories.find((c) => c.id === p.category_id);
+          const isCategoryClosed = cat && cat.schedule_enabled && cat.schedule_status === 'CLOSED';
+          const effectivelyAvailable = !boolOutOfStock && !isCategoryClosed;
           return {
             ...p,
             is_out_of_stock: boolOutOfStock,
-            is_available: !boolOutOfStock,
+            is_available: effectivelyAvailable,
             stock_quantity: boolOutOfStock ? 0 : (p.stock_quantity && p.stock_quantity > 0 ? p.stock_quantity : 100),
           };
         })
@@ -43,27 +84,6 @@ export const PublicMenuPage: React.FC = () => {
       fetchData();
     },
   });
-
-  useEffect(() => {
-    fetchData();
-  }, [selectedBranch?.id]);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const branchParam = selectedBranch?.id ? `?branch_id=${selectedBranch.id}` : '';
-      const [catData, prodData] = await Promise.all([
-        api.get<Category[]>('/categories'),
-        api.get<Product[]>(`/products${branchParam}`)
-      ]);
-      setCategories(catData);
-      setProducts(prodData);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredProducts = products.filter((p) => {
     if (selectedCategory === 'ALL') return true;

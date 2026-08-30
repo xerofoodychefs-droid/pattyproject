@@ -84,10 +84,15 @@ export const CustomerHome: React.FC = () => {
     },
   });
 
-  useEffect(() => {
-    fetchProducts();
-    fetchTodaysOffers();
-  }, [selectedBranch?.id]);
+  const fetchProducts = async () => {
+    try {
+      const branchParam = selectedBranch?.id ? `?branch_id=${selectedBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
+      const data: Product[] = await api.get(`/products${branchParam}`);
+      setProducts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchTodaysOffers = async () => {
     try {
@@ -100,15 +105,28 @@ export const CustomerHome: React.FC = () => {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      const branchParam = selectedBranch?.id ? `?branch_id=${selectedBranch.id}` : '';
-      const data: Product[] = await api.get(`/products${branchParam}`);
-      setProducts(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  useEffect(() => {
+    fetchProducts();
+    fetchTodaysOffers();
+
+    const intervalId = setInterval(() => {
+      fetchProducts();
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProducts();
+        fetchTodaysOffers();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedBranch?.id]);
 
   const mcProduct = products.find(p => p.name.toLowerCase().includes('mc project') && !p.name.toLowerCase().includes('vegan'));
   const outlawProduct = products.find(p => p.name.toLowerCase().includes('outlaw project') && !p.name.toLowerCase().includes('vegan'));

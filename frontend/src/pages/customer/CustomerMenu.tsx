@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Plus,
   LayoutGrid,
@@ -38,45 +38,116 @@ export const CustomerMenu: React.FC = () => {
 
   const { selectedBranch, setSelectedBranch } = useCartStore();
 
-  // Realtime product availability subscription (Zero-refresh immediate update)
+  // Authoritative revalidation method to sync categories & products effective availability
+  const revalidateMenu = useCallback(async () => {
+    try {
+      const currentBranch = useCartStore.getState().selectedBranch;
+      const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
+      const [catData, prodData] = await Promise.all([
+        api.get<Category[]>(`/categories?_t=${Date.now()}`).catch(() => null),
+        api.get<Product[]>(`/products${branchParam}`).catch(() => null)
+      ]);
+
+      if (catData && Array.isArray(catData)) {
+        setCategories((prev) => {
+          const comboCat = prev.find(c => c.id === 'category-combo-offers' || c.slug?.includes('combo'));
+          const hasComboInFresh = catData.some(c => c.id === 'category-combo-offers' || c.slug?.includes('combo'));
+          if (comboCat && !hasComboInFresh) {
+            return [comboCat, ...catData.filter(c => c.id !== comboCat.id)];
+          }
+          return catData;
+        });
+      }
+
+      if (prodData && Array.isArray(prodData)) {
+        const prodMap = new Map(prodData.map((p) => [p.id, p]));
+        setProducts((prev) =>
+          prev.map((p) => {
+            const fresh = prodMap.get(p.id);
+            if (!fresh) return p;
+            return {
+              ...p,
+              is_available: fresh.is_available,
+              is_out_of_stock: fresh.is_out_of_stock,
+              stock_quantity: fresh.stock_quantity,
+              is_active: fresh.is_active,
+              base_price: fresh.base_price,
+            };
+          })
+        );
+
+        setSelectedProduct((prev) => {
+          if (!prev) return null;
+          const fresh = prodMap.get(prev.id);
+          if (!fresh) return prev;
+          return {
+            ...prev,
+            is_available: fresh.is_available,
+            is_out_of_stock: fresh.is_out_of_stock,
+            stock_quantity: fresh.stock_quantity,
+            is_active: fresh.is_active,
+            base_price: fresh.base_price,
+          };
+        });
+      }
+    } catch {
+      // Silent error on background revalidation
+    }
+  }, []);
+
+  // Periodic schedule revalidation (every 30s) + immediate revalidation when returning to tab
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      revalidateMenu();
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        revalidateMenu();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [revalidateMenu]);
+
+  // Realtime product availability subscription (Zero-refresh immediate update merged with schedule rules)
   useProductRealtime({
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId) return p;
+          const cat = categories.find((c) => c.id === p.category_id);
+          const isCategoryClosed = cat && cat.schedule_enabled && cat.schedule_status === 'CLOSED';
+          const effectivelyAvailable = !boolOutOfStock && !isCategoryClosed;
           return {
             ...p,
             is_out_of_stock: boolOutOfStock,
-            is_available: !boolOutOfStock,
+            is_available: effectivelyAvailable,
             stock_quantity: boolOutOfStock ? 0 : (p.stock_quantity && p.stock_quantity > 0 ? p.stock_quantity : 100),
           };
         })
       );
       setSelectedProduct((prev) => {
         if (!prev || prev.id !== productId) return prev;
+        const cat = categories.find((c) => c.id === prev.category_id);
+        const isCategoryClosed = cat && cat.schedule_enabled && cat.schedule_status === 'CLOSED';
+        const effectivelyAvailable = !boolOutOfStock && !isCategoryClosed;
         return {
           ...prev,
           is_out_of_stock: boolOutOfStock,
-          is_available: !boolOutOfStock,
+          is_available: effectivelyAvailable,
           stock_quantity: boolOutOfStock ? 0 : (prev.stock_quantity && prev.stock_quantity > 0 ? prev.stock_quantity : 100),
         };
       });
     },
     onReconnect: () => {
-      const currentBranch = useCartStore.getState().selectedBranch;
-      const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
-      api.get<Product[]>(`/products${branchParam}`).then((data) => {
-        if (data && Array.isArray(data)) {
-          setProducts((prev) => {
-            const map = new Map(data.map((item) => [item.id, item]));
-            return prev.map((p) => {
-              const updated = map.get(p.id);
-              return updated ? { ...p, ...updated } : p;
-            });
-          });
-        }
-      }).catch(() => {});
+      revalidateMenu();
     },
   });
 
