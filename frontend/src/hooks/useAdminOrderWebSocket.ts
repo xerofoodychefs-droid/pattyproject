@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useOrderAlertStore } from '../store/orderAlertStore';
-import { getAdminWebSocketUrl } from '../api/client';
+import { getAdminWebSocketUrl, getValidAccessToken } from '../api/client';
 import { Order } from '../types';
 
 interface UseAdminOrderWebSocketOptions {
@@ -15,7 +15,7 @@ export const useAdminOrderWebSocket = ({
   onOrderStatusChanged,
   onReconnect,
 }: UseAdminOrderWebSocketOptions = {}) => {
-  const { token, user } = useAuthStore();
+  const { user } = useAuthStore();
   const { addAlert, removeAlert, setWsConnected } = useOrderAlertStore();
 
   const onIncomingOrderRef = useRef(onIncomingOrder);
@@ -29,6 +29,7 @@ export const useAdminOrderWebSocket = ({
   });
 
   const wsRef = useRef<WebSocket | null>(null);
+  const isConnectingRef = useRef<boolean>(false);
   const reconnectAttemptsRef = useRef<number>(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -46,14 +47,32 @@ export const useAdminOrderWebSocket = ({
     }
   }, []);
 
-  const connect = useCallback(() => {
-    if (!token || !user) return;
-    if (user.role !== 'SUPER_ADMIN' && user.role !== 'BRANCH_ADMIN') return;
+  const connect = useCallback(async () => {
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+    if (currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'BRANCH_ADMIN') return;
+
+    if (isConnectingRef.current) return;
+    isConnectingRef.current = true;
 
     clearTimers();
 
     try {
-      const wsUrl = getAdminWebSocketUrl(token);
+      const validToken = await getValidAccessToken();
+      if (!validToken || !isMountedRef.current) {
+        setWsConnected(false);
+        return;
+      }
+
+      // Close existing socket before opening a replacement
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      const wsUrl = getAdminWebSocketUrl(validToken);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -99,10 +118,10 @@ export const useAdminOrderWebSocket = ({
             if (orderData && orderData.id) {
               // SuperAdmin processes all branches; BranchAdmin checks branch isolation
               if (
-                user.role === 'BRANCH_ADMIN' &&
-                user.branch_ids &&
-                user.branch_ids.length > 0 &&
-                !user.branch_ids.includes(orderData.branch_id)
+                currentUser.role === 'BRANCH_ADMIN' &&
+                currentUser.branch_ids &&
+                currentUser.branch_ids.length > 0 &&
+                !currentUser.branch_ids.includes(orderData.branch_id)
               ) {
                 return;
               }
@@ -142,7 +161,7 @@ export const useAdminOrderWebSocket = ({
         // Handled in onclose
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = async (event) => {
         if (!isMountedRef.current) return;
         setWsConnected(false);
         clearTimers();
@@ -150,6 +169,13 @@ export const useAdminOrderWebSocket = ({
         // 1008 = Policy violation / unauthorized
         if (event.code === 1008) {
           console.warn('[AdminWS] Unauthorized admin role or invalid session.');
+          return;
+        }
+
+        // Verify token before scheduling reconnect; if refresh fails, stop reconnecting
+        const nextToken = await getValidAccessToken();
+        if (!nextToken || !isMountedRef.current) {
+          console.warn('[AdminWS] Session expired or invalid. Halting WebSocket reconnection.');
           return;
         }
 
@@ -166,8 +192,10 @@ export const useAdminOrderWebSocket = ({
       };
     } catch (e) {
       console.warn('[AdminWS] Connection initialization error:', e);
+    } finally {
+      isConnectingRef.current = false;
     }
-  }, [token, user, addAlert, removeAlert, setWsConnected, clearTimers]);
+  }, [addAlert, removeAlert, setWsConnected, clearTimers]);
 
   useEffect(() => {
     isMountedRef.current = true;

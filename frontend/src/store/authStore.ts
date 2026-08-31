@@ -23,12 +23,21 @@ const getInitialUser = (): User | null => {
 };
 
 export const useAuthStore = create<AuthState>((set) => {
-  // Synchronize state when session expires in API client
+  // Synchronize state when session expires or token is refreshed in API client
   if (typeof window !== 'undefined') {
     window.addEventListener('patty:auth_session_expired', () => {
       useCartStore.getState().resetCartOnLogout();
       set({ token: null, refreshToken: null, user: null });
     });
+
+    window.addEventListener('patty:auth_token_refreshed', ((e: CustomEvent) => {
+      if (e.detail?.token) {
+        set((state) => ({
+          token: e.detail.token,
+          refreshToken: e.detail.refreshToken || state.refreshToken || getSafeStorage('patty_refresh_token'),
+        }));
+      }
+    }) as EventListener);
   }
 
   return {

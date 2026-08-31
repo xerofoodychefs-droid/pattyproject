@@ -69,9 +69,31 @@ export function getProductWebSocketUrl(): string {
   return `${cleanBase}/api/v1/ws/products`;
 }
 
+export function isTokenExpiring(token: string, bufferSeconds = 30): boolean {
+  if (!token || typeof token !== 'string') return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (typeof payload.exp !== 'number') return true;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    return payload.exp <= (nowInSeconds + bufferSeconds);
+  } catch {
+    return true;
+  }
+}
+
 let refreshPromise: Promise<string | null> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getSafeStorage('patty_refresh_token');
   if (!refreshToken) return null;
 
@@ -98,6 +120,16 @@ async function refreshAccessToken(): Promise<string | null> {
       if (data.refresh_token) {
         setSafeStorage('patty_refresh_token', data.refresh_token);
       }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('patty:auth_token_refreshed', {
+            detail: {
+              token: data.access_token,
+              refreshToken: data.refresh_token || getSafeStorage('patty_refresh_token'),
+            },
+          })
+        );
+      }
       return data.access_token;
     }
     return null;
@@ -106,6 +138,21 @@ async function refreshAccessToken(): Promise<string | null> {
   } finally {
     refreshPromise = null;
   }
+}
+
+export async function getValidAccessToken(): Promise<string | null> {
+  const currentToken = getSafeStorage('patty_token');
+  if (currentToken && !isTokenExpiring(currentToken, 30)) {
+    return currentToken;
+  }
+  const refreshToken = getSafeStorage('patty_refresh_token');
+  if (!refreshToken) {
+    return null;
+  }
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken();
+  }
+  return await refreshPromise;
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
