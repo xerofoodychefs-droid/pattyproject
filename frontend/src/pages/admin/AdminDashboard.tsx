@@ -260,13 +260,13 @@ export const AdminDashboard: React.FC = () => {
                     : 'bg-red-950/60 border-red-500/40 text-red-400'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full ${isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-red-400 animate-pulse'}`} />
-                <span>{isOpen ? '🟢 Shop is Open' : '🔴 Shop is Closed'}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isOpen ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span>{isOpen ? 'Shop is Open' : 'Shop is Closed'}</span>
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleSaveShopHours} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <form onSubmit={handleSaveShopHours} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
             <div>
               <label className="block text-xs font-semibold text-[#A1A1AA] mb-1.5 uppercase tracking-wider">
                 Opening Time (24h)
@@ -276,9 +276,9 @@ export const AdminDashboard: React.FC = () => {
                 required
                 value={adminOpeningTime}
                 onChange={(e) => setAdminOpeningTime(e.target.value)}
-                className="w-full bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none"
+                className="w-full h-11 bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-white font-mono focus:outline-none"
               />
-              <span className="text-[11px] text-[#71717A] mt-1 block">
+              <span className="text-[11px] text-[#71717A] mt-1.5 block">
                 Current: {formatTime12h(adminOpeningTime)}
               </span>
             </div>
@@ -292,14 +292,20 @@ export const AdminDashboard: React.FC = () => {
                 required
                 value={adminClosingTime}
                 onChange={(e) => setAdminClosingTime(e.target.value)}
-                className="w-full bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none"
+                className="w-full h-11 bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 text-sm text-white font-mono focus:outline-none"
               />
-              <span className="text-[11px] text-[#71717A] mt-1 block">
+              <span className="text-[11px] text-[#71717A] mt-1.5 block">
                 Current: {formatTime12h(adminClosingTime)}
               </span>
             </div>
 
             <div>
+              <label
+                className="hidden sm:block text-xs font-semibold text-transparent mb-1.5 uppercase tracking-wider select-none pointer-events-none"
+                aria-hidden="true"
+              >
+                &nbsp;
+              </label>
               <button
                 type="submit"
                 disabled={savingShopHours}
@@ -307,13 +313,20 @@ export const AdminDashboard: React.FC = () => {
               >
                 {savingShopHours ? 'Saving...' : 'Save & Update Hours'}
               </button>
-              {shopHoursMsg && (
+              {shopHoursMsg ? (
                 <span
-                  className={`text-[11px] font-semibold mt-1 block text-center ${
+                  className={`text-[11px] font-semibold mt-1.5 block text-center ${
                     shopHoursMsg.isError ? 'text-red-400' : 'text-emerald-400'
                   }`}
                 >
                   {shopHoursMsg.text}
+                </span>
+              ) : (
+                <span
+                  className="text-[11px] text-transparent mt-1.5 block select-none pointer-events-none"
+                  aria-hidden="true"
+                >
+                  &nbsp;
                 </span>
               )}
             </div>
