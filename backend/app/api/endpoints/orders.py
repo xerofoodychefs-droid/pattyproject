@@ -473,6 +473,14 @@ def update_order_status(
             detail=f"Cannot transition order from terminal status '{old_status}' to '{new_status}'."
         )
 
+    # Authoritative Payment State Gate for Order Acceptance
+    if new_status == OrderStatus.ACCEPTED:
+        if not order.payment_status or order.payment_status.upper() != PaymentStatus.PAID:
+            raise HTTPException(
+                status_code=400,
+                detail="Order cannot be accepted until payment is confirmed."
+            )
+
     order.status = new_status
     if new_status in [OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COLLECTED, OrderStatus.PAID]:
         order.payment_status = PaymentStatus.PAID

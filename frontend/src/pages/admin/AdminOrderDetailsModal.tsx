@@ -27,8 +27,14 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
     try {
       await api.patch(`/orders/${order.id}/status`, { status: selectedStatus });
       onUpdateStatus();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Failed to update status', err);
+      const detailMsg =
+        (typeof err?.detail === 'string' ? err.detail : '') ||
+        (typeof err?.detail === 'object' && err.detail ? (err.detail.message || err.detail.error || err.detail.msg) : '') ||
+        err?.message ||
+        'Failed to update order status. Please try again.';
+      alert(detailMsg);
     } finally {
       setLoading(false);
     }
@@ -40,8 +46,14 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
     try {
       await api.patch(`/orders/${order.id}/status`, { status: 'CANCELLED', notes: 'Order cancelled by Admin' });
       onUpdateStatus();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Failed to cancel order', err);
+      const detailMsg =
+        (typeof err?.detail === 'string' ? err.detail : '') ||
+        (typeof err?.detail === 'object' && err.detail ? (err.detail.message || err.detail.error || err.detail.msg) : '') ||
+        err?.message ||
+        'Failed to cancel order. Please try again.';
+      alert(detailMsg);
     } finally {
       setLoading(false);
     }
@@ -222,7 +234,12 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
                 className="w-full h-10 bg-[#0D0D0D] border border-[#242424] focus:border-[#FF5A00] text-[#F5F5F5] text-xs font-semibold px-3 rounded-lg focus:outline-none transition-colors"
               >
                 <option value="INCOMING">INCOMING (New Order)</option>
-                <option value="ACCEPTED">ACCEPTED (Order Confirmed)</option>
+                <option
+                  value="ACCEPTED"
+                  disabled={order.payment_status !== 'PAID'}
+                >
+                  {order.payment_status === 'PAID' ? 'ACCEPTED (Order Confirmed)' : 'ACCEPTED (Payment Required)'}
+                </option>
                 <option value="PREPARING">PREPARING (In Kitchen)</option>
                 <option value="READY">READY (Packed / Waiting Dispatch)</option>
                 <option value="OUT_FOR_DELIVERY">OUT FOR DELIVERY (With Driver)</option>
@@ -240,7 +257,7 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
               </button>
 
               {/* One-Click Quick Workflow Action */}
-              {selectedStatus === 'INCOMING' && (
+              {selectedStatus === 'INCOMING' && order.payment_status === 'PAID' && (
                 <button
                   onClick={async () => {
                     setSelectedStatus('ACCEPTED');
@@ -248,6 +265,14 @@ export const AdminOrderDetailsModal: React.FC<Props> = ({ order, onClose, onUpda
                     try {
                       await api.patch(`/orders/${order.id}/status`, { status: 'ACCEPTED' });
                       onUpdateStatus();
+                    } catch (err: any) {
+                      console.error('Failed to accept order', err);
+                      const detailMsg =
+                        (typeof err?.detail === 'string' ? err.detail : '') ||
+                        (typeof err?.detail === 'object' && err.detail ? (err.detail.message || err.detail.error || err.detail.msg) : '') ||
+                        err?.message ||
+                        'Failed to accept order. Please try again.';
+                      alert(detailMsg);
                     } finally { setLoading(false); }
                   }}
                   className="w-full h-10 bg-[#06B6D4] hover:bg-[#0891B2] text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"

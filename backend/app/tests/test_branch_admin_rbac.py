@@ -71,7 +71,7 @@ def setup_rbac_environment():
         status=OrderStatus.INCOMING,
         subtotal=15.00,
         total_amount=17.50,
-        payment_status=PaymentStatus.PENDING
+        payment_status=PaymentStatus.PAID
     )
     db.add(camden_order)
 

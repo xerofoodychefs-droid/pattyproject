@@ -176,15 +176,15 @@ export const AdminOrderBoard: React.FC = () => {
 
   const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId);
-    if (newStatus === 'ACCEPTED' || ['CANCELLED', 'REJECTED'].includes(newStatus)) {
-      removeAlert(orderId);
-    }
 
     try {
       await api.patch(`/orders/${orderId}/status`, { status: newStatus });
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       );
+      if (newStatus === 'ACCEPTED' || ['CANCELLED', 'REJECTED'].includes(newStatus)) {
+        removeAlert(orderId);
+      }
     } catch (err: any) {
       console.error('Failed to update status', err);
       const detailMsg =
@@ -193,16 +193,20 @@ export const AdminOrderBoard: React.FC = () => {
         err?.message ||
         'Failed to update order status. Please try again.';
       alert(detailMsg);
+      fetchOrders(true);
     } finally {
       setUpdatingOrderId(null);
     }
   };
 
-  const getNextStatus = (currentStatus: string) => {
+  const getNextStatus = (currentStatus: string, paymentStatus?: string) => {
     switch (currentStatus) {
       case 'INCOMING':
       case 'PENDING_PAYMENT':
       case 'PAID':
+        if (paymentStatus !== 'PAID') {
+          return null; // Do NOT show Accept Order action if payment is not confirmed PAID
+        }
         return { label: 'Accept Order', status: 'ACCEPTED', color: 'bg-[#06B6D4] hover:bg-[#0891B2] text-black font-bold' };
       case 'ACCEPTED':
         return { label: 'Prepare', status: 'PREPARING', color: 'bg-[#F59E0B] hover:bg-[#D97706] text-black font-bold' };
@@ -213,6 +217,23 @@ export const AdminOrderBoard: React.FC = () => {
         return { label: 'Delivered', status: 'DELIVERED', color: 'bg-[#22C55E] hover:bg-[#16A34A] text-white font-semibold' };
       default:
         return null;
+    }
+  };
+
+  const getPaymentBadgeClass = (paymentStatus?: string) => {
+    switch (paymentStatus?.toUpperCase()) {
+      case 'PAID':
+        return 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/30';
+      case 'PENDING':
+        return 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30';
+      case 'FAILED':
+        return 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30';
+      case 'CANCELLED':
+        return 'bg-[#71717A]/10 text-[#71717A] border-[#71717A]/30';
+      case 'REFUNDED':
+        return 'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/30';
+      default:
+        return 'bg-[#27272A] text-[#A1A1AA] border-[#3F3F46]';
     }
   };
 
@@ -554,7 +575,7 @@ export const AdminOrderBoard: React.FC = () => {
                 </tr>
               ) : (
                 filteredOrders.map((o) => {
-                  const nextAction = getNextStatus(o.status);
+                  const nextAction = getNextStatus(o.status, o.payment_status);
                   const isUpdating = updatingOrderId === o.id;
                   const isAlerting = alertingOrderIds.includes(o.id) || o.status === 'INCOMING';
 
@@ -590,8 +611,8 @@ export const AdminOrderBoard: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-[#F5F5F5]">£{o.total_amount.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30">
-                          {o.payment_status || 'Paid'}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getPaymentBadgeClass(o.payment_status)}`}>
+                          {o.payment_status || 'PENDING'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-[#A1A1AA]">
@@ -608,7 +629,13 @@ export const AdminOrderBoard: React.FC = () => {
                           aria-label={`Change status for order ${o.order_number}`}
                         >
                           <option value="INCOMING" className="bg-[#151515] text-[#FF5A00]">Incoming</option>
-                          <option value="ACCEPTED" className="bg-[#151515] text-[#06B6D4]">Accepted</option>
+                          <option
+                            value="ACCEPTED"
+                            disabled={o.payment_status !== 'PAID'}
+                            className={`bg-[#151515] ${o.payment_status === 'PAID' ? 'text-[#06B6D4]' : 'text-[#71717A]'}`}
+                          >
+                            {o.payment_status === 'PAID' ? 'Accepted' : 'Accepted (Unpaid)'}
+                          </option>
                           <option value="PREPARING" className="bg-[#151515] text-[#F59E0B]">Preparing</option>
                           <option value="READY" className="bg-[#151515] text-[#10B981]">Ready</option>
                           <option value="OUT_FOR_DELIVERY" className="bg-[#151515] text-[#8B5CF6]">Out for Delivery</option>
