@@ -47,6 +47,7 @@ export const CustomerCart: React.FC = () => {
   const [promoMsg, setPromoMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [showAvailablePromos, setShowAvailablePromos] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
+  const [isCouponsLoaded, setIsCouponsLoaded] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -65,14 +66,50 @@ export const CustomerCart: React.FC = () => {
   const fetchAvailableCoupons = async () => {
     try {
       const data = await api.get<AvailableCoupon[]>('/promotions/available');
-      if (Array.isArray(data)) {
-        setAvailableCoupons(data);
+      const validCoupons = Array.isArray(data) ? data : [];
+      setAvailableCoupons(validCoupons);
+      setIsCouponsLoaded(true);
+
+      // Reconcile currently applied coupon against authoritative API response
+      const currentAppliedCode = useCartStore.getState().couponCode;
+      if (currentAppliedCode) {
+        const isPresent = validCoupons.some(
+          (c) => c.code.trim().toUpperCase() === currentAppliedCode.trim().toUpperCase()
+        );
+        if (!isPresent) {
+          removeCoupon();
+          setPromoInput('');
+          setPromoMsg(null);
+        }
       }
     } catch (e) {
       console.error('Failed to load available coupons:', e);
       setAvailableCoupons([]);
+      setIsCouponsLoaded(true);
+
+      // On API failure, clear any stale applied coupon for safety
+      if (useCartStore.getState().couponCode) {
+        removeCoupon();
+        setPromoInput('');
+        setPromoMsg(null);
+      }
     }
   };
+
+  // Continuously reconcile if applied coupon is invalidated or if availableCoupons update
+  useEffect(() => {
+    if (!isCouponsLoaded) return;
+    if (couponCode) {
+      const isPresent = availableCoupons.some(
+        (c) => c.code.trim().toUpperCase() === couponCode.trim().toUpperCase()
+      );
+      if (!isPresent) {
+        removeCoupon();
+        setPromoInput('');
+        setPromoMsg(null);
+      }
+    }
+  }, [couponCode, availableCoupons, isCouponsLoaded, removeCoupon]);
 
   const handleApplyPromo = async (codeToApply?: string) => {
     const targetCode = (codeToApply || promoInput).trim().toUpperCase();
