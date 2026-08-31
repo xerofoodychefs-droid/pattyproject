@@ -10,6 +10,8 @@ import { useOrderAlertStore } from '../../store/orderAlertStore';
 import { useAdminOrderWebSocket } from '../../hooks/useAdminOrderWebSocket';
 import { audioAlert } from '../../utils/audioAlert';
 import { AdminOrderDetailsModal } from './AdminOrderDetailsModal';
+import { ThermalReceiptModal } from '../../components/admin/ThermalReceiptModal';
+import { hasAutoPrinted, markAutoPrinted } from '../../utils/printThermalReceipt';
 
 export const AdminOrderBoard: React.FC = () => {
   const { user } = useAuthStore();
@@ -28,6 +30,7 @@ export const AdminOrderBoard: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [autoPrintOrder, setAutoPrintOrder] = useState<Order | null>(null);
   const [filterBranch, setFilterBranch] = useState(
     user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids[0] ? user.branch_ids[0] : 'ALL'
   );
@@ -178,12 +181,26 @@ export const AdminOrderBoard: React.FC = () => {
     setUpdatingOrderId(orderId);
 
     try {
-      await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+      const res = await api.patch<Order>(`/orders/${orderId}/status`, { status: newStatus });
+      const updatedOrder = res;
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       );
       if (newStatus === 'ACCEPTED' || ['CANCELLED', 'REJECTED'].includes(newStatus)) {
         removeAlert(orderId);
+      }
+
+      // Auto-trigger 80mm POS receipt printing upon successful order acceptance
+      if (newStatus === 'ACCEPTED') {
+        if (!hasAutoPrinted(orderId)) {
+          markAutoPrinted(orderId);
+          const targetOrder = (updatedOrder && updatedOrder.id && updatedOrder.items && updatedOrder.items.length > 0)
+            ? updatedOrder
+            : (orders.find((o) => o.id === orderId) || updatedOrder);
+          if (targetOrder) {
+            setAutoPrintOrder(targetOrder);
+          }
+        }
       }
     } catch (err: any) {
       console.error('Failed to update status', err);
@@ -686,10 +703,26 @@ export const AdminOrderBoard: React.FC = () => {
         <AdminOrderDetailsModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          onUpdateStatus={() => {
+          onUpdateStatus={(updatedOrder?: Order) => {
             fetchOrders();
             setSelectedOrder(null);
+            if (updatedOrder && updatedOrder.status === 'ACCEPTED') {
+              if (!hasAutoPrinted(updatedOrder.id)) {
+                markAutoPrinted(updatedOrder.id);
+                setAutoPrintOrder(updatedOrder);
+              }
+            }
           }}
+        />
+      )}
+
+      {/* Automatic Print Receipt Trigger on Order Acceptance */}
+      {autoPrintOrder && (
+        <ThermalReceiptModal
+          order={autoPrintOrder}
+          isOpen={Boolean(autoPrintOrder)}
+          onClose={() => setAutoPrintOrder(null)}
+          autoPrint={true}
         />
       )}
     </div>

@@ -697,7 +697,7 @@ export const OrderConfirmation: React.FC = () => {
             {/* Printable Official Receipt Modal */}
             {showReceiptModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                <div className="bg-white text-black rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4 font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto">
+                <div className="thermal-receipt-80mm bg-white text-black rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4 font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-center border-b border-black pb-2">
                     <div className="text-left">
                       <h3 className="font-extrabold text-sm tracking-wider uppercase">PATTY PROJECT UK</h3>
@@ -719,8 +719,8 @@ export const OrderConfirmation: React.FC = () => {
                   <div className="space-y-1.5 py-1">
                     {order.items && order.items.length > 0 ? (
                       order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start">
-                          <span className="truncate max-w-[240px]">
+                        <div key={idx} className="flex justify-between items-start gap-2">
+                          <span className="break-words pr-2 flex-1">
                             {item.quantity}  {item.product_name}
                           </span>
                           <span className="font-semibold shrink-0">
