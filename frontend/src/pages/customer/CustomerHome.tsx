@@ -303,9 +303,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-transparent border border-white/[0.05] rounded-2xl"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
                   src={mcProduct?.image_url || '/product_the_mc_project.png'}
                   alt="MC Project"
@@ -331,9 +331,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-transparent border border-white/[0.05] rounded-2xl"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
                   src={outlawProduct?.image_url || '/product_the_outlaw_project_.png'}
                   alt="Outlaw Project"
@@ -359,9 +359,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-transparent border border-white/[0.05] rounded-2xl"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
                   src={pastramiProduct?.image_url || '/product_pastrami_burger_.png'}
                   alt="Pastrami Burger"
@@ -390,9 +390,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-transparent border border-white/[0.05] rounded-2xl"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
                   src={chickenProduct?.image_url || '/product_buffalo_chicken_sando_.png'}
                   alt="Fried Chicken Sando"
@@ -418,9 +418,9 @@ export const CustomerHome: React.FC = () => {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-[#0D0D0D]/60 border border-white/[0.05] rounded-2xl hover:border-[#FF5500]/40 transition-colors"
+              className="flex items-center gap-4 sm:gap-5 cursor-pointer p-2.5 sm:p-4 bg-transparent border border-white/[0.05] rounded-2xl"
             >
-              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-[#111111]">
+              <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
                   src={halloumiProduct?.image_url || '/product_the_halloumi_project_veg.png'}
                   alt="Halloumi Burger"
