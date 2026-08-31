@@ -260,67 +260,45 @@ FALLBACK_OFFER_CODES: Dict[str, Dict[str, Any]] = {
 
 @router.get("/validate")
 def validate_coupon(code: str = Query(...), subtotal: float = Query(...), db: Session = Depends(get_db)):
-    """Validates coupon code against current subtotal."""
+    """Validates coupon code against current subtotal with database as authoritative single source of truth."""
     clean_code = code.strip().upper()
     coupon = db.query(Coupon).filter(Coupon.code == clean_code, Coupon.is_active == True).first()
     
-    if coupon:
-        if subtotal < coupon.min_order_value:
-            raise HTTPException(status_code=400, detail=f"Code requires minimum order of £{coupon.min_order_value:.2f}")
+    if not coupon:
+        raise HTTPException(status_code=400, detail="Invalid or expired promo code")
 
-        if coupon.used_count >= coupon.usage_limit:
-            raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+    if subtotal < coupon.min_order_value:
+        raise HTTPException(status_code=400, detail=f"Code requires minimum order of £{coupon.min_order_value:.2f}")
 
+    if coupon.used_count >= coupon.usage_limit:
+        raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+
+    discount = 0.0
+    if coupon.coupon_type == "PERCENTAGE":
+        discount = round(subtotal * (coupon.discount_value / 100.0), 2)
+    elif coupon.coupon_type == "FIXED_AMOUNT":
+        discount = min(float(coupon.discount_value), subtotal)
+    elif coupon.coupon_type == "FREE_SHIPPING":
         discount = 0.0
-        if coupon.coupon_type == "PERCENTAGE":
-            discount = round(subtotal * (coupon.discount_value / 100.0), 2)
-        elif coupon.coupon_type == "FIXED_AMOUNT":
-            discount = min(float(coupon.discount_value), subtotal)
 
-        return {
-            "valid": True,
-            "code": coupon.code,
-            "discount_amount": discount,
-            "calculated_discount": discount,
-            "coupon_type": coupon.coupon_type,
-            "discount_value": coupon.discount_value,
-            "message": f"Promo code '{coupon.code}' applied! Saved £{discount:.2f}"
-        }
-
-    # Fallback to configured offer codes
-    if clean_code in FALLBACK_OFFER_CODES:
-        info = FALLBACK_OFFER_CODES[clean_code]
-        if subtotal < info["min_order_value"]:
-            raise HTTPException(status_code=400, detail=f"Code requires minimum order of £{info['min_order_value']:.2f}")
-
-        discount = 0.0
-        if info["coupon_type"] == "PERCENTAGE":
-            discount = round(subtotal * (info["discount_value"] / 100.0), 2)
-        elif info["coupon_type"] == "FIXED_AMOUNT":
-            discount = min(float(info["discount_value"]), subtotal)
-
-        return {
-            "valid": True,
-            "code": clean_code,
-            "discount_amount": discount,
-            "calculated_discount": discount,
-            "coupon_type": info["coupon_type"],
-            "discount_value": info["discount_value"],
-            "message": f"Promo code '{clean_code}' applied! Saved £{discount:.2f}"
-        }
-
-    raise HTTPException(status_code=400, detail="Invalid or expired promo code")
+    return {
+        "valid": True,
+        "code": coupon.code,
+        "discount_amount": discount,
+        "calculated_discount": discount,
+        "coupon_type": coupon.coupon_type,
+        "discount_value": coupon.discount_value,
+        "message": f"Promo code '{coupon.code}' applied! Saved £{discount:.2f}"
+    }
 
 @router.get("/available")
 def get_available_coupons(response: Response, db: Session = Depends(get_db)):
-    """Returns list of available promo codes with description, code and discount for customer cart display."""
+    """Returns list of active available promo codes from database for customer cart display."""
     response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
-    db_coupons = db.query(Coupon).filter(Coupon.is_active == True).all()
+    db_coupons = db.query(Coupon).filter(Coupon.is_active == True).order_by(Coupon.created_at.desc()).all()
     results = []
-    seen = set()
 
     for c in db_coupons:
-        seen.add(c.code.upper())
         results.append({
             "code": c.code,
             "name": c.name,
@@ -331,25 +309,13 @@ def get_available_coupons(response: Response, db: Session = Depends(get_db)):
             "badge": f"{int(c.discount_value)}% OFF" if c.coupon_type == "PERCENTAGE" else f"£{c.discount_value:.2f} OFF"
         })
 
-    for code, info in FALLBACK_OFFER_CODES.items():
-        if code not in seen:
-            results.append({
-                "code": code,
-                "name": info["name"],
-                "description": info["description"],
-                "coupon_type": info["coupon_type"],
-                "discount_value": info["discount_value"],
-                "min_order_value": info["min_order_value"],
-                "badge": info["badge"]
-            })
-
     return results
 
 @router.get("/coupons", response_model=List[CouponResponse])
 @router.get("", response_model=List[CouponResponse])
 def list_coupons(response: Response, db: Session = Depends(get_db)):
-    """List all active coupons for admin dashboard and customer promotional displays."""
-    response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+    """List all active coupons for admin dashboard with fresh real-time cache headers."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return db.query(Coupon).filter(Coupon.is_active == True).order_by(Coupon.created_at.desc()).all()
 
 @router.post("/coupons", response_model=CouponResponse)

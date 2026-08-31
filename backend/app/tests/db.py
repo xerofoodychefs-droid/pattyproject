@@ -23,6 +23,7 @@ from app.models import (
     Coupon
 )
 from app.core.security import get_password_hash
+from app.db.seed import seed_system_promotions
 
 import threading
 
@@ -129,4 +130,5 @@ def reset_test_db():
 
     db.add_all([admin_user, camden, westfield, cat, prod])
     db.commit()
+    seed_system_promotions(db)
     db.close()

@@ -28,63 +28,6 @@ interface AvailableCoupon {
   badge: string;
 }
 
-const DEFAULT_COUPONS: AvailableCoupon[] = [
-  {
-    code: 'COMBO15',
-    name: 'Burger Combo Discount',
-    description: '15% OFF on burger combos & meals',
-    coupon_type: 'PERCENTAGE',
-    discount_value: 15.0,
-    min_order_value: 10.0,
-    badge: '15% OFF'
-  },
-  {
-    code: 'FEAST20',
-    name: 'Party Feast Discount',
-    description: '20% OFF on family & party bundle orders',
-    coupon_type: 'PERCENTAGE',
-    discount_value: 20.0,
-    min_order_value: 20.0,
-    badge: '20% OFF'
-  },
-  {
-    code: 'PATTY10',
-    name: '10% Off Everything',
-    description: 'Save 10% on your entire food order',
-    coupon_type: 'PERCENTAGE',
-    discount_value: 10.0,
-    min_order_value: 5.0,
-    badge: '10% OFF'
-  },
-  {
-    code: 'WELCOME20',
-    name: 'Welcome New Customer',
-    description: '20% OFF your first Patty Project order',
-    coupon_type: 'PERCENTAGE',
-    discount_value: 20.0,
-    min_order_value: 12.0,
-    badge: 'WELCOME DEAL'
-  },
-  {
-    code: 'LUNCH599',
-    name: 'Lunch Special Saver',
-    description: 'Save £3.00 on quick lunch orders',
-    coupon_type: 'FIXED_AMOUNT',
-    discount_value: 3.0,
-    min_order_value: 8.0,
-    badge: '£3.00 OFF'
-  },
-  {
-    code: 'SHAKEUP',
-    name: 'Free Shake Upgrade Deal',
-    description: 'Save £3.50 with burger & sides shake upgrade',
-    coupon_type: 'FIXED_AMOUNT',
-    discount_value: 3.5,
-    min_order_value: 10.0,
-    badge: 'FREE SHAKE'
-  }
-];
-
 export const CustomerCart: React.FC = () => {
   const {
     items,
@@ -103,7 +46,7 @@ export const CustomerCart: React.FC = () => {
   const [promoInput, setPromoInput] = useState('');
   const [promoMsg, setPromoMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [showAvailablePromos, setShowAvailablePromos] = useState(false);
-  const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>(DEFAULT_COUPONS);
+  const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -122,11 +65,12 @@ export const CustomerCart: React.FC = () => {
   const fetchAvailableCoupons = async () => {
     try {
       const data = await api.get<AvailableCoupon[]>('/promotions/available');
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setAvailableCoupons(data);
       }
     } catch (e) {
-      console.error('Failed to load available coupons, using defaults:', e);
+      console.error('Failed to load available coupons:', e);
+      setAvailableCoupons([]);
     }
   };
 

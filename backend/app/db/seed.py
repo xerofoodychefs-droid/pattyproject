@@ -16,6 +16,78 @@ DEV_DEFAULT_ADMIN_PWD = "dev_admin_password_123!"
 DEV_DEFAULT_BRANCH_PWD = "dev_branch_password_123!"
 DEV_DEFAULT_CUST_PWD = "dev_customer_password_123!"
 
+SYSTEM_PROMOTIONS_DATA = [
+    {
+        "code": "COMBO15",
+        "name": "Burger Combo Discount",
+        "coupon_type": "PERCENTAGE",
+        "discount_value": 15.0,
+        "min_order_value": 10.0,
+        "usage_limit": 1000
+    },
+    {
+        "code": "FEAST20",
+        "name": "Party Feast Discount",
+        "coupon_type": "PERCENTAGE",
+        "discount_value": 20.0,
+        "min_order_value": 20.0,
+        "usage_limit": 1000
+    },
+    {
+        "code": "PATTY10",
+        "name": "10% Off Everything",
+        "coupon_type": "PERCENTAGE",
+        "discount_value": 10.0,
+        "min_order_value": 5.0,
+        "usage_limit": 1000
+    },
+    {
+        "code": "WELCOME20",
+        "name": "Welcome New Customer",
+        "coupon_type": "PERCENTAGE",
+        "discount_value": 20.0,
+        "min_order_value": 12.0,
+        "usage_limit": 1000
+    },
+    {
+        "code": "LUNCH599",
+        "name": "Lunch Special Saver",
+        "coupon_type": "FIXED_AMOUNT",
+        "discount_value": 3.0,
+        "min_order_value": 8.0,
+        "usage_limit": 1000
+    },
+    {
+        "code": "SHAKEUP",
+        "name": "Free Shake Upgrade Deal",
+        "coupon_type": "FIXED_AMOUNT",
+        "discount_value": 3.5,
+        "min_order_value": 10.0,
+        "usage_limit": 1000
+    }
+]
+
+def seed_system_promotions(db):
+    """
+    Idempotently ensures all built-in promotional codes exist in the database coupons table.
+    Preserves all existing records and administrator modifications.
+    """
+    for promo in SYSTEM_PROMOTIONS_DATA:
+        existing = db.query(Coupon).filter(Coupon.code == promo["code"]).first()
+        if not existing:
+            new_coupon = Coupon(
+                code=promo["code"],
+                name=promo["name"],
+                coupon_type=promo["coupon_type"],
+                discount_value=promo["discount_value"],
+                min_order_value=promo["min_order_value"],
+                usage_limit=promo.get("usage_limit", 1000),
+                used_count=0,
+                is_active=True
+            )
+            db.add(new_coupon)
+    db.commit()
+
 def ensure_schema_up_to_date(eng):
     from sqlalchemy import inspect, text
     try:
@@ -68,8 +140,10 @@ def seed_db():
                 admin_loyalty.available_points = 0
                 admin_loyalty.lifetime_points = 0
                 print(f"Sanitized non-customer loyalty balance to 0 for {au.role} {au.email}.")
+        # Ensure built-in promotional codes exist in database (idempotent, preserves admin custom values)
+        seed_system_promotions(db)
         db.commit()
-        print("Database already seeded. Verified payments, £0.00 delivery fees, and customer-only loyalty accounts.")
+        print("Database already seeded. Verified payments, £0.00 delivery fees, system promotions, and customer-only loyalty accounts.")
         db.close()
         return
 
@@ -343,10 +417,11 @@ def seed_db():
     db.add_all([r1, r2, r3])
 
     # 10. Promotional Coupons
-    cpn1 = Coupon(code="PATTY10", name="10% off entire order", coupon_type="PERCENTAGE", discount_value=10.0, min_order_value=15.0, is_active=True)
-    cpn2 = Coupon(code="BURGER5", name="£5 off orders over £25", coupon_type="FIXED_AMOUNT", discount_value=5.0, min_order_value=25.0, is_active=True)
-    cpn3 = Coupon(code="FREESHIP", name="Free delivery promotion", coupon_type="FREE_SHIPPING", discount_value=0.0, min_order_value=0.0, is_active=True)
-    db.add_all([cpn1, cpn2, cpn3])
+    seed_system_promotions(db)
+    if not db.query(Coupon).filter(Coupon.code == "BURGER5").first():
+        db.add(Coupon(code="BURGER5", name="£5 off orders over £25", coupon_type="FIXED_AMOUNT", discount_value=5.0, min_order_value=25.0, is_active=True))
+    if not db.query(Coupon).filter(Coupon.code == "FREESHIP").first():
+        db.add(Coupon(code="FREESHIP", name="Free delivery promotion", coupon_type="FREE_SHIPPING", discount_value=0.0, min_order_value=0.0, is_active=True))
 
     # 11. Printers
     printer1 = Printer(branch_id=branch_central.id, name="Central Kitchen Receipt Printer", ip_address="192.168.1.201", is_active=True)
