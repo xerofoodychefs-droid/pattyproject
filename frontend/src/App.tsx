@@ -14,27 +14,11 @@ import { CustomerFooter } from './components/customer/CustomerFooter';
 import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
 
-// Dynamic Browser Title & Favicon Manager for Admin and Customer routes
+// Dynamic Browser Title Manager for Admin and Customer routes
 const DynamicTitleManager: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Dynamic favicon update with cache buster
-    const updateFavicon = () => {
-      const existingIcons = document.querySelectorAll<HTMLLinkElement>("link[rel*='icon']");
-      existingIcons.forEach(icon => {
-        icon.href = `/favicon-32x32.png?v=patty2026`;
-      });
-      if (existingIcons.length === 0) {
-        const newIcon = document.createElement('link');
-        newIcon.rel = 'icon';
-        newIcon.type = 'image/png';
-        newIcon.href = `/favicon-32x32.png?v=patty2026`;
-        document.head.appendChild(newIcon);
-      }
-    };
-    updateFavicon();
-
     const path = location.pathname;
     if (path === '/admin' || path === '/admin/login' || path === '/admin/dashboard') {
       const { token, user } = useAuthStore.getState();
