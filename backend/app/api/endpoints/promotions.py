@@ -12,6 +12,8 @@ from app.models.user import UserRole, User
 
 router = APIRouter()
 
+PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+
 DEFAULT_TODAYS_OFFERS: Dict[str, Any] = {
     "section_title": "TODAY'S OFFERS",
     "view_all_link": "/offers",

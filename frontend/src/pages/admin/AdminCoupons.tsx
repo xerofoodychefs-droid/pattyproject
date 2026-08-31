@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Search, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { api } from '../../api/client';
 import { AdminCreateCouponModal } from './AdminCreateCouponModal';
 
@@ -19,17 +19,20 @@ interface CouponItem {
 export const AdminCoupons: React.FC = () => {
   const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchCoupons = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data: any = await api.get('/promotions/coupons');
-      setCoupons(data);
-    } catch (err) {
+      setCoupons(Array.isArray(data) ? data : []);
+    } catch (err: any) {
       console.error('Failed to fetch coupons:', err);
+      setError(err?.detail || err?.message || 'Failed to fetch coupons. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -97,6 +100,22 @@ export const AdminCoupons: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-xl flex items-center justify-between text-red-300 text-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={fetchCoupons}
+            className="px-3 py-1 bg-red-900/60 hover:bg-red-800 border border-red-700 rounded text-white text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Coupons Data Table */}
       <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl overflow-hidden shadow-sm">
