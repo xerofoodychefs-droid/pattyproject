@@ -1,22 +1,27 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { getProductWebSocketUrl } from '../api/client';
+import { useShopHoursStore, ShopStatus } from '../store/shopHoursStore';
 
 interface UseProductRealtimeOptions {
   onProductAvailabilityChange?: (productId: string, isOutOfStock: boolean) => void;
+  onShopStatusChange?: (status: Partial<ShopStatus>) => void;
   onReconnect?: () => void;
   enabled?: boolean;
 }
 
 export const useProductRealtime = ({
   onProductAvailabilityChange,
+  onShopStatusChange,
   onReconnect,
   enabled = true,
 }: UseProductRealtimeOptions = {}) => {
   const onProductAvailabilityChangeRef = useRef(onProductAvailabilityChange);
+  const onShopStatusChangeRef = useRef(onShopStatusChange);
   const onReconnectRef = useRef(onReconnect);
 
   useEffect(() => {
     onProductAvailabilityChangeRef.current = onProductAvailabilityChange;
+    onShopStatusChangeRef.current = onShopStatusChange;
     onReconnectRef.current = onReconnect;
   });
 
@@ -61,8 +66,11 @@ export const useProductRealtime = ({
           }
         }, 20000);
 
-        if (wasReconnecting && onReconnectRef.current) {
-          onReconnectRef.current();
+        if (wasReconnecting) {
+          useShopHoursStore.getState().fetchShopStatus();
+          if (onReconnectRef.current) {
+            onReconnectRef.current();
+          }
         }
       };
 
@@ -75,6 +83,20 @@ export const useProductRealtime = ({
           if (type === 'PING') {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'PONG' }));
+            }
+            return;
+          }
+
+          if (type === 'shop_status_changed') {
+            const statusPayload: Partial<ShopStatus> = {
+              is_open: typeof data.is_open === 'boolean' ? data.is_open : undefined,
+              opening_time: data.opening_time,
+              closing_time: data.closing_time,
+              reason: data.reason,
+            };
+            useShopHoursStore.getState().setShopStatus(statusPayload);
+            if (onShopStatusChangeRef.current) {
+              onShopStatusChangeRef.current(statusPayload);
             }
             return;
           }

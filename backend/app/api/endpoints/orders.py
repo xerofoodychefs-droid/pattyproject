@@ -10,6 +10,7 @@ from app.schemas.order import OrderCreateRequest, OrderResponse, StatusUpdateReq
 from app.services.pricing_service import calculate_order_totals
 from app.services.payment_service import payment_provider
 from app.services.availability_service import validate_order_items_availability
+from app.services.shop_hours_service import validate_shop_open_for_ordering
 from app.api.endpoints.auth import require_role, get_current_user, get_optional_current_user
 from app.models.user import UserRole, User
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
@@ -46,6 +47,8 @@ def create_order(
     order_type_clean = request.order_type.strip().upper()
     if order_type_clean not in ["DELIVERY", "COLLECTION"]:
         raise HTTPException(status_code=400, detail="Invalid order type. Must be DELIVERY or COLLECTION.")
+
+    validate_shop_open_for_ordering(db)
 
     branch = db.query(Branch).filter(Branch.id == request.branch_id, Branch.is_active == True).first()
     if not branch:

@@ -28,6 +28,7 @@ from app.services.payment_service import (
 )
 from app.services.square_service import SquarePaymentError
 from app.services.branch_service import calculate_haversine_miles, MAX_DELIVERY_RADIUS_MILES
+from app.services.shop_hours_service import validate_shop_open_for_ordering
 from app.api.endpoints.auth import require_role, get_current_user
 from app.models.user import UserRole, User
 
@@ -90,6 +91,8 @@ async def create_payment_session(
     order = db.query(Order).filter(Order.id == target_order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    validate_shop_open_for_ordering(db)
 
     # Protection: Cancelled order payment rejection
     if order.status == OrderStatus.CANCELLED:

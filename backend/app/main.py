@@ -3,9 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.endpoints import (
     auth, branches, products, orders, payments, loyalty,
-    promotions, addresses, payment_methods, customers, admin_ws, customer_ws, contact, cart
+    promotions, addresses, payment_methods, customers, admin_ws, customer_ws, contact, cart, shop_hours
 )
 from app.db.seed import seed_db
+from app.core.shop_ticker import shop_ticker
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,6 +27,12 @@ app.add_middleware(
 def on_startup():
     settings.validate_production_configuration()
     seed_db()
+    shop_ticker.start()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    shop_ticker.stop()
 
 from fastapi.responses import PlainTextResponse
 
@@ -59,6 +66,7 @@ app.include_router(promotions.router, prefix=f"{prefix}/promotions", tags=["Prom
 app.include_router(addresses.router, prefix=f"{prefix}/addresses", tags=["Addresses"])
 app.include_router(payment_methods.router, prefix=f"{prefix}/payment-methods", tags=["Payment Methods"])
 app.include_router(customers.router, prefix=f"{prefix}/customers", tags=["Customers"])
+app.include_router(shop_hours.router, prefix=f"{prefix}/shop", tags=["Shop Hours"])
 app.include_router(admin_ws.router, prefix=f"{prefix}/admin/ws", tags=["Admin WebSocket"])
 app.include_router(customer_ws.router, prefix=f"{prefix}/ws", tags=["Customer WebSocket"])
 app.include_router(contact.router, prefix=f"{prefix}/contact", tags=["Contact"])

@@ -14,6 +14,7 @@ import { Product, Category, Branch } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { useCartStore } from '../../store/cartStore';
 import { useProductRealtime } from '../../hooks/useProductRealtime';
+import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
 
 interface OfferCard {
   id: string;
@@ -37,6 +38,11 @@ export const CustomerMenu: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const { selectedBranch, setSelectedBranch } = useCartStore();
+  const { isOpen, openingTime, closingTime, fetchShopStatus } = useShopHoursStore();
+
+  useEffect(() => {
+    fetchShopStatus();
+  }, [fetchShopStatus]);
 
   // Authoritative revalidation method to sync categories & products effective availability
   const revalidateMenu = useCallback(async () => {
@@ -399,6 +405,27 @@ export const CustomerMenu: React.FC = () => {
             Burgers, sides and more. Made fresh to order.
           </p>
         </div>
+
+        {/* Global Shop Closed Live Banner */}
+        {!isOpen && (
+          <div className="rounded-xl border border-red-500/30 bg-gradient-to-r from-red-950/60 via-[#180808] to-[#0D0D0D] p-3.5 sm:p-4 text-white shadow-lg flex items-center gap-3 transition-all duration-300">
+            <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse shrink-0 ring-4 ring-red-500/20" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-red-400 text-xs sm:text-sm uppercase tracking-wider">
+                  Shop is Currently Closed
+                </span>
+                <span className="text-[11px] bg-red-900/60 text-red-200 border border-red-700/50 px-2 py-0.5 rounded-full font-medium">
+                  Opens at {formatTime12h(openingTime)}
+                </span>
+              </div>
+              <p className="text-xs text-[#A1A1AA] mt-0.5">
+                Ordering is currently unavailable. Our daily opening hours are{' '}
+                <span className="text-white font-semibold">{formatTime12h(openingTime)} – {formatTime12h(closingTime)}</span>.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ============================================================ */}
         {/* FAST HARDWARE-ACCELERATED RIGHT-TO-LEFT SLIDING OFFERS STRIP */}

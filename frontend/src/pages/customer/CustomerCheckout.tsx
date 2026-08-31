@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Truck, ShoppingBag, MapPin, Clock, Lock, CheckCircle2, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
+import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
 import { api, getSafeStorage, setSafeStorage } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
@@ -145,6 +146,7 @@ interface SquareDigitalWalletsSectionProps {
   total: number;
   loading: boolean;
   paymentLoading: boolean;
+  isOpen?: boolean;
   activePaymentMethod: 'CARD' | 'GOOGLE_PAY' | 'APPLE_PAY' | null;
   onGooglePayPayment: (gpayInstance: any) => void;
   onApplePayPayment: (apayInstance: any) => void;
@@ -155,6 +157,7 @@ const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = 
   total,
   loading,
   paymentLoading,
+  isOpen = true,
   activePaymentMethod,
   onGooglePayPayment,
   onApplePayPayment,
@@ -270,7 +273,7 @@ const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = 
             type="button"
             id="apple-pay-button"
             onClick={() => onApplePayPayment(applePayRef.current)}
-            disabled={loading || paymentLoading}
+            disabled={!isOpen || loading || paymentLoading}
             className="w-full h-11 sm:h-12 bg-black hover:bg-[#111111] active:bg-[#1A1A1A] border border-[#333333] hover:border-[#444444] rounded-lg sm:rounded-xl text-white font-medium flex items-center justify-center cursor-pointer shadow-sm hover:shadow-md transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mb-2.5"
             aria-label="Pay with Apple Pay"
           >
@@ -302,8 +305,12 @@ const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = 
           <div
             id="square-google-pay-button"
             ref={googlePayContainerRef}
-            onClick={() => onGooglePayPayment(googlePayRef.current)}
-            className="w-full h-11 cursor-pointer overflow-hidden rounded-lg shadow-sm"
+            onClick={() => {
+              if (isOpen) {
+                onGooglePayPayment(googlePayRef.current);
+              }
+            }}
+            className={`w-full h-11 overflow-hidden rounded-lg shadow-sm ${!isOpen ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
           />
         )}
       </div>
@@ -342,6 +349,12 @@ export const CustomerCheckout: React.FC = () => {
   } = useCartStore();
   const { user } = useAuthStore();
   const navigate = useNavigate();
+
+  const { isOpen, openingTime, closingTime, fetchShopStatus } = useShopHoursStore();
+
+  useEffect(() => {
+    fetchShopStatus();
+  }, [fetchShopStatus]);
 
   const [customerName, setCustomerName] = useState(user?.full_name || '');
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
@@ -514,6 +527,10 @@ export const CustomerCheckout: React.FC = () => {
 
   const handleContinueToPayment = () => {
     setError('');
+    if (!isOpen) {
+      setError(`The shop is currently closed. Ordering is available during our opening hours (${formatTime12h(openingTime)} – ${formatTime12h(closingTime)}).`);
+      return;
+    }
     if (!customerName.trim()) {
       setError('Full Name is mandatory.');
       return;
@@ -544,6 +561,10 @@ export const CustomerCheckout: React.FC = () => {
     sourceId: string | undefined
   ) => {
     setError('');
+    if (!isOpen) {
+      setError(`The shop is currently closed. Ordering is available during our opening hours (${formatTime12h(openingTime)} – ${formatTime12h(closingTime)}).`);
+      return;
+    }
     if (items.length === 0) {
       setError('Your cart is empty. Please add items before checking out.');
       return;
@@ -803,6 +824,27 @@ export const CustomerCheckout: React.FC = () => {
         Checkout
       </h1>
 
+      {/* Global Shop Closed Live Banner */}
+      {!isOpen && (
+        <div className="mb-5 rounded-xl border border-red-500/40 bg-gradient-to-r from-red-950/70 via-[#180808] to-[#0D0D0D] p-4 text-white shadow-xl flex items-center gap-3">
+          <div className="h-3.5 w-3.5 rounded-full bg-red-500 animate-pulse shrink-0 ring-4 ring-red-500/20" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-red-400 text-sm uppercase tracking-wider">
+                Shop is Currently Closed
+              </span>
+              <span className="text-xs bg-red-900/70 text-red-200 border border-red-700/60 px-2.5 py-0.5 rounded-full font-medium">
+                Opens at {formatTime12h(openingTime)}
+              </span>
+            </div>
+            <p className="text-xs text-[#D4D4D8] mt-1">
+              Payment and order creation are currently paused. Our operating hours are{' '}
+              <strong className="text-white">{formatTime12h(openingTime)} – {formatTime12h(closingTime)}</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="mb-5 p-3.5 rounded-lg bg-[#241209] border border-[#FF5A00]/40 flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 text-[#FF5A00] shrink-0 mt-0.5" />
@@ -1012,11 +1054,12 @@ export const CustomerCheckout: React.FC = () => {
               <button
                 type="button"
                 onClick={handleContinueToPayment}
-                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                disabled={!isOpen}
+                className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-[#27272A]"
               >
-                <span>Continue to Payment</span>
-                <span>•</span>
-                <span>£{total.toFixed(2)}</span>
+                <span>{!isOpen ? `Shop Closed (Opens at ${formatTime12h(openingTime)})` : 'Continue to Payment'}</span>
+                {isOpen && <span>•</span>}
+                {isOpen && <span>£{total.toFixed(2)}</span>}
               </button>
             </>
           ) : (
@@ -1041,6 +1084,7 @@ export const CustomerCheckout: React.FC = () => {
                     total={total}
                     loading={loading}
                     paymentLoading={paymentLoading}
+                    isOpen={isOpen}
                     activePaymentMethod={activePaymentMethod}
                     onGooglePayPayment={handleGooglePayPayment}
                     onApplePayPayment={handleApplePayPayment}
@@ -1166,12 +1210,14 @@ export const CustomerCheckout: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCardPayment}
-                disabled={loading || paymentLoading || (paymentConfig?.provider === 'square' && !squareCardReady)}
+                disabled={!isOpen || loading || paymentLoading || (paymentConfig?.provider === 'square' && !squareCardReady)}
                 className="w-full h-12 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-sm font-bold rounded-xl shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50 active:scale-[0.99]"
               >
                 <Lock className="w-4 h-4" />
                 <span>
-                  {activePaymentMethod === 'CARD' && paymentLoading
+                  {!isOpen
+                    ? `Shop Closed (Opens at ${formatTime12h(openingTime)})`
+                    : activePaymentMethod === 'CARD' && paymentLoading
                     ? 'Processing Card Payment...'
                     : `Pay Securely with Card • £${total.toFixed(2)}`}
                 </span>

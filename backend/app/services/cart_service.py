@@ -16,6 +16,7 @@ from app.schemas.cart import (
     CartItemCreateRequest
 )
 from app.services.availability_service import is_product_effective_available
+from app.services.shop_hours_service import validate_shop_open_for_ordering
 
 
 def _normalize_configuration(
@@ -108,6 +109,8 @@ def add_item_to_cart(
     """Adds an item or increments quantity if identical item configuration already exists."""
     if quantity <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be at least 1")
+
+    validate_shop_open_for_ordering(db)
 
     product = db.query(Product).options(selectinload(Product.category)).filter(Product.id == product_id, Product.is_active == True).first()
     if not product:

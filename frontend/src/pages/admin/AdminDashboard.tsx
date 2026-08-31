@@ -19,6 +19,7 @@ import {
 import { api } from '../../api/client';
 import { Branch, Order, BranchStats } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
 import { AdminCreateBranchModal } from './AdminCreateBranchModal';
 import { AdminOrderDetailsModal } from './AdminOrderDetailsModal';
 
@@ -39,6 +40,50 @@ export const AdminDashboard: React.FC = () => {
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<Order | null>(null);
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+
+  // Shop Hours Management (Super Admin only)
+  const { isOpen, openingTime, closingTime, fetchShopStatus } = useShopHoursStore();
+  const [adminOpeningTime, setAdminOpeningTime] = useState(openingTime || '11:00');
+  const [adminClosingTime, setAdminClosingTime] = useState(closingTime || '23:00');
+  const [savingShopHours, setSavingShopHours] = useState(false);
+  const [shopHoursMsg, setShopHoursMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    fetchShopStatus();
+  }, [fetchShopStatus]);
+
+  useEffect(() => {
+    if (openingTime) setAdminOpeningTime(openingTime);
+    if (closingTime) setAdminClosingTime(closingTime);
+  }, [openingTime, closingTime]);
+
+  const handleSaveShopHours = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user?.role !== 'SUPER_ADMIN') return;
+    if (adminOpeningTime === adminClosingTime) {
+      setShopHoursMsg({ text: 'Opening time and closing time cannot be identical.', isError: true });
+      return;
+    }
+    setSavingShopHours(true);
+    setShopHoursMsg(null);
+    try {
+      const res = await api.patch<{ opening_time: string; closing_time: string; is_open: boolean }>('/shop/admin/settings', {
+        opening_time: adminOpeningTime,
+        closing_time: adminClosingTime,
+      });
+      useShopHoursStore.getState().setShopStatus(res);
+      setShopHoursMsg({
+        text: `✓ Shop hours updated to ${formatTime12h(adminOpeningTime)} – ${formatTime12h(adminClosingTime)}!`,
+        isError: false,
+      });
+      setTimeout(() => setShopHoursMsg(null), 5000);
+    } catch (err: any) {
+      const msg = err?.detail || err?.message || 'Failed to update shop hours.';
+      setShopHoursMsg({ text: typeof msg === 'string' ? msg : JSON.stringify(msg), isError: true });
+    } finally {
+      setSavingShopHours(false);
+    }
+  };
 
   useEffect(() => {
     fetchBranches(false);
@@ -187,6 +232,94 @@ export const AdminDashboard: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* SUPER ADMIN SHOP OPERATING HOURS SETTINGS */}
+      {user?.role === 'SUPER_ADMIN' && !selectedBranch && (
+        <div className="bg-[#0D0D0D] border border-[#242424] rounded-xl p-5 sm:p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1C1C1C]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#FF5A00]/10 border border-[#FF5A00]/30 flex items-center justify-center text-[#FF5A00]">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                  Shop Operating Hours
+                </h2>
+                <p className="text-xs text-[#71717A]">
+                  Global opening & closing times (UK Europe/London wall-clock time).
+                </p>
+              </div>
+            </div>
+
+            {/* Live Status Badge */}
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wider ${
+                  isOpen
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
+                    : 'bg-red-950/60 border-red-500/40 text-red-400'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-red-400 animate-pulse'}`} />
+                <span>{isOpen ? '🟢 Shop is Open' : '🔴 Shop is Closed'}</span>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveShopHours} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-semibold text-[#A1A1AA] mb-1.5 uppercase tracking-wider">
+                Opening Time (24h)
+              </label>
+              <input
+                type="time"
+                required
+                value={adminOpeningTime}
+                onChange={(e) => setAdminOpeningTime(e.target.value)}
+                className="w-full bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none"
+              />
+              <span className="text-[11px] text-[#71717A] mt-1 block">
+                Current: {formatTime12h(adminOpeningTime)}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#A1A1AA] mb-1.5 uppercase tracking-wider">
+                Closing Time (24h)
+              </label>
+              <input
+                type="time"
+                required
+                value={adminClosingTime}
+                onChange={(e) => setAdminClosingTime(e.target.value)}
+                className="w-full bg-[#151515] border border-[#2A2A2A] focus:border-[#FF5A00] rounded-lg px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none"
+              />
+              <span className="text-[11px] text-[#71717A] mt-1 block">
+                Current: {formatTime12h(adminClosingTime)}
+              </span>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={savingShopHours}
+                className="w-full h-11 bg-[#FF5A00] hover:bg-[#E84F00] text-white text-xs sm:text-sm font-bold uppercase tracking-wider rounded-lg shadow-lg shadow-[#FF5A00]/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingShopHours ? 'Saving...' : 'Save & Update Hours'}
+              </button>
+              {shopHoursMsg && (
+                <span
+                  className={`text-[11px] font-semibold mt-1 block text-center ${
+                    shopHoursMsg.isError ? 'text-red-400' : 'text-emerald-400'
+                  }`}
+                >
+                  {shopHoursMsg.text}
+                </span>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Main Branch Summary Table */}
       {!selectedBranch ? (

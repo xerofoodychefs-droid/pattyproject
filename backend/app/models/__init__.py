@@ -13,6 +13,7 @@ from app.models.loyalty import (
     LoyaltyMilestone
 )
 from app.models.promotion import Coupon, OfferSetting
+from app.models.setting import ShopSetting
 from app.models.printer import Printer, PrintJob
 from app.models.audit import AuditLog
 from app.models.cart import Cart, CartItem
@@ -26,7 +27,7 @@ __all__ = [
     "Payment", "PaymentStatus", "PaymentProvider", "PaymentEvent",
     "LoyaltyAccount", "LoyaltyTransaction", "LoyaltyReward",
     "LoyaltyProgramConfig", "LoyaltyCampaign", "LoyaltyMilestone",
-    "Coupon", "OfferSetting",
+    "Coupon", "OfferSetting", "ShopSetting",
     "Printer", "PrintJob",
     "AuditLog",
     "Cart", "CartItem"

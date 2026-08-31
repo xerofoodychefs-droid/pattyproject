@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Share2, X, Check, Plus, Minus, ShoppingCart, Sliders, Utensils } from 'lucide-react';
 import { Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption, SelectedChoice } from '../../types';
 import { useCartStore } from '../../store/cartStore';
+import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
 
 interface Props {
   product: Product;
@@ -14,6 +15,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
   const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
   const { items, addItem, setProductModalOpen } = useCartStore();
+  const { isOpen, openingTime } = useShopHoursStore();
 
   const choiceGroups = useMemo(() => product.choice_groups || [], [product.choice_groups]);
 
@@ -267,7 +269,17 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
 
           {/* Desktop Bottom Action CTA Bar with Quantity Stepper */}
           <div className="hidden md:block p-5 bg-[#0D0D0D] border-t border-[#242424] shrink-0">
-            {isProductOutOfStock ? (
+            {!isOpen ? (
+              <button
+                disabled
+                className="h-12 bg-[#18181B] border border-red-900/50 text-[#A1A1AA] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
+              >
+                <span className="text-white font-bold">£{totalPrice.toFixed(2)}</span>
+                <span className="text-red-400 font-bold uppercase tracking-wider">
+                  Shop Closed (Opens at {formatTime12h(openingTime)})
+                </span>
+              </button>
+            ) : isProductOutOfStock ? (
               <button
                 disabled
                 className="h-12 bg-[#18181B] border border-[#27272A] text-[#71717A] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
@@ -585,7 +597,17 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
 
           {/* Mobile Bottom Action CTA Bar (Pinned at bottom) with Quantity Stepper */}
           <div className="md:hidden p-4 bg-[#0D0D0D] border-t border-[#242424] shrink-0 sticky bottom-0 z-30">
-            {isProductOutOfStock ? (
+            {!isOpen ? (
+              <button
+                disabled
+                className="h-12 bg-[#18181B] border border-red-900/50 text-[#A1A1AA] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
+              >
+                <span className="text-white font-bold">£{totalPrice.toFixed(2)}</span>
+                <span className="text-red-400 font-bold uppercase tracking-wider">
+                  Shop Closed (Opens at {formatTime12h(openingTime)})
+                </span>
+              </button>
+            ) : isProductOutOfStock ? (
               <button
                 disabled
                 className="h-12 bg-[#18181B] border border-[#27272A] text-[#71717A] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"

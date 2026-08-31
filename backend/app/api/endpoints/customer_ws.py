@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.websocket_manager import manager
 
+from app.core.database import SessionLocal
+from app.services.shop_hours_service import get_authoritative_shop_status
+
 logger = logging.getLogger("pattyproject.websocket")
 router = APIRouter()
 
@@ -30,6 +33,24 @@ async def customer_products_websocket(websocket: WebSocket):
             "channel": "products",
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+        # Send current shop status on initial connection
+        try:
+            db_ws = SessionLocal()
+            try:
+                shop_status = get_authoritative_shop_status(db_ws)
+                await websocket.send_json({
+                    "type": "shop_status_changed",
+                    "is_open": shop_status["is_open"],
+                    "opening_time": shop_status["opening_time"],
+                    "closing_time": shop_status["closing_time"],
+                    "reason": shop_status["reason"],
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            finally:
+                db_ws.close()
+        except Exception as e:
+            logger.warning(f"[WS_PRODUCT_SHOP_STATUS_INIT_ERR] {e}")
 
         # Main receive / heartbeat loop
         while True:

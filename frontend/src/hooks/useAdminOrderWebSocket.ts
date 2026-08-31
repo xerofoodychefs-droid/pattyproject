@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useOrderAlertStore } from '../store/orderAlertStore';
+import { useShopHoursStore } from '../store/shopHoursStore';
 import { getAdminWebSocketUrl, getValidAccessToken } from '../api/client';
 import { Order } from '../types';
 
@@ -110,6 +111,16 @@ export const useAdminOrderWebSocket = ({
 
           if (type === 'CONNECTED') {
             setWsConnected(true);
+            return;
+          }
+
+          if (type === 'shop_status_changed') {
+            useShopHoursStore.getState().setShopStatus({
+              is_open: typeof data.is_open === 'boolean' ? data.is_open : undefined,
+              opening_time: data.opening_time,
+              closing_time: data.closing_time,
+              reason: data.reason,
+            });
             return;
           }
 

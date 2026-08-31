@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.user import User, UserRole
 from app.core.websocket_manager import manager
+from app.services.shop_hours_service import get_authoritative_shop_status
 
 logger = logging.getLogger("pattyproject.websocket")
 router = APIRouter()
@@ -101,6 +102,24 @@ async def admin_orders_websocket(
             "branch_ids": list(branch_ids),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+        # Send current shop status on initial connection
+        try:
+            db_ws = SessionLocal()
+            try:
+                shop_status = get_authoritative_shop_status(db_ws)
+                await websocket.send_json({
+                    "type": "shop_status_changed",
+                    "is_open": shop_status["is_open"],
+                    "opening_time": shop_status["opening_time"],
+                    "closing_time": shop_status["closing_time"],
+                    "reason": shop_status["reason"],
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            finally:
+                db_ws.close()
+        except Exception as e:
+            logger.warning(f"[WS_ADMIN_SHOP_STATUS_INIT_ERR] {e}")
 
         # Main receive / heartbeat loop
         while True:

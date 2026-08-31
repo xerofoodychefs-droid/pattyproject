@@ -162,6 +162,86 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"[WS_PRODUCT_SYNC_ERR] Failed to run product broadcast: {e}")
 
+    async def broadcast_shop_status(
+        self,
+        is_open: bool,
+        opening_time: str,
+        closing_time: str,
+        reason: str = "OPEN"
+    ) -> None:
+        """
+        Broadcasts shop open/closed status changes to all connected customers and admins in real time.
+        """
+        payload = {
+            "type": "shop_status_changed",
+            "is_open": bool(is_open),
+            "opening_time": str(opening_time),
+            "closing_time": str(closing_time),
+            "reason": str(reason),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+        async with self._lock:
+            product_recipients = list(self._product_connections.keys())
+            admin_recipients = list(self._connections.keys())
+
+        dead_product = []
+        dead_admin = []
+        delivered_count = 0
+
+        for ws in product_recipients:
+            try:
+                await ws.send_json(payload)
+                delivered_count += 1
+            except Exception:
+                dead_product.append(ws)
+
+        for ws in admin_recipients:
+            try:
+                await ws.send_json(payload)
+                delivered_count += 1
+            except Exception:
+                dead_admin.append(ws)
+
+        if dead_product or dead_admin:
+            async with self._lock:
+                for ws in dead_product:
+                    self._product_connections.pop(ws, None)
+                for ws in dead_admin:
+                    self._connections.pop(ws, None)
+
+        logger.info(
+            f"[WS_SHOP_STATUS_BROADCAST] is_open={is_open} hours={opening_time}-{closing_time} "
+            f"delivered={delivered_count}"
+        )
+
+    def sync_broadcast_shop_status(
+        self,
+        is_open: bool,
+        opening_time: str,
+        closing_time: str,
+        reason: str = "OPEN"
+    ) -> None:
+        """
+        Synchronous wrapper allowing synchronous endpoints to trigger the async shop status broadcast safely.
+        """
+        coro = self.broadcast_shop_status(is_open, opening_time, closing_time, reason)
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                loop.create_task(coro)
+                return
+        except RuntimeError:
+            pass
+
+        if self._main_loop and self._main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self._main_loop)
+        else:
+            try:
+                asyncio.run(coro)
+            except Exception as e:
+                logger.error(f"[WS_SHOP_STATUS_SYNC_ERR] Failed to run shop status broadcast: {e}")
+
     async def connect(self, websocket: WebSocket, user_id: str, role: str, branch_ids: Set[str]) -> None:
         """Accepts and registers a verified admin WebSocket connection."""
         await websocket.accept()

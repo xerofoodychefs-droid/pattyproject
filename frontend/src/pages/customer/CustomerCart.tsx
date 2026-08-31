@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
+import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
 import { api } from '../../api/client';
 
 interface AvailableCoupon {
@@ -106,6 +107,12 @@ export const CustomerCart: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const { isOpen, openingTime, closingTime, fetchShopStatus } = useShopHoursStore();
+
+  useEffect(() => {
+    fetchShopStatus();
+  }, [fetchShopStatus]);
 
   // Load available promo codes from backend
   useEffect(() => {
@@ -603,17 +610,38 @@ export const CustomerCart: React.FC = () => {
                 )
               )}
 
+              {/* Shop Closed Warning */}
+              {!isOpen && (
+                <div className="bg-red-950/40 border border-red-800/40 rounded-lg p-3 text-xs text-red-300 font-medium flex items-start gap-2.5">
+                  <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0 mt-1.5" />
+                  <div>
+                    <p className="font-bold text-red-400">Shop is Currently Closed</p>
+                    <p className="text-[11px] text-red-300/80 mt-0.5">
+                      Ordering is available between {formatTime12h(openingTime)} and {formatTime12h(closingTime)}. Your cart will be saved.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <button
-                disabled={hasOutOfStockItems}
+                disabled={!isOpen || hasOutOfStockItems}
                 onClick={() => navigate('/checkout')}
                 className={`w-full h-12 text-sm font-semibold rounded-lg shadow-lg transition-colors flex items-center justify-center gap-2 ${
-                  hasOutOfStockItems
+                  !isOpen
+                    ? 'bg-[#18181B] text-red-400 cursor-not-allowed border border-red-900/50'
+                    : hasOutOfStockItems
                     ? 'bg-[#27272A] text-[#71717A] cursor-not-allowed border border-[#3F3F46]'
                     : 'bg-[#FF5A00] hover:bg-[#E84F00] text-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF5A00]/50'
                 }`}
               >
-                <span>{hasOutOfStockItems ? 'Resolve Out of Stock Items' : 'Proceed to checkout'}</span>
-                {!hasOutOfStockItems && <ChevronRight className="w-4 h-4" />}
+                <span>
+                  {!isOpen
+                    ? `Shop Closed (Opens at ${formatTime12h(openingTime)})`
+                    : hasOutOfStockItems
+                    ? 'Resolve Out of Stock Items'
+                    : 'Proceed to checkout'}
+                </span>
+                {isOpen && !hasOutOfStockItems && <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>
