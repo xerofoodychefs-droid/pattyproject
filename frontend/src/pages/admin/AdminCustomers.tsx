@@ -79,7 +79,7 @@ export const AdminCustomers: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[1220px] mx-auto px-6 sm:px-8 py-8 space-y-6 text-[#F5F5F5]">
+    <div className="p-4 sm:p-6 lg:p-8 w-full max-w-[1680px] mx-auto space-y-6 text-[#F5F5F5]">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Plus,
@@ -285,9 +286,9 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
     }
   };
 
-  return (
-    <div className="admin-modal-overlay">
-      <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-6xl shadow-2xl p-4 sm:p-6 md:p-7 relative text-white">
+  const modalContent = (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
+      <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-6xl shadow-2xl p-4 sm:p-6 md:p-7 relative text-white max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-4 sm:mb-6 shrink-0">
           <div className="flex items-center gap-3">
@@ -943,4 +944,6 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

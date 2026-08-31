@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, CheckCircle2, AlertCircle, ArrowUp, ArrowDown, MoveVertical, Loader2, Clock, Save } from 'lucide-react';
 import { Category } from '../../types';
 import { api } from '../../api/client';
@@ -199,9 +200,9 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
     }
   };
 
-  return (
-    <div className="admin-modal-overlay">
-      <div className="admin-modal-container bg-[#121212] border border-[#262626] rounded-2xl max-w-xl shadow-2xl p-4 sm:p-6 relative flex flex-col text-white max-h-[90vh]">
+  const modalContent = (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
+      <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-xl shadow-2xl p-4 sm:p-6 relative flex flex-col text-white max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-[#262626] mb-4 sm:mb-5 shrink-0">
           <div>
@@ -446,4 +447,6 @@ export const AdminCategoryModal: React.FC<Props> = ({ categories, onClose, onRef
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
