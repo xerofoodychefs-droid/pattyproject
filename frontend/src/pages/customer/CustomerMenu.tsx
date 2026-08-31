@@ -455,7 +455,7 @@ export const CustomerMenu: React.FC = () => {
                           {offer.badge}
                         </span>
                       )}
-                      {offer.price !== undefined && (
+                      {typeof offer.price === 'number' && !isNaN(offer.price) && (
                         <span className="text-[10px] sm:text-[11px] font-extrabold text-[#FF8844]">
                           £{offer.price.toFixed(2)}
                         </span>
@@ -529,7 +529,7 @@ export const CustomerMenu: React.FC = () => {
           </button>
 
           {categories
-            .filter((c) => !c.slug?.toLowerCase().includes('combo') && !c.name.toLowerCase().includes('combo'))
+            .filter((c) => !c.slug?.toLowerCase().includes('combo') && !c.name?.toLowerCase().includes('combo'))
             .map((c) => {
               const isSelected = selectedCategory === c.id;
               return (
@@ -542,7 +542,7 @@ export const CustomerMenu: React.FC = () => {
                       : 'bg-[#0D0D0D] text-[#A1A1AA] border-[#242424] hover:text-[#F5F5F5] hover:bg-[#151515] hover:border-[#333333]'
                   }`}
                 >
-                  {getCategoryIcon(c.slug || c.name, isSelected)}
+                  {getCategoryIcon(c.slug || c.name || '', isSelected)}
                   <span>{c.name}</span>
                 </button>
               );
@@ -571,9 +571,11 @@ export const CustomerMenu: React.FC = () => {
               const displayImg = p.image_url || '/placeholder-burger.svg';
               const isOutOfStock = p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
 
-              const isVeg = p.name.includes('[VEG]');
-              const isVegan = p.name.includes('[VEGAN]');
-              const cleanName = p.name.replace('[VEG]', '').replace('[VEGAN]', '').trim();
+              const rawName = p.name || '';
+              const isVeg = rawName.includes('[VEG]');
+              const isVegan = rawName.includes('[VEGAN]');
+              const cleanName = rawName.replace('[VEG]', '').replace('[VEGAN]', '').trim() || 'Item';
+              const basePrice = typeof p.base_price === 'number' ? p.base_price : Number(p.base_price || 0);
 
               return (
                 <div
@@ -622,9 +624,9 @@ export const CustomerMenu: React.FC = () => {
                             VEGAN
                           </span>
                         )}
-                        {p.compare_at_price && p.compare_at_price > p.base_price && (
+                        {p.compare_at_price && Number(p.compare_at_price) > basePrice && (
                           <span className="bg-[#FF5A00] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow">
-                            SAVE £{(p.compare_at_price - p.base_price).toFixed(2)}
+                            SAVE £{(Number(p.compare_at_price) - basePrice).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -648,11 +650,11 @@ export const CustomerMenu: React.FC = () => {
                   <div className="p-2.5 sm:p-3 pt-0 flex items-center justify-between mt-auto">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-xs sm:text-sm font-bold text-[#F5F5F5]">
-                        £{p.base_price.toFixed(2)}
+                        £{basePrice.toFixed(2)}
                       </span>
-                      {p.compare_at_price && p.compare_at_price > p.base_price && (
+                      {p.compare_at_price && Number(p.compare_at_price) > basePrice && (
                         <span className="text-[10px] sm:text-[11px] text-[#71717A] line-through">
-                          £{p.compare_at_price.toFixed(2)}
+                          £{Number(p.compare_at_price).toFixed(2)}
                         </span>
                       )}
                     </div>

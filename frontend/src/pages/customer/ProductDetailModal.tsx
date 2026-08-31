@@ -281,7 +281,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                   {product.name}
                 </h2>
                 <span className={`text-lg font-bold shrink-0 ${isProductOutOfStock ? 'text-[#71717A]' : 'text-[#FF5A00]'}`}>
-                  £{product.base_price.toFixed(2)}
+                  £{(product.base_price ?? 0).toFixed(2)}
                 </span>
               </div>
 
@@ -312,7 +312,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 disabled
                 className="h-12 bg-[#18181B] border border-red-900/50 text-[#A1A1AA] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
               >
-                <span className="text-white font-bold">£{totalPrice.toFixed(2)}</span>
+                <span className="text-white font-bold">£{(totalPrice ?? 0).toFixed(2)}</span>
                 <span className="text-red-400 font-bold uppercase tracking-wider">
                   Shop Closed (Opens at {formatTime12h(openingTime)})
                 </span>
@@ -322,7 +322,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 disabled
                 className="h-12 bg-[#18181B] border border-[#27272A] text-[#71717A] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
               >
-                <span className="line-through opacity-70">£{totalPrice.toFixed(2)}</span>
+                <span className="line-through opacity-70">£{(totalPrice ?? 0).toFixed(2)}</span>
                 <span className="text-[#EF4444] font-bold uppercase tracking-wider">Out of Stock</span>
               </button>
             ) : (
@@ -640,7 +640,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 disabled
                 className="h-12 bg-[#18181B] border border-red-900/50 text-[#A1A1AA] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
               >
-                <span className="text-white font-bold">£{totalPrice.toFixed(2)}</span>
+                <span className="text-white font-bold">£{(totalPrice ?? 0).toFixed(2)}</span>
                 <span className="text-red-400 font-bold uppercase tracking-wider">
                   Shop Closed (Opens at {formatTime12h(openingTime)})
                 </span>
@@ -650,7 +650,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                 disabled
                 className="h-12 bg-[#18181B] border border-[#27272A] text-[#71717A] rounded-lg px-5 flex items-center justify-between font-semibold text-sm cursor-not-allowed w-full select-none"
               >
-                <span className="line-through opacity-70">£{totalPrice.toFixed(2)}</span>
+                <span className="line-through opacity-70">£{(totalPrice ?? 0).toFixed(2)}</span>
                 <span className="text-[#EF4444] font-bold uppercase tracking-wider">Out of Stock</span>
               </button>
             ) : (
@@ -691,7 +691,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                       : 'bg-[#242424] text-[#71717A] cursor-not-allowed border border-[#333333]'
                   }`}
                 >
-                  <span className="font-bold">£{totalPrice.toFixed(2)}</span>
+                  <span className="font-bold">£{(totalPrice ?? 0).toFixed(2)}</span>
                   <span>
                     {isChoiceRequirementSatisfied
                       ? `Add ${quantity} ${quantity === 1 ? 'pc' : 'pcs'}`
@@ -708,6 +708,10 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined' || !document.body) {
+    return null;
+  }
 
   return createPortal(modalContent, document.body);
 };
