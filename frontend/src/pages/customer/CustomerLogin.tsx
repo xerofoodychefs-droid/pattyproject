@@ -222,12 +222,22 @@ export const CustomerLogin: React.FC = () => {
       setError('Please enter your full name.');
       return;
     }
+    if (fullName.trim().length > 20) {
+      setError('Full name must not exceed 20 characters.');
+      return;
+    }
     if (!email.trim() || !email.includes('@')) {
       setError('Please enter a valid email address.');
       return;
     }
     if (!password || password.length < 6) {
       setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(0, 11);
+    if (cleanPhone && cleanPhone.length > 11) {
+      setError('Phone number must not exceed 11 digits.');
       return;
     }
 
@@ -238,8 +248,8 @@ export const CustomerLogin: React.FC = () => {
       const response: any = await api.post('/auth/register', {
         email: cleanEmail,
         password: password,
-        full_name: fullName.trim(),
-        phone: phone.trim() || undefined,
+        full_name: fullName.trim().slice(0, 20),
+        phone: cleanPhone || undefined,
       });
 
       if (response?.requires_verification) {
@@ -673,7 +683,8 @@ export const CustomerLogin: React.FC = () => {
                       <input
                         type="text"
                         value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
+                        maxLength={20}
+                        onChange={(e) => setFullName(e.target.value.slice(0, 20))}
                         placeholder="John Smith"
                         className="w-full bg-transparent text-xs text-white placeholder-[#6B7280] focus:outline-none"
                       />
@@ -700,9 +711,11 @@ export const CustomerLogin: React.FC = () => {
                       <Phone className="w-4 h-4 text-[#FF5500] mr-2.5 shrink-0" />
                       <input
                         type="tel"
+                        inputMode="numeric"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+44 7123 456789"
+                        maxLength={11}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                        placeholder="07123456789"
                         className="w-full bg-transparent text-xs text-white placeholder-[#6B7280] focus:outline-none"
                       />
                     </div>
