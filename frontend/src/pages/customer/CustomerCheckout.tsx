@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Truck, ShoppingBag, MapPin, Clock, Lock, CheckCircle2, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Truck, ShoppingBag, MapPin, Clock, Lock, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
@@ -310,7 +310,8 @@ const SquareDigitalWalletsSection: React.FC<SquareDigitalWalletsSectionProps> = 
                 onGooglePayPayment(googlePayRef.current);
               }
             }}
-            className={`w-full h-11 overflow-hidden rounded-lg shadow-sm ${!isOpen ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
+            className={`w-full h-11 overflow-hidden rounded-lg border-0 ring-0 outline-none [&_iframe]:border-none [&_iframe]:outline-none [&_*]:border-none [&_*]:outline-none shadow-sm ${!isOpen ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
+            style={{ border: 'none', outline: 'none' }}
           />
         )}
       </div>
@@ -1070,10 +1071,6 @@ export const CustomerCheckout: React.FC = () => {
                   <Lock className="w-4 h-4 text-[#FF5A00]" />
                   <span>Payment Details</span>
                 </h2>
-                <span className="bg-[#0D2818] border border-[#22C55E]/40 text-[#22C55E] text-[10px] font-semibold uppercase px-2.5 py-1 rounded flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#22C55E]" />
-                  256-Bit SSL Encrypted
-                </span>
               </div>
 
               {paymentConfig?.provider === 'square' ? (
@@ -1200,11 +1197,6 @@ export const CustomerCheckout: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              <div className="flex items-center gap-2 text-xs text-[#22C55E] font-medium pt-1">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>All payments are secure and encrypted</span>
-              </div>
 
               {/* Card Pay Securely CTA Button (Exclusively processes Card) */}
               <button
