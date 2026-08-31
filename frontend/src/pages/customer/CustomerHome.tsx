@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Star, ChevronRight, Wheat, Sparkles } from 'lucide-react';
 import { api } from '../../api/client';
@@ -16,6 +16,10 @@ import offerBg3 from '../../assets/offer_bg_3.png';
 export const CustomerHome: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  const handleCloseProductModal = useCallback(() => {
+    setSelectedProduct(null);
+  }, []);
   const [todaysOffersData, setTodaysOffersData] = useState<any>({
     section_title: "TODAY'S OFFERS",
     view_all_link: "/offers",
@@ -538,7 +542,7 @@ export const CustomerHome: React.FC = () => {
       {selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
+          onClose={handleCloseProductModal}
         />
       )}
     </div>

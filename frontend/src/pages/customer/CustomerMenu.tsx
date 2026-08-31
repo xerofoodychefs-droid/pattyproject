@@ -40,6 +40,10 @@ export const CustomerMenu: React.FC = () => {
   const { selectedBranch, setSelectedBranch } = useCartStore();
   const { isOpen, openingTime, closingTime, fetchShopStatus } = useShopHoursStore();
 
+  const handleCloseProductModal = useCallback(() => {
+    setSelectedProduct(null);
+  }, []);
+
   useEffect(() => {
     fetchShopStatus();
   }, [fetchShopStatus]);
@@ -704,7 +708,7 @@ export const CustomerMenu: React.FC = () => {
       {selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
+          onClose={handleCloseProductModal}
         />
       )}
     </div>

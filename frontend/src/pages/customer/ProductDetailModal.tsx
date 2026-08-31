@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Share2, X, Check, Plus, Minus, ShoppingCart, Sliders, Utensils } from 'lucide-react';
 import { Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption, SelectedChoice } from '../../types';
@@ -15,7 +15,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
   const [selectedChoices, setSelectedChoices] = useState<SelectedChoice[]>([]);
   const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
-  const { items, addItem, setProductModalOpen } = useCartStore();
+  const { items, addItem } = useCartStore();
   const { isOpen, openingTime } = useShopHoursStore();
 
   const choiceGroups = useMemo(() => product.choice_groups || [], [product.choice_groups]);
@@ -103,6 +103,11 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
     .filter((item) => item.product.id === product.id)
     .reduce((sum, item) => sum + item.quantity, 0);
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   // Scroll position capture, body scroll lock, Escape key listener, and modal open state in store
   useEffect(() => {
     const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -115,11 +120,11 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
     document.body.style.overflow = 'hidden';
-    setProductModalOpen(true);
+    useCartStore.getState().setProductModalOpen(true);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -128,13 +133,13 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalOverflow;
       document.body.style.paddingRight = originalPaddingRight;
-      setProductModalOpen(false);
+      useCartStore.getState().setProductModalOpen(false);
       window.scrollTo({
         top: scrollY,
         behavior: 'instant' as ScrollBehavior,
       });
     };
-  }, [setProductModalOpen, onClose]);
+  }, []);
 
   // Modifiers configured by Admin for this specific product (no hardcoded fallbacks)
   const availableModifiers = useMemo(() => {
