@@ -9,6 +9,81 @@ interface ThermalReceiptModalProps {
   autoPrint?: boolean;
 }
 
+interface CustomizationCategories {
+  addons: { label: string; price?: number }[];
+  removals: string[];
+  selections: { label: string; price?: number }[];
+}
+
+const parseCustomizations = (item: any): CustomizationCategories => {
+  const addons: { label: string; price?: number }[] = [];
+  const removals: string[] = [];
+  const selections: { label: string; price?: number }[] = [];
+
+  // 1. Process selected_modifiers (array of objects or strings)
+  if (Array.isArray(item.selected_modifiers)) {
+    for (const mod of item.selected_modifiers) {
+      if (!mod) continue;
+      if (typeof mod === 'string') {
+        const trimmed = mod.trim();
+        if (trimmed.startsWith('-') || trimmed.toLowerCase().startsWith('no ') || trimmed.toLowerCase().startsWith('without ')) {
+          const clean = trimmed.replace(/^[-•\s]+/, '').replace(/^(no|without)\s+/i, '').trim();
+          if (clean && !removals.includes(clean)) removals.push(clean);
+        } else if (trimmed.includes(':')) {
+          selections.push({ label: trimmed });
+        } else {
+          addons.push({ label: trimmed.replace(/^[+•\s]+/, '').trim() });
+        }
+      } else if (typeof mod === 'object') {
+        const rawName = (mod.name || mod.option_name || '').trim();
+        const price = typeof mod.price === 'number' && mod.price > 0 ? mod.price : undefined;
+
+        if (mod.is_choice || mod.group_name || (rawName.includes(':') && !rawName.startsWith('-'))) {
+          const group = mod.group_name || (rawName.includes(':') ? rawName.split(':')[0].trim() : '');
+          const opt = mod.option_name || (rawName.includes(':') ? rawName.split(':')[1].trim() : rawName);
+          const label = group ? `${group}: ${opt}` : opt;
+          if (label && !selections.some(s => s.label === label)) {
+            selections.push({ label, price });
+          }
+        } else if (rawName.startsWith('-') || rawName.toLowerCase().startsWith('no ') || rawName.toLowerCase().startsWith('without ') || mod.is_removal) {
+          const clean = rawName.replace(/^[-•\s]+/, '').replace(/^(no|without)\s+/i, '').trim();
+          if (clean && !removals.includes(clean)) removals.push(clean);
+        } else if (rawName) {
+          addons.push({ label: rawName.replace(/^[+•\s]+/, '').trim(), price });
+        }
+      }
+    }
+  }
+
+  // 2. Process selected_choices (array of choice objects)
+  if (Array.isArray(item.selected_choices)) {
+    for (const ch of item.selected_choices) {
+      if (!ch) continue;
+      const group = (ch.group_name || '').trim();
+      const opt = (ch.option_name || ch.name || '').trim();
+      const label = group ? `${group}: ${opt}` : opt;
+      const price = typeof ch.price_delta === 'number' && ch.price_delta > 0 ? ch.price_delta : undefined;
+      if (label && !selections.some(s => s.label === label)) {
+        selections.push({ label, price });
+      }
+    }
+  }
+
+  // 3. Process removed_ingredients (array of strings)
+  if (Array.isArray(item.removed_ingredients)) {
+    for (const rem of item.removed_ingredients) {
+      if (typeof rem === 'string' && rem.trim()) {
+        const clean = rem.trim().replace(/^[-•\s]+/, '').replace(/^(no|without)\s+/i, '').trim();
+        if (clean && !removals.includes(clean)) {
+          removals.push(clean);
+        }
+      }
+    }
+  }
+
+  return { addons, removals, selections };
+};
+
 export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   order,
   isOpen,
@@ -44,68 +119,234 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   const totalVal = Number(order.total_amount || 0);
   const totalItemsCount = (order.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0);
 
+  // Address parsing
+  const formatAddressLines = (): string[] => {
+    if (order.order_type !== 'DELIVERY' || !order.delivery_address) return [];
+    const addr = order.delivery_address;
+    const lines: string[] = [];
+    if (typeof addr === 'string') {
+      return addr.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    }
+    if (typeof addr === 'object' && addr !== null) {
+      if (addr.address_line1) lines.push(String(addr.address_line1).trim());
+      if (addr.address_line2) lines.push(String(addr.address_line2).trim());
+      if (addr.city) lines.push(String(addr.city).trim());
+      const postAndCountry = [addr.postcode, addr.country || 'United Kingdom'].filter(Boolean).map(s => String(s).trim()).join(', ');
+      if (postAndCountry) lines.push(postAndCountry);
+      if (lines.length === 0 && addr.formatted_address) {
+        return String(addr.formatted_address).split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      }
+    }
+    return lines;
+  };
+
+  const addressLines = formatAddressLines();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-black">
-      <div className="thermal-receipt-80mm bg-white rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4 font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center border-b border-black pb-2">
-          <div className="text-left">
-            <h3 className="font-extrabold text-sm tracking-wider uppercase">PATTY PROJECT UK</h3>
-            <p className="text-[10px] text-zinc-600">Order: {order.order_number}</p>
-          </div>
+      <div className="thermal-receipt-80mm bg-white rounded-lg max-w-md w-full p-5 shadow-2xl font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto">
+        {/* Close Button (Screen Only) */}
+        <div className="flex justify-end print:hidden mb-1">
           <button
             type="button"
             onClick={onClose}
-            className="p-1 hover:bg-zinc-200 rounded text-black cursor-pointer print:hidden"
+            className="p-1 hover:bg-zinc-200 rounded text-black cursor-pointer"
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="text-center font-bold tracking-widest text-sm border-b border-dashed border-zinc-400 py-1">
+        {/* 1. Centered Monochrome Logo */}
+        <div className="flex justify-center mb-1">
+          <img
+            src="/logo.png"
+            alt="Patty Project"
+            className="w-16 h-16 object-contain filter grayscale contrast-200"
+          />
+        </div>
+
+        {/* 2. Header: PATTY PROJECT (no UK) and Order Number */}
+        <div className="text-center space-y-0.5">
+          <h2 className="font-extrabold text-base tracking-wider uppercase">PATTY PROJECT</h2>
+          <p className="text-xs font-semibold">Order: {order.order_number}</p>
+        </div>
+
+        <div className="border-b border-dashed border-zinc-400 my-2" />
+
+        {/* 3. Customer Information */}
+        {(order.customer_name || order.customer_phone) && (
+          <>
+            <div className="space-y-1 text-xs">
+              <div className="font-bold tracking-wide uppercase text-[11px]">CUSTOMER</div>
+              {order.customer_name && (
+                <div className="flex gap-2">
+                  <span className="w-12 text-zinc-700">Name</span>
+                  <span>: {order.customer_name}</span>
+                </div>
+              )}
+              {order.customer_phone && (
+                <div className="flex gap-2">
+                  <span className="w-12 text-zinc-700">Phone</span>
+                  <span>: {order.customer_phone}</span>
+                </div>
+              )}
+            </div>
+            <div className="border-b border-dashed border-zinc-400 my-2" />
+          </>
+        )}
+
+        {/* 4. Delivery Address or Order Type */}
+        {addressLines.length > 0 ? (
+          <>
+            <div className="space-y-0.5 text-xs">
+              <div className="font-bold tracking-wide uppercase text-[11px]">DELIVERY ADDRESS</div>
+              {addressLines.map((line, lIdx) => (
+                <div key={lIdx} className="break-words leading-tight">{line}</div>
+              ))}
+            </div>
+            <div className="border-b border-dashed border-zinc-400 my-2" />
+          </>
+        ) : order.order_type === 'COLLECTION' ? (
+          <>
+            <div className="space-y-0.5 text-xs">
+              <div className="font-bold tracking-wide uppercase text-[11px]">ORDER TYPE</div>
+              <div className="font-semibold">COLLECTION</div>
+              {order.collection_slot_time && (
+                <div className="text-[11px] text-zinc-700">Slot: {new Date(order.collection_slot_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              )}
+            </div>
+            <div className="border-b border-dashed border-zinc-400 my-2" />
+          </>
+        ) : null}
+
+        {/* 5. Bill Title & Table Header */}
+        <div className="text-center font-bold tracking-widest text-sm py-0.5">
           BILL
         </div>
 
-        <div className="space-y-1.5 py-1">
+        <div className="border-b border-dashed border-zinc-400 my-1" />
+
+        <div className="flex justify-between items-center text-[11px] font-bold pb-0.5">
+          <div className="flex gap-2">
+            <span className="w-5">QTY</span>
+            <span>ITEM & DETAILS</span>
+          </div>
+          <span>PRICE</span>
+        </div>
+
+        <div className="border-b border-dashed border-zinc-400 mb-2" />
+
+        {/* 6. Items, Customizations, Add-ons, Removals, Selections */}
+        <div className="space-y-2 py-0.5">
           {order.items && order.items.length > 0 ? (
-            order.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-start gap-2">
-                <span className="break-words pr-2 flex-1">
-                  {item.quantity}  {item.product_name}
-                </span>
-                <span className="font-semibold shrink-0">
-                  £{Number(item.total_price || 0).toFixed(2)}
-                </span>
-              </div>
-            ))
+            order.items.map((item, idx) => {
+              const { addons, removals, selections } = parseCustomizations(item);
+              const hasCustomizations = addons.length > 0 || removals.length > 0 || selections.length > 0;
+
+              return (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex gap-2 flex-1 items-start">
+                      <span className="font-bold w-5 shrink-0">{item.quantity}</span>
+                      <span className="font-bold break-words flex-1 leading-snug">{item.product_name}</span>
+                    </div>
+                    <span className="font-bold shrink-0">
+                      £{Number(item.total_price || 0).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {hasCustomizations && (
+                    <div className="pl-7 text-[11px] space-y-1 leading-tight text-zinc-800">
+                      {addons.length > 0 && (
+                        <div>
+                          <div className="font-semibold">• Add-ons:</div>
+                          <div className="pl-3 space-y-0.5">
+                            {addons.map((a, aIdx) => (
+                              <div key={aIdx} className="flex justify-between">
+                                <span>- {a.label}</span>
+                                {a.price !== undefined && (
+                                  <span>£{Number(a.price).toFixed(2)}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {removals.length > 0 && (
+                        <div>
+                          <div className="font-semibold">• Removals:</div>
+                          <div className="pl-3 space-y-0.5">
+                            {removals.map((r, rIdx) => (
+                              <div key={rIdx}>- {r}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selections.length > 0 && (
+                        <div>
+                          <div className="font-semibold">• Selections / Options:</div>
+                          <div className="pl-3 space-y-0.5">
+                            {selections.map((s, sIdx) => (
+                              <div key={sIdx} className="flex justify-between">
+                                <span>- {s.label}</span>
+                                {s.price !== undefined && (
+                                  <span>£{Number(s.price).toFixed(2)}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
-            <p>1  Standard Order  £{subtotalVal.toFixed(2)}</p>
+            <div className="flex justify-between items-start gap-2">
+              <div className="flex gap-2 flex-1">
+                <span className="font-bold w-5">1</span>
+                <span className="font-bold">Standard Order</span>
+              </div>
+              <span className="font-bold">£{subtotalVal.toFixed(2)}</span>
+            </div>
           )}
         </div>
 
-        <div className="border-t border-zinc-400 pt-1.5 flex justify-between font-bold">
-          <span>{totalItemsCount}  ITEM(S)</span>
+        {/* 7. Totals & Discount */}
+        <div className="border-t border-dashed border-zinc-400 pt-1.5 flex justify-between font-bold text-xs">
+          <span>{totalItemsCount} ITEM(S)</span>
           <span>£{subtotalVal.toFixed(2)}</span>
         </div>
 
         {discountVal > 0 && (
-          <div className="flex justify-between text-zinc-800">
-            <span>   Discount</span>
+          <div className="flex justify-between text-xs text-zinc-800 pt-0.5">
+            <span>DISCOUNT {order.coupon_code ? `(${order.coupon_code})` : ''}</span>
             <span>-£{discountVal.toFixed(2)}</span>
           </div>
         )}
 
-        <div className="border-t border-zinc-400 pt-1.5 flex justify-between font-extrabold text-sm">
-          <span>   AMOUNT DUE</span>
+        <div className="border-t border-dashed border-zinc-400 my-1.5" />
+
+        <div className="flex justify-between font-extrabold text-sm py-0.5">
+          <span>AMOUNT DUE</span>
           <span>£{totalVal.toFixed(2)}</span>
         </div>
 
-        <div className="border-t border-dashed border-zinc-400 pt-3 space-y-1">
-          <div className="grid grid-cols-4 font-bold text-[11px] pb-1 border-b border-zinc-300">
+        <div className="border-b border-dashed border-zinc-400 my-1.5" />
+
+        {/* 8. 4-Column VAT Breakdown */}
+        <div className="space-y-1">
+          <div className="grid grid-cols-4 font-bold text-[11px] pb-0.5">
             <span>Rate</span>
             <span className="text-right">Net</span>
             <span className="text-right">Tax</span>
             <span className="text-right">Gross</span>
           </div>
+          <div className="border-b border-dashed border-zinc-300" />
           <div className="grid grid-cols-4 text-[11px]">
             <span>20%</span>
             <span className="text-right">£{netVal.toFixed(2)}</span>
@@ -114,12 +355,31 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
           </div>
         </div>
 
-        <div className="pt-2 text-center text-[10px] space-y-1 border-t border-zinc-300">
+        <div className="border-b border-dashed border-zinc-400 my-2" />
+
+        {/* 9. Legal Notice */}
+        <div className="text-center text-[10px]">
           <p className="font-semibold">Tax are included in the Gross amount!</p>
-          <p className="font-bold tracking-wider">VAT NO: 525 5772 74</p>
         </div>
 
-        <div className="pt-3 flex gap-2 print:hidden">
+        <div className="border-b border-dashed border-zinc-400 my-2" />
+
+        <div className="text-center text-[11px] font-bold tracking-wider">
+          VAT NO: 525 5772 74
+        </div>
+
+        <div className="border-b border-dashed border-zinc-400 my-2" />
+
+        {/* 10. Receipt Thank You Footer */}
+        <div className="text-center text-[11px] space-y-0.5 text-zinc-800">
+          <p>Thank you for your order!</p>
+          <p>We hope to serve you again.</p>
+        </div>
+
+        <div className="border-b border-dashed border-zinc-400 mt-2 mb-3" />
+
+        {/* Action Buttons (Print / Close) */}
+        <div className="pt-1 flex gap-2 print:hidden">
           <button
             type="button"
             onClick={() => window.print()}
