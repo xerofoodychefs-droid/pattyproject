@@ -4,7 +4,6 @@ import { Star, ChevronRight, Wheat, Sparkles } from 'lucide-react';
 import { api } from '../../api/client';
 import { Product } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
-import { CustomerFooter } from '../../components/customer/CustomerFooter';
 import { useCartStore } from '../../store/cartStore';
 import { useProductRealtime } from '../../hooks/useProductRealtime';
 import categoryBannerImg from '../../assets/categories_showcase_banner.png';
