@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Share2, X, Check, Plus, Minus, ShoppingCart, Sliders, Utensils } from 'lucide-react';
 import { Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption, SelectedChoice } from '../../types';
 import { useCartStore } from '../../store/cartStore';
@@ -102,13 +103,38 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
     .filter((item) => item.product.id === product.id)
     .reduce((sum, item) => sum + item.quantity, 0);
 
-  // Set modal open state in store on mount, reset on unmount
+  // Scroll position capture, body scroll lock, Escape key listener, and modal open state in store
   useEffect(() => {
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+
+    // Calculate scrollbar width to avoid layout shift when scrollbar is hidden
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
     setProductModalOpen(true);
-    return () => {
-      setProductModalOpen(false);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
     };
-  }, [setProductModalOpen]);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+      setProductModalOpen(false);
+      window.scrollTo({
+        top: scrollY,
+        behavior: 'instant' as ScrollBehavior,
+      });
+    };
+  }, [setProductModalOpen, onClose]);
 
   // Modifiers configured by Admin for this specific product (no hardcoded fallbacks)
   const availableModifiers = useMemo(() => {
@@ -152,16 +178,28 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
 
   const defaultImg = product.image_url || '/placeholder-burger.svg';
 
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden animate-in fade-in duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`product-title-${product.id}`}
+    >
       {/* Click Outside Backdrop Listener */}
-      <div className="fixed inset-0" onClick={onClose} />
+      <div
+        className="absolute inset-0 cursor-pointer"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
       {/* Main Modal Surface */}
-      <div className="bg-[#0D0D0D] text-[#F5F5F5] rounded-t-[12px] sm:rounded-[12px] max-w-2xl lg:max-w-3xl w-full shadow-2xl overflow-hidden relative z-10 border border-[#242424] flex flex-col md:flex-row max-h-[90vh] animate-in zoom-in-95 duration-150">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#0D0D0D] text-[#F5F5F5] rounded-xl sm:rounded-2xl max-w-2xl lg:max-w-3xl w-full shadow-2xl overflow-hidden relative z-10 border border-[#242424] flex flex-col md:flex-row max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] animate-in zoom-in-95 duration-150 overscroll-contain"
+      >
         
         {/* LEFT COLUMN: Product Image & Details */}
-        <div className="w-full md:w-1/2 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[#242424] bg-[#0D0D0D] overflow-y-auto">
+        <div className="w-full md:w-1/2 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[#242424] bg-[#0D0D0D] overflow-y-auto max-h-[35vh] sm:max-h-[40vh] md:max-h-none shrink-0 md:shrink overscroll-contain">
           <div className="p-4 sm:p-5 space-y-3.5">
             
             {/* Top Action Header with Share & Close buttons */}
@@ -239,7 +277,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
             {/* Product Info */}
             <div className="space-y-2 pt-1">
               <div className="flex items-start justify-between gap-3">
-                <h2 className="text-lg sm:text-xl font-bold text-[#F5F5F5] leading-snug">
+                <h2 id={`product-title-${product.id}`} className="text-lg sm:text-xl font-bold text-[#F5F5F5] leading-snug">
                   {product.name}
                 </h2>
                 <span className={`text-lg font-bold shrink-0 ${isProductOutOfStock ? 'text-[#71717A]' : 'text-[#FF5A00]'}`}>
@@ -340,7 +378,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
         </div>
 
         {/* RIGHT COLUMN: Customization Options List */}
-        <div className="w-full md:w-1/2 flex flex-col bg-[#121212] overflow-hidden flex-1">
+        <div className="w-full md:w-1/2 flex flex-col bg-[#121212] overflow-hidden flex-1 min-h-0">
           
           {/* Customization Section Header */}
           <div className="p-4 sm:p-5 border-b border-[#242424] flex items-center justify-between bg-[#121212] sticky top-0 z-10 shrink-0">
@@ -360,7 +398,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
           </div>
 
           {/* Scrollable Option Cards List */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 bg-[#121212]">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5 bg-[#121212] overscroll-contain">
             
             {/* 0. CHOICE GROUPS SECTION (e.g. Choose any 2, Choose your rasher) */}
             {choiceGroups.length > 0 && (
@@ -670,6 +708,8 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default ProductDetailModal;
