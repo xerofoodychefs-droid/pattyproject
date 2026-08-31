@@ -355,8 +355,12 @@ def get_order_by_number(
     Customer order inspection / status tracking or admin inspection.
     Enforces strict ownership & role authorization to prevent IDOR / PII enumeration.
     """
+    clean_num = str(order_number or "").strip()
+    hash_num = f"#{clean_num}" if not clean_num.startswith("#") else clean_num
     order = db.query(Order).filter(
-        (Order.order_number == order_number) | (Order.id == order_number)
+        (Order.id == clean_num) |
+        (Order.order_number == clean_num) |
+        (Order.order_number == hash_num)
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")

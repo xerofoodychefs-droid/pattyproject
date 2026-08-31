@@ -85,8 +85,9 @@ export const MockCheckoutPage: React.FC = () => {
           type: 'success',
           text: 'Payment successful! Redirecting to order confirmation...'
         });
+        const targetIdentifier = paymentData.order_id || encodeURIComponent(paymentData.order_number || '');
         setTimeout(() => {
-          navigate(`/order-confirmation/${paymentData.order_number}`);
+          navigate(`/order-confirmation/${targetIdentifier}`);
         }, 1200);
       } else if (status === 'FAILED') {
         setActionMessage({

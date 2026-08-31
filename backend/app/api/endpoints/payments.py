@@ -348,10 +348,14 @@ def verify_transaction_status(transaction_id: str, db: Session = Depends(get_db)
     if not payment:
         payment = db.query(Payment).filter(Payment.order_id == transaction_id).order_by(Payment.created_at.desc()).first()
 
-    # 4. Fallback: Order Number lookup (e.g. #PP1234)
+    # 4. Fallback: Order Number lookup (e.g. #PP1234 or PP1234)
     if not payment:
+        clean_tx = str(transaction_id or "").strip()
+        hash_tx = f"#{clean_tx}" if not clean_tx.startswith("#") else clean_tx
         order_match = db.query(Order).filter(
-            (Order.order_number == transaction_id) | (Order.id == transaction_id)
+            (Order.id == clean_tx) |
+            (Order.order_number == clean_tx) |
+            (Order.order_number == hash_tx)
         ).first()
         if order_match:
             payment = db.query(Payment).filter(Payment.order_id == order_match.id).order_by(Payment.created_at.desc()).first()

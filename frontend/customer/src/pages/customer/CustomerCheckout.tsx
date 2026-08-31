@@ -3,11 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Truck, ShoppingBag, MapPin, Clock, Lock, CheckCircle2, Building2, Plus, Star, ShieldCheck, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
-import { api } from '../../api/client';
+import { api, getSafeStorage, setSafeStorage } from '../../api/client';
 import { CustomerAddress } from '../../types/address';
 import { CustomerCard } from '../../types/card';
 import { loadSquareSdk } from '../../utils/squarePayments';
-import { getSafeStorage } from '../../api/client';
 
 // ==========================================
 // 1. ISOLATED SQUARE CARD PAYMENT COMPONENT
@@ -617,16 +616,23 @@ export const CustomerCheckout: React.FC = () => {
         }
       );
 
+      const targetEmail = (customerEmail || newOrder.customer_email || '').trim();
+      if (targetEmail) {
+        setSafeStorage('patty_last_order_email', targetEmail);
+      }
+      const emailQuery = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : '';
+      const targetIdentifier = newOrder.id || encodeURIComponent(newOrder.order_number || '');
+
       if (sessionRes && sessionRes.status === 'PAID') {
         clearCart();
-        navigate(`/order-confirmation/${newOrder.order_number}`);
+        navigate(`/order-confirmation/${targetIdentifier}${emailQuery}`);
       } else if (sessionRes && sessionRes.transaction_id && sessionRes.provider === 'MOCK') {
         navigate(`/mock-checkout/${sessionRes.transaction_id}`);
       } else if (sessionRes && sessionRes.payment_url) {
         navigate(sessionRes.payment_url);
       } else {
         clearCart();
-        navigate(`/order-confirmation/${newOrder.order_number}`);
+        navigate(`/order-confirmation/${targetIdentifier}${emailQuery}`);
       }
     } catch (err: any) {
       const detailObj = err?.detail || err?.data?.detail;

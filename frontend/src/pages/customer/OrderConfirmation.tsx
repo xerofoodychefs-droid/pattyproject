@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -30,12 +30,16 @@ import { useAuthStore } from '../../store/authStore';
 export const OrderConfirmation: React.FC = () => {
   const { orderNumber } = useParams<{ orderNumber?: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  // Multi-format order identifier resolution
+  const hashIdentifier = location.hash ? location.hash.replace(/^#/, '').trim() : '';
+
+  // Multi-format order identifier resolution (Supports route param, hash fragment, search params)
   const resolvedIdentifier = (
     orderNumber ||
+    hashIdentifier ||
     searchParams.get('order_number') ||
     searchParams.get('order_id') ||
     searchParams.get('reference_id') ||
