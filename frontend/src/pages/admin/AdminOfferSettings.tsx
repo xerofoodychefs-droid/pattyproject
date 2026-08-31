@@ -320,11 +320,32 @@ export const AdminOfferSettings: React.FC = () => {
     setSuccessMsg(null);
     try {
       const updated = await api.put<OffersPageConfig>('/promotions/settings/offers-page', offersPageConfig);
-      setOffersPageConfig(updated);
+      if (updated && updated.banner && updated.offers) {
+        setOffersPageConfig(updated);
+      }
       showNotification("Offers Page settings saved successfully! /offers is now updated.");
     } catch (err: any) {
       console.error(err);
       showNotification(err?.message || "Failed to save Offers Page settings.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetOffersPage = async () => {
+    if (!window.confirm("Are you sure you want to reset the Offers Page to the default configuration?")) {
+      return;
+    }
+    setSaving(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const updated = await api.put<OffersPageConfig>('/promotions/settings/offers-page', DEFAULT_OFFERS_PAGE_CONFIG);
+      setOffersPageConfig(updated || DEFAULT_OFFERS_PAGE_CONFIG);
+      showNotification("Offers Page reset to defaults and published!");
+    } catch (err: any) {
+      console.error(err);
+      showNotification(err?.message || "Failed to reset Offers Page.", true);
     } finally {
       setSaving(false);
     }
@@ -348,6 +369,25 @@ export const AdminOfferSettings: React.FC = () => {
     }
   };
 
+  const handleResetComboDeals = async () => {
+    if (!window.confirm("Are you sure you want to reset all Combo Deals?")) {
+      return;
+    }
+    setSaving(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const updated = await api.put<ComboDealsConfig>('/promotions/settings/combo-deals', DEFAULT_COMBO_DEALS_CONFIG);
+      setComboDealsConfig(updated || DEFAULT_COMBO_DEALS_CONFIG);
+      showNotification("Combo Deals reset to defaults.");
+    } catch (err: any) {
+      console.error(err);
+      showNotification(err?.message || "Failed to reset Combo Deals.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUpdateCardField = (index: number, field: keyof TodaysOfferCard, value: string) => {
     setTodaysConfig(prev => {
       const updatedCards = [...prev.cards];
@@ -356,26 +396,46 @@ export const AdminOfferSettings: React.FC = () => {
     });
   };
 
-  const handleSaveOfferItem = (offerItem: OfferPageItem) => {
-    setOffersPageConfig(prev => {
-      const existingIndex = prev.offers.findIndex(o => o.id === offerItem.id);
-      let newOffers = [...prev.offers];
-      if (existingIndex >= 0) {
-        newOffers[existingIndex] = offerItem;
-      } else {
-        newOffers.push(offerItem);
-      }
-      return { ...prev, offers: newOffers };
-    });
+  const handleSaveOfferItem = async (offerItem: OfferPageItem) => {
+    const existingIndex = offersPageConfig.offers.findIndex(o => o.id === offerItem.id);
+    let newOffers = [...offersPageConfig.offers];
+    if (existingIndex >= 0) {
+      newOffers[existingIndex] = offerItem;
+    } else {
+      newOffers.push(offerItem);
+    }
+    const newConfig: OffersPageConfig = { ...offersPageConfig, offers: newOffers };
+    setOffersPageConfig(newConfig);
     setEditingOffer(null);
     setIsAddingNewOffer(false);
+
+    // Auto sync to backend immediately upon confirming edit/add
+    try {
+      const updated = await api.put<OffersPageConfig>('/promotions/settings/offers-page', newConfig);
+      if (updated && updated.banner && updated.offers) {
+        setOffersPageConfig(updated);
+      }
+      showNotification(isAddingNewOffer ? "New offer deal added & published to /offers!" : "Offer deal updated & published to /offers!");
+    } catch (err: any) {
+      console.error('Failed to sync offer deal:', err);
+      showNotification(err?.message || "Failed to save offer deal.", true);
+    }
   };
 
-  const handleDeleteOfferItem = (id: string) => {
-    setOffersPageConfig(prev => ({
-      ...prev,
-      offers: prev.offers.filter(o => o.id !== id)
-    }));
+  const handleDeleteOfferItem = async (id: string) => {
+    const newOffers = offersPageConfig.offers.filter(o => o.id !== id);
+    const newConfig: OffersPageConfig = { ...offersPageConfig, offers: newOffers };
+    setOffersPageConfig(newConfig);
+    try {
+      const updated = await api.put<OffersPageConfig>('/promotions/settings/offers-page', newConfig);
+      if (updated && updated.banner && updated.offers) {
+        setOffersPageConfig(updated);
+      }
+      showNotification("Offer deal removed from /offers.");
+    } catch (err: any) {
+      console.error(err);
+      showNotification(err?.message || "Failed to remove offer deal.", true);
+    }
   };
 
   const handleSaveComboItem = async (comboItem: ComboDealItem) => {
@@ -713,7 +773,7 @@ export const AdminOfferSettings: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setOffersPageConfig(DEFAULT_OFFERS_PAGE_CONFIG)}
+                  onClick={handleResetOffersPage}
                   className="text-xs text-[#A1A1AA] hover:text-white flex items-center gap-1.5 px-3 py-2 bg-[#1A1A1A] hover:bg-[#262626] rounded-xl border border-[#2A2A2A] cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -1006,7 +1066,7 @@ export const AdminOfferSettings: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setComboDealsConfig(DEFAULT_COMBO_DEALS_CONFIG)}
+                  onClick={handleResetComboDeals}
                   className="text-xs text-[#A1A1AA] hover:text-white flex items-center gap-1.5 px-3 py-2 bg-[#1A1A1A] hover:bg-[#262626] rounded-xl border border-[#2A2A2A] cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
