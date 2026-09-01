@@ -197,57 +197,18 @@ input:-webkit-autofill:active {
     padding: 0 !important;
     width: 80mm !important;
     max-width: 80mm !important;
-    font-family: 'Courier New', Courier, monospace !important;
-  }
-
-  #root {
-    background: transparent !important;
-    background-color: transparent !important;
-    min-height: auto !important;
+    min-width: 80mm !important;
     height: auto !important;
-  }
-
-  /* Isolate print output: hide everything by default */
-  body * {
-    visibility: hidden;
-  }
-
-  /* Make only the thermal receipt and its contents visible */
-  .thermal-receipt-80mm,
-  .thermal-receipt-80mm * {
-    visibility: visible;
-  }
-
-  /* Position and size the receipt specifically for 80mm thermal roll (72mm active width) */
-  .thermal-receipt-80mm {
-    position: absolute !important;
-    left: 4mm !important;
-    top: 0 !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
-    margin: 0 auto !important;
-    padding: 4mm 2mm !important;
-    box-sizing: border-box !important;
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    font-family: 'Courier New', Courier, monospace !important;
-    overflow: visible !important;
+    min-height: 0 !important;
     max-height: none !important;
-    height: auto !important;
-    page-break-inside: auto !important;
-  }
-
-  .thermal-receipt-80mm img {
-    filter: grayscale(100%) contrast(200%) !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Reset outer overlay and fixed wrappers */
+  #root,
+  main,
+  .admin-layout-shell,
   .admin-modal-overlay,
   .fixed.inset-0 {
     background: transparent !important;
@@ -255,11 +216,82 @@ input:-webkit-autofill:active {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     position: static !important;
+    margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    display: block !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Isolate print output: hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Make only the thermal receipt container and its descendants visible */
+  .thermal-receipt-80mm,
+  .thermal-receipt-80mm * {
+    visibility: visible !important;
+  }
+
+  /* Position and size the receipt specifically for 80mm thermal roll (72mm active width) */
+  .thermal-receipt-80mm {
+    position: static !important;
+    display: block !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
+    min-width: 72mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 1mm 4mm 1mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Courier New', monospace !important;
     overflow: visible !important;
     max-height: none !important;
+    min-height: 0 !important;
     height: auto !important;
-    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Solid pure black text & borders for crystal-clear thermal printing (zero gray dithering) */
+  .thermal-receipt-80mm,
+  .thermal-receipt-80mm p,
+  .thermal-receipt-80mm span,
+  .thermal-receipt-80mm div,
+  .thermal-receipt-80mm h2,
+  .thermal-receipt-80mm td,
+  .thermal-receipt-80mm th,
+  .thermal-receipt-80mm [class*="text-"] {
+    color: #000000 !important;
+    text-rendering: geometricPrecision !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+
+  /* Force all dashed and solid receipt dividers to solid pure black */
+  .thermal-receipt-80mm hr,
+  .thermal-receipt-80mm .border-dashed,
+  .thermal-receipt-80mm [class*="border-"] {
+    border-color: #000000 !important;
+    opacity: 1 !important;
+  }
+
+  .thermal-receipt-80mm img {
+    filter: grayscale(100%) contrast(250%) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Hide print buttons and controls */
