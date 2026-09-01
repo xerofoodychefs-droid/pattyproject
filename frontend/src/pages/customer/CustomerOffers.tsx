@@ -27,12 +27,68 @@ interface OfferItem {
   description: string;
 }
 
+const DEFAULT_OFFERS_DATA = {
+  banner: {
+    tagline: "EXCLUSIVE OFFERS",
+    headline_main: "DEALS THAT",
+    headline_highlight: "HIT DIFFERENT.",
+    description: "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better.",
+    image_url: "/offers_combo_banner.png"
+  },
+  offers: [
+    {
+      id: 'combo',
+      category: ['combos', 'burgers'],
+      title: 'BURGER COMBO',
+      tag: 'BURGER + FRIES + DRINK',
+      tagIcon: 'utensils' as const,
+      badge: 'SAVE 15%',
+      code: 'COMBO15',
+      image: '/product_the_mc_project.png',
+      description: 'Get our signature double smash burger served with seasoned skin-on fries and any cold drink of your choice.'
+    },
+    {
+      id: 'family',
+      category: ['combos', 'burgers', 'sides'],
+      title: 'PATTY FEAST (FEEDS 4)',
+      tag: '4 BURGERS + 2 FRIES + 4 DRINKS',
+      tagIcon: 'utensils' as const,
+      badge: 'POPULAR',
+      code: 'FEAST20',
+      image: '/product_the_outlaw_project_.png',
+      description: 'The ultimate burger party box! Includes 4 classic smash burgers, 2 large rosemary salt fries, and 4 refreshing drinks.'
+    },
+    {
+      id: 'lunch',
+      category: ['limited', 'burgers'],
+      title: 'LUNCH SPECIAL',
+      tag: 'MON - FRI, 12PM - 4PM',
+      tagIcon: 'clock' as const,
+      badge: '£5.99 ONLY',
+      code: 'LUNCH599',
+      image: '/product_pastrami_burger_.png',
+      description: 'Quick lunch win! Single smash patty burger or crispy chicken sandwich with skin-on fries for just £5.99.'
+    },
+    {
+      id: 'shake',
+      category: ['drinks', 'limited'],
+      title: 'FREE SHAKE UPGRADE',
+      tag: 'WITH ANY BURGER & FRIES ORDER',
+      tagIcon: 'gift' as const,
+      badge: 'LIMITED TIME',
+      code: 'SHAKEUP',
+      image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80',
+      description: 'Upgrade your soft drink to any handmade gourmet milkshake for free when you order a burger and sides.'
+    }
+  ]
+};
+
 export const CustomerOffers: React.FC = () => {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
+  const [loading, setLoading] = useState<boolean>(true);
   const [offersData, setOffersData] = useState<{
     banner: {
       tagline: string;
@@ -42,61 +98,7 @@ export const CustomerOffers: React.FC = () => {
       image_url: string;
     };
     offers: OfferItem[];
-  }>({
-    banner: {
-      tagline: "EXCLUSIVE OFFERS",
-      headline_main: "DEALS THAT",
-      headline_highlight: "HIT DIFFERENT.",
-      description: "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better.",
-      image_url: "/offers_combo_banner.png"
-    },
-    offers: [
-      {
-        id: 'combo',
-        category: ['combos', 'burgers'],
-        title: 'BURGER COMBO',
-        tag: 'BURGER + FRIES + DRINK',
-        tagIcon: 'utensils',
-        badge: 'SAVE 15%',
-        code: 'COMBO15',
-        image: '/product_the_mc_project.png',
-        description: 'Get our signature double smash burger served with seasoned skin-on fries and any cold drink of your choice.'
-      },
-      {
-        id: 'family',
-        category: ['combos', 'burgers', 'sides'],
-        title: 'PATTY FEAST (FEEDS 4)',
-        tag: '4 BURGERS + 2 FRIES + 4 DRINKS',
-        tagIcon: 'utensils',
-        badge: 'POPULAR',
-        code: 'FEAST20',
-        image: '/product_the_outlaw_project_.png',
-        description: 'The ultimate burger party box! Includes 4 classic smash burgers, 2 large rosemary salt fries, and 4 refreshing drinks.'
-      },
-      {
-        id: 'lunch',
-        category: ['limited', 'burgers'],
-        title: 'LUNCH SPECIAL',
-        tag: 'MON - FRI, 12PM - 4PM',
-        tagIcon: 'clock',
-        badge: '£5.99 ONLY',
-        code: 'LUNCH599',
-        image: '/product_pastrami_burger_.png',
-        description: 'Quick lunch win! Single smash patty burger or crispy chicken sandwich with skin-on fries for just £5.99.'
-      },
-      {
-        id: 'shake',
-        category: ['drinks', 'limited'],
-        title: 'FREE SHAKE UPGRADE',
-        tag: 'WITH ANY BURGER & FRIES ORDER',
-        tagIcon: 'gift',
-        badge: 'LIMITED TIME',
-        code: 'SHAKEUP',
-        image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80',
-        description: 'Upgrade your soft drink to any handmade gourmet milkshake for free when you order a burger and sides.'
-      }
-    ]
-  });
+  } | null>(null);
 
   useEffect(() => {
     fetchOffersData();
@@ -104,12 +106,17 @@ export const CustomerOffers: React.FC = () => {
 
   const fetchOffersData = async () => {
     try {
-      const data = await api.get<any>('/promotions/settings/offers-page');
-      if (data && data.banner && data.offers) {
+      const data = await api.get<any>(`/promotions/settings/offers-page?_t=${Date.now()}`);
+      if (data && data.banner && Array.isArray(data.offers)) {
         setOffersData(data);
+      } else {
+        setOffersData(DEFAULT_OFFERS_DATA);
       }
     } catch (err) {
       console.error('Failed to load offers page config:', err);
+      setOffersData(DEFAULT_OFFERS_DATA);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -142,9 +149,10 @@ export const CustomerOffers: React.FC = () => {
     }, 600);
   };
 
+  const currentOffersData = offersData || DEFAULT_OFFERS_DATA;
   const filteredOffers = activeCategory === 'all'
-    ? offersData.offers
-    : offersData.offers.filter(o => o.category.includes(activeCategory));
+    ? currentOffersData.offers
+    : currentOffersData.offers.filter(o => o.category.includes(activeCategory));
 
   const renderTagIcon = (type: 'utensils' | 'clock' | 'gift') => {
     switch (type) {
@@ -175,14 +183,16 @@ export const CustomerOffers: React.FC = () => {
         className="w-full bg-black relative overflow-hidden min-h-[260px] sm:min-h-[300px] lg:h-[340px] xl:h-[380px] flex items-center justify-center"
       >
         {/* Right-aligned combo visual fitted inside the banner */}
-        <div className="absolute top-0 right-0 bottom-0 h-full w-full max-w-[1200px] flex justify-end items-center pointer-events-none select-none z-0 p-3 sm:p-5 lg:p-6">
-          <img
-            src={offersData.banner.image_url || "/offers_combo_banner.png"}
-            alt="Patty Project Exclusive Offers Combo"
-            className="h-full w-auto max-h-[92%] sm:max-h-[95%] object-contain object-right select-none"
-            loading="eager"
-          />
-        </div>
+        {!loading && (
+          <div className="absolute top-0 right-0 bottom-0 h-full w-full max-w-[1200px] flex justify-end items-center pointer-events-none select-none z-0 p-3 sm:p-5 lg:p-6 animate-in fade-in duration-300">
+            <img
+              src={currentOffersData.banner.image_url || "/offers_combo_banner.png"}
+              alt="Patty Project Exclusive Offers Combo"
+              className="h-full w-auto max-h-[92%] sm:max-h-[95%] object-contain object-right select-none"
+              loading="eager"
+            />
+          </div>
+        )}
 
         {/* Soft edge gradient to ensure 100% crisp text readability */}
         <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent sm:via-black/50 md:via-transparent z-[1] pointer-events-none" />
@@ -190,16 +200,26 @@ export const CustomerOffers: React.FC = () => {
         {/* Banner Content Container */}
         <div className="w-full max-w-[1360px] h-full mx-auto px-4 sm:px-8 lg:px-12 flex items-center relative z-10 py-8 sm:py-0">
           <div className="w-full sm:w-1/2 lg:max-w-[540px] text-left">
-            <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.14em] block mb-2 sm:mb-2.5">
-              {offersData.banner.tagline || "EXCLUSIVE OFFERS"}
-            </span>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[44px] font-black uppercase tracking-tight leading-[0.98]">
-              <span className="text-white block">{offersData.banner.headline_main || "DEALS THAT"}</span>
-              <span className="text-[#FF5A00] block mt-1">{offersData.banner.headline_highlight || "HIT DIFFERENT."}</span>
-            </h1>
-            <p className="mt-3 sm:mt-4 text-[#A1A1AA] text-xs sm:text-sm md:text-base leading-relaxed max-w-[460px]">
-              {offersData.banner.description || "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better."}
-            </p>
+            {loading ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-3 w-28 bg-[#222] rounded" />
+                <div className="h-10 w-64 bg-[#1F1F1F] rounded" />
+                <div className="h-4 w-80 bg-[#1A1A1A] rounded mt-2" />
+              </div>
+            ) : (
+              <>
+                <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.14em] block mb-2 sm:mb-2.5">
+                  {currentOffersData.banner.tagline || "EXCLUSIVE OFFERS"}
+                </span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[44px] font-black uppercase tracking-tight leading-[0.98]">
+                  <span className="text-white block">{currentOffersData.banner.headline_main || "DEALS THAT"}</span>
+                  <span className="text-[#FF5A00] block mt-1">{currentOffersData.banner.headline_highlight || "HIT DIFFERENT."}</span>
+                </h1>
+                <p className="mt-3 sm:mt-4 text-[#A1A1AA] text-xs sm:text-sm md:text-base leading-relaxed max-w-[460px]">
+                  {currentOffersData.banner.description || "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better."}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -232,7 +252,24 @@ export const CustomerOffers: React.FC = () => {
 
         {/* OFFERS CARDS GRID WITH REAL PRODUCT PICTURES */}
         <section className="w-full">
-          {filteredOffers.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-[#0D0D0D] border border-[#242424] rounded-xl overflow-hidden animate-pulse flex flex-col justify-between"
+                >
+                  <div className="w-full aspect-[4/3] bg-[#161616]" />
+                  <div className="p-2.5 sm:p-4 space-y-2.5">
+                    <div className="h-2.5 w-1/3 bg-[#262626] rounded" />
+                    <div className="h-4 w-3/4 bg-[#202020] rounded" />
+                    <div className="h-2.5 w-full bg-[#181818] rounded" />
+                    <div className="h-7 w-full bg-[#161616] rounded mt-2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredOffers.length === 0 ? (
             <div className="text-center py-16 bg-[#111] border border-[#222] rounded-3xl space-y-3">
               <Sparkles className="w-8 h-8 text-[#FF5A00] mx-auto animate-pulse" />
               <h3 className="text-lg font-bold text-white uppercase">No offers in this category right now</h3>
@@ -245,7 +282,7 @@ export const CustomerOffers: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5 animate-in fade-in duration-200">
               {filteredOffers.map((offer) => (
                 <div
                   key={offer.id}
@@ -257,6 +294,7 @@ export const CustomerOffers: React.FC = () => {
                       src={offer.image}
                       alt={offer.title}
                       className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200 select-none"
+                      loading="eager"
                     />
                     <span className="absolute top-2 left-2 bg-[#FF5A00] text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded shadow-md z-10">
                       {offer.badge}
