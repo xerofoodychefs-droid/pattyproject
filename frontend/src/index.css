@@ -202,7 +202,7 @@ input:-webkit-autofill:active {
     -webkit-backdrop-filter: none !important;
   }
 
-  /* 2. Page & Body Constraints for 72mm Printable Width on 80mm Roll */
+  /* 2. Page & Body Constraints for 76mm Printable Width on 80mm Roll */
   html,
   body {
     background: #ffffff !important;
@@ -210,9 +210,9 @@ input:-webkit-autofill:active {
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
-    min-width: 72mm !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    min-width: 76mm !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -239,9 +239,9 @@ input:-webkit-autofill:active {
     position: static !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
-    min-width: 72mm !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    min-width: 76mm !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -252,13 +252,13 @@ input:-webkit-autofill:active {
     background-color: #ffffff !important;
   }
 
-  /* 5. Exact 72mm active printable area on 80mm thermal paper roll */
+  /* 5. Exact 76mm active printable area on 80mm thermal paper roll */
   .thermal-receipt-80mm {
     position: static !important;
     display: block !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
-    min-width: 72mm !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    min-width: 76mm !important;
     margin: 0 auto !important;
     padding: 2mm 1mm 4mm 1mm !important;
     box-sizing: border-box !important;
