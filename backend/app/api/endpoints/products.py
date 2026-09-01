@@ -1,7 +1,7 @@
 import random
 import re
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.models.product import Category, Product, ProductModifier, Inventory, ProductChoiceGroup, ProductChoiceOption
@@ -20,6 +20,7 @@ from app.services.availability_service import (
     get_category_schedule_status,
     parse_time_string
 )
+from app.services.image_service import process_image_url, process_images_list, save_uploaded_file
 
 router = APIRouter()
 
@@ -383,6 +384,15 @@ def get_product_details(
     }
     return ProductResponse(**p_dict)
 
+@router.post("/products/upload-image")
+async def upload_product_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.BRANCH_ADMIN]))
+):
+    """Authenticated upload for product images. Returns short stored URL."""
+    url = await save_uploaded_file(file)
+    return {"url": url, "image_url": url}
+
 @router.post("/products", response_model=ProductResponse)
 def create_product(
     request: ProductCreateRequest,
@@ -394,6 +404,16 @@ def create_product(
     if db.query(Product).filter(Product.sku == sku_candidate).first():
         sku_candidate = f"{sku_candidate}-{random.randint(100, 999)}"
 
+    # Process images safely through image storage service before DB writes
+    final_image_url = process_image_url(request.image_url) if request.image_url is not None else None
+    if request.images is not None:
+        final_images = process_images_list(request.images)
+    else:
+        final_images = [final_image_url] if final_image_url else []
+
+    if not final_image_url and final_images:
+        final_image_url = final_images[0]
+
     prod = Product(
         category_id=request.category_id,
         name=request.name,
@@ -402,8 +422,8 @@ def create_product(
         full_description=request.full_description,
         allergens=request.allergens,
         ingredients=request.ingredients,
-        image_url=request.image_url,
-        images=request.images if request.images is not None else ([request.image_url] if request.image_url else []),
+        image_url=final_image_url,
+        images=final_images,
         base_price=request.base_price,
         compare_at_price=request.compare_at_price,
         rating=request.rating or 4.7,
@@ -489,9 +509,9 @@ def update_product(
     if request.ingredients is not None:
         prod.ingredients = request.ingredients
     if request.image_url is not None:
-        prod.image_url = request.image_url
+        prod.image_url = process_image_url(request.image_url)
     if request.images is not None:
-        prod.images = request.images
+        prod.images = process_images_list(request.images)
     if request.base_price is not None:
         prod.base_price = request.base_price
     if request.compare_at_price is not None:

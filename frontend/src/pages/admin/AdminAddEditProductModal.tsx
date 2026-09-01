@@ -17,7 +17,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { Category, Product } from '../../types';
-import { api } from '../../api/client';
+import { api, API_BASE, getSafeStorage } from '../../api/client';
 
 interface Props {
   categories: Category[];
@@ -87,6 +87,7 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
   });
 
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const mainImageInputRef = useRef<HTMLInputElement | null>(null);
   const galleryImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -193,39 +194,98 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
     setChoiceGroups(updated);
   };
 
-  const handleMainImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMainImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 8 * 1024 * 1024) {
-        setError('Photo size exceeds 8MB. Please choose a smaller image.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setImageUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Photo size exceeds 8MB. Please choose a smaller image.');
+      e.target.value = '';
+      return;
     }
-    e.target.value = '';
+
+    // Immediate local preview for fast responsive UI
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        setImageUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = getSafeStorage('patty_token');
+      const res = await fetch(`${API_BASE}/products/upload-image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to upload photo.');
+      }
+      const data = await res.json();
+      const storedUrl = data.url || data.image_url;
+      if (storedUrl) {
+        setImageUrl(storedUrl);
+      }
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setError(err?.message || 'Failed to upload image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
   };
 
-  const handleGalleryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      if (file.size > 8 * 1024 * 1024) return;
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setGalleryImages((prev) => [...prev, reader.result as string]);
+    const fileList = Array.from(files);
+    for (const file of fileList) {
+      if (file.size > 8 * 1024 * 1024) {
+        setError(`Photo "${file.name}" exceeds 8MB. Please choose a smaller image.`);
+        e.target.value = '';
+        return;
+      }
+    }
+
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const token = getSafeStorage('patty_token');
+      const uploadPromises = fileList.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_BASE}/products/upload-image`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Failed to upload "${file.name}".`);
         }
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = '';
+        const data = await res.json();
+        return data.url || data.image_url;
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      const validUrls = uploadedUrls.filter(Boolean) as string[];
+      setGalleryImages((prev) => [...prev, ...validUrls]);
+    } catch (err: any) {
+      console.error('Gallery image upload failed:', err);
+      setError(err?.message || 'Failed to upload gallery images.');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -934,10 +994,10 @@ export const AdminAddEditProductModal: React.FC<Props> = ({ categories, product,
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || uploadingImage}
               className="px-6 py-2.5 bg-[#FF5500] hover:bg-[#E04B00] text-white rounded-xl text-xs font-bold shadow-md shadow-[#FF5500]/20 cursor-pointer disabled:opacity-50 transition-all"
             >
-              {loading ? 'Saving Product...' : product ? 'Update Product' : 'Save & Publish Product'}
+              {loading ? 'Saving Product...' : uploadingImage ? 'Uploading Photo...' : product ? 'Update Product' : 'Save & Publish Product'}
             </button>
           </div>
         </form>
