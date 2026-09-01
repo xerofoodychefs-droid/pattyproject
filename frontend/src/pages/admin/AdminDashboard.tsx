@@ -104,7 +104,12 @@ export const AdminDashboard: React.FC = () => {
           return [];
         })
       ]);
-      let filtered = branchData || [];
+      if (!Array.isArray(branchData)) {
+        console.error('[AdminDashboard] Unexpected branches API response shape:', branchData);
+        throw new Error('Unexpected branches API response shape');
+      }
+
+      let filtered = branchData;
       if (user?.role === 'BRANCH_ADMIN') {
         const allowedIds = user.branch_ids || [];
         filtered = filtered.filter((b) => allowedIds.includes(b.id));
@@ -119,7 +124,7 @@ export const AdminDashboard: React.FC = () => {
         setBranchStats(statsMap);
       }
     } catch (err) {
-      console.error(err);
+      console.error('[AdminDashboard] Failed to fetch branches:', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -128,8 +133,13 @@ export const AdminDashboard: React.FC = () => {
   const fetchBranchOrders = async (branchId: string) => {
     setOrdersLoading(true);
     try {
-      const branchOrders: Order[] = await api.get(`/orders?branch_id=${branchId}&_t=${Date.now()}`);
-      setOrders(branchOrders || []);
+      const branchOrders = await api.get<Order[]>(`/orders?branch_id=${branchId}&_t=${Date.now()}`);
+      if (Array.isArray(branchOrders)) {
+        setOrders(branchOrders);
+      } else {
+        console.error('[AdminDashboard] Unexpected branch orders API response shape:', branchOrders);
+        throw new Error('Unexpected branch orders API response shape');
+      }
     } catch (err) {
       console.error('Failed to fetch branch orders:', err);
     } finally {

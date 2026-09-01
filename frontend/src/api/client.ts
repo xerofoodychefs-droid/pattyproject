@@ -195,21 +195,41 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
       }
     }
 
-    const data = await response.json().catch(() => ({}));
+    if (response.status === 204) {
+      return null as unknown as T;
+    }
+
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      if (!response.ok) {
+        const statusMsg = response.statusText ? `HTTP ${response.status} ${response.statusText}` : `HTTP ${response.status}`;
+        console.warn(`[API] ${statusMsg} non-JSON response from ${url}`);
+        const customErr: any = new Error(`Server returned ${statusMsg}. Please ensure the backend is running.`);
+        customErr.status = response.status;
+        throw customErr;
+      } else {
+        console.error(`[API] Expected JSON response but received non-JSON payload from ${url} (HTTP ${response.status})`);
+        const customErr: any = new Error(`Invalid non-JSON response received from server for ${endpoint} (HTTP ${response.status})`);
+        customErr.status = response.status;
+        throw customErr;
+      }
+    }
 
     if (!response.ok) {
       let detailMsg: string = '';
-      if (typeof data.detail === 'string') {
+      if (typeof data?.detail === 'string') {
         detailMsg = data.detail;
-      } else if (data.detail && typeof data.detail === 'object') {
+      } else if (data?.detail && typeof data.detail === 'object') {
         detailMsg = data.detail.message || data.detail.error || data.detail.msg || data.detail.detail || '';
-      } else if (Array.isArray(data.detail)) {
+      } else if (Array.isArray(data?.detail)) {
         detailMsg = data.detail.map((e: any) => (typeof e === 'string' ? e : e.msg || e.message || JSON.stringify(e))).join(', ');
       }
 
-      if (!detailMsg && typeof data.message === 'string') {
+      if (!detailMsg && typeof data?.message === 'string') {
         detailMsg = data.message;
-      } else if (!detailMsg && typeof data.error === 'string') {
+      } else if (!detailMsg && typeof data?.error === 'string') {
         detailMsg = data.error;
       }
 
@@ -226,7 +246,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
       console.warn(`[API] HTTP ${response.status} response from ${url}:`, detailMsg);
 
       const customErr: any = new Error(detailMsg);
-      customErr.detail = data.detail;
+      customErr.detail = data?.detail;
       customErr.data = data;
       customErr.status = response.status;
       throw customErr;

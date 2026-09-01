@@ -97,21 +97,26 @@ export const CustomerHome: React.FC = () => {
   const fetchProducts = async () => {
     try {
       const branchParam = selectedBranch?.id ? `?branch_id=${selectedBranch.id}&_t=${Date.now()}` : `?_t=${Date.now()}`;
-      const data: Product[] = await api.get(`/products${branchParam}`);
-      setProducts(data);
+      const data = await api.get<Product[]>(`/products${branchParam}`);
+      if (Array.isArray(data)) {
+        setProducts(data);
+      } else {
+        console.error('[CustomerHome] Unexpected products API response shape:', data);
+        throw new Error('Unexpected products API response shape');
+      }
     } catch (err) {
-      console.error(err);
+      console.error('[CustomerHome] Failed to fetch products:', err);
     }
   };
 
   const fetchTodaysOffers = async () => {
     try {
       const data = await api.get<any>('/promotions/settings/todays-offers');
-      if (data && data.cards && data.cards.length > 0) {
+      if (data && Array.isArray(data.cards) && data.cards.length > 0) {
         setTodaysOffersData(data);
       }
     } catch (err) {
-      console.error('Failed to load today offers config:', err);
+      console.error('[CustomerHome] Failed to load today offers config:', err);
     }
   };
 

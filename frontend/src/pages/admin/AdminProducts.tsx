@@ -70,20 +70,26 @@ export const AdminProducts: React.FC = () => {
         api.get<Category[]>(`/categories?_t=${timestamp}`),
         api.get<Branch[]>('/branches')
       ]);
-      const standardCategories = (catData || []).filter(
+      if (!Array.isArray(prodData) || !Array.isArray(catData)) {
+        console.error('[AdminProducts] Unexpected products or categories response shape:', { prodData, catData });
+        throw new Error('Unexpected products or categories response shape');
+      }
+
+      const standardCategories = catData.filter(
         (c) => !c.slug?.toLowerCase().includes('combo') && !c.name?.toLowerCase().includes('combo')
       );
-      const standardProducts = (prodData || []).filter(
+      const standardProducts = prodData.filter(
         (p) =>
           !p.sku?.startsWith('COMBO-') &&
-          !catData?.some(
+          !catData.some(
             (c) => c.id === p.category_id && (c.slug?.toLowerCase().includes('combo') || c.name?.toLowerCase().includes('combo'))
           )
       );
       setProducts(standardProducts);
       setCategories(standardCategories);
       
-      let filteredBranches = branchData || [];
+      const validBranches = Array.isArray(branchData) ? branchData : [];
+      let filteredBranches = validBranches;
       if (user?.role === 'BRANCH_ADMIN' && user.branch_ids && user.branch_ids.length > 0) {
         filteredBranches = filteredBranches.filter((b) => user.branch_ids.includes(b.id));
       }
@@ -97,7 +103,7 @@ export const AdminProducts: React.FC = () => {
         fetchInventory(defaultBranch);
       }
     } catch (err) {
-      console.error(err);
+      console.error('[AdminProducts] Failed to fetch initial data:', err);
     } finally {
       setLoading(false);
     }
