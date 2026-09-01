@@ -455,6 +455,7 @@ def create_product(
                 db.add(opt)
 
     db.commit()
+    manager.sync_broadcast_product_changed(action="created", product_id=prod.id)
     prod = db.query(Product).options(
         selectinload(Product.modifiers),
         selectinload(Product.choice_groups).selectinload(ProductChoiceGroup.options)
@@ -550,6 +551,7 @@ def update_product(
 
     db.commit()
 
+    manager.sync_broadcast_product_changed(action="updated", product_id=prod.id)
     if request.is_out_of_stock is not None:
         manager.sync_broadcast_product_availability(
             product_id=prod.id,
@@ -634,12 +636,14 @@ def delete_product(
         prod.is_active = False
         db.query(Inventory).filter(Inventory.product_id == product_id).update({Inventory.is_available: False})
         db.commit()
+        manager.sync_broadcast_product_changed(action="deleted", product_id=product_id)
         manager.sync_broadcast_product_availability(product_id=product_id, is_out_of_stock=True)
         return {"message": "Product archived successfully", "id": product_id, "archived": True}
     else:
         # Hard delete if no historical orders exist for this product
         db.delete(prod)
         db.commit()
+        manager.sync_broadcast_product_changed(action="deleted", product_id=product_id)
         manager.sync_broadcast_product_availability(product_id=product_id, is_out_of_stock=True)
         return {"message": "Product deleted successfully", "id": product_id, "deleted": True}
 
@@ -743,6 +747,10 @@ def update_inventory_item(
     db.commit()
     db.refresh(inv)
 
+    manager.sync_broadcast_product_changed(action="updated", product_id=inv.product_id, branch_id=inv.branch_id)
+    if inv.is_available is not None:
+        manager.sync_broadcast_product_availability(product_id=inv.product_id, is_out_of_stock=not inv.is_available)
+
     prod = inv.product
     cat = prod.category if prod else None
     return InventoryResponse(
@@ -799,6 +807,9 @@ def toggle_inventory_stock(
 
     db.commit()
     db.refresh(inv)
+
+    manager.sync_broadcast_product_changed(action="updated", product_id=inv.product_id, branch_id=inv.branch_id)
+    manager.sync_broadcast_product_availability(product_id=inv.product_id, is_out_of_stock=not inv.is_available)
 
     prod = inv.product or db.query(Product).filter(Product.id == request.product_id).first()
     cat = prod.category if prod else None

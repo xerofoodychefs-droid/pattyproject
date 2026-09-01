@@ -14,6 +14,19 @@ export const ProductDetailPage: React.FC = () => {
   const { selectedBranch } = useCartStore();
 
   useProductRealtime({
+    onProductChange: (event) => {
+      if (productId && (event.product_id === productId || event.product_id === 'ALL')) {
+        const currentBranch = useCartStore.getState().selectedBranch;
+        if (event.branch_id && currentBranch?.id && event.branch_id !== currentBranch.id) {
+          return;
+        }
+        if (event.action === 'deleted') {
+          setProduct(null);
+        } else {
+          fetchProduct(productId);
+        }
+      }
+    },
     onProductAvailabilityChange: (id: string, isOutOfStock: boolean) => {
       if (productId === id) {
         const boolOutOfStock = Boolean(isOutOfStock);

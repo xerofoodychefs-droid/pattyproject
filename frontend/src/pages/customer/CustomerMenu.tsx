@@ -70,34 +70,23 @@ export const CustomerMenu: React.FC = () => {
       }
 
       if (prodData && Array.isArray(prodData)) {
-        const prodMap = new Map(prodData.map((p) => [p.id, p]));
-        setProducts((prev) =>
-          prev.map((p) => {
-            const fresh = prodMap.get(p.id);
-            if (!fresh) return p;
-            return {
-              ...p,
-              is_available: fresh.is_available,
-              is_out_of_stock: fresh.is_out_of_stock,
-              stock_quantity: fresh.stock_quantity,
-              is_active: fresh.is_active,
-              base_price: fresh.base_price,
-            };
-          })
-        );
+        setProducts((prev) => {
+          const comboProducts = prev.filter(
+            (p) => p.sku?.startsWith('COMBO-') || p.category_id === 'category-combo-offers'
+          );
+          const nonComboFresh = prodData.filter(
+            (p) => !p.sku?.startsWith('COMBO-') && p.category_id !== 'category-combo-offers'
+          );
+          return [...nonComboFresh, ...comboProducts];
+        });
 
         setSelectedProduct((prev) => {
           if (!prev) return null;
-          const fresh = prodMap.get(prev.id);
-          if (!fresh) return prev;
-          return {
-            ...prev,
-            is_available: fresh.is_available,
-            is_out_of_stock: fresh.is_out_of_stock,
-            stock_quantity: fresh.stock_quantity,
-            is_active: fresh.is_active,
-            base_price: fresh.base_price,
-          };
+          if (prev.sku?.startsWith('COMBO-') || prev.category_id === 'category-combo-offers') {
+            return prev;
+          }
+          const fresh = prodData.find((p) => p.id === prev.id);
+          return fresh || null;
         });
       }
     } catch {
@@ -125,8 +114,15 @@ export const CustomerMenu: React.FC = () => {
     };
   }, [revalidateMenu]);
 
-  // Realtime product availability subscription (Zero-refresh immediate update merged with schedule rules)
+  // Realtime product availability & catalog changes subscription
   useProductRealtime({
+    onProductChange: (event) => {
+      const currentBranch = useCartStore.getState().selectedBranch;
+      if (event.branch_id && currentBranch?.id && event.branch_id !== currentBranch.id) {
+        return;
+      }
+      revalidateMenu();
+    },
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>

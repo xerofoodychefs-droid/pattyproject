@@ -63,6 +63,13 @@ export const PublicMenuPage: React.FC = () => {
   }, [selectedBranch?.id]);
 
   useProductRealtime({
+    onProductChange: (event) => {
+      const currentBranch = useCartStore.getState().selectedBranch;
+      if (event.branch_id && currentBranch?.id && event.branch_id !== currentBranch.id) {
+        return;
+      }
+      fetchData();
+    },
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>

@@ -56,6 +56,13 @@ export const CustomerHome: React.FC = () => {
 
   // Realtime product availability subscription
   useProductRealtime({
+    onProductChange: (event) => {
+      const currentBranch = useCartStore.getState().selectedBranch;
+      if (event.branch_id && currentBranch?.id && event.branch_id !== currentBranch.id) {
+        return;
+      }
+      fetchProducts();
+    },
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       const boolOutOfStock = Boolean(isOutOfStock);
       setProducts((prev) =>

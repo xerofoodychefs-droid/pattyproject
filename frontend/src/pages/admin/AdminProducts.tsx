@@ -35,6 +35,9 @@ export const AdminProducts: React.FC = () => {
   const [categoryToggling, setCategoryToggling] = useState(false);
 
   useProductRealtime({
+    onProductChange: () => {
+      fetchInitialData();
+    },
     onProductAvailabilityChange: (productId: string, isOutOfStock: boolean) => {
       setProducts((prev) =>
         prev.map((p) =>

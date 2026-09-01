@@ -4,6 +4,7 @@ import { useShopHoursStore, ShopStatus } from '../store/shopHoursStore';
 
 interface UseProductRealtimeOptions {
   onProductAvailabilityChange?: (productId: string, isOutOfStock: boolean) => void;
+  onProductChange?: (event: { action: 'created' | 'updated' | 'deleted' | string; product_id: string; branch_id?: string | null }) => void;
   onShopStatusChange?: (status: Partial<ShopStatus>) => void;
   onReconnect?: () => void;
   enabled?: boolean;
@@ -11,16 +12,19 @@ interface UseProductRealtimeOptions {
 
 export const useProductRealtime = ({
   onProductAvailabilityChange,
+  onProductChange,
   onShopStatusChange,
   onReconnect,
   enabled = true,
 }: UseProductRealtimeOptions = {}) => {
   const onProductAvailabilityChangeRef = useRef(onProductAvailabilityChange);
+  const onProductChangeRef = useRef(onProductChange);
   const onShopStatusChangeRef = useRef(onShopStatusChange);
   const onReconnectRef = useRef(onReconnect);
 
   useEffect(() => {
     onProductAvailabilityChangeRef.current = onProductAvailabilityChange;
+    onProductChangeRef.current = onProductChange;
     onShopStatusChangeRef.current = onShopStatusChange;
     onReconnectRef.current = onReconnect;
   });
@@ -97,6 +101,18 @@ export const useProductRealtime = ({
             useShopHoursStore.getState().setShopStatus(statusPayload);
             if (onShopStatusChangeRef.current) {
               onShopStatusChangeRef.current(statusPayload);
+            }
+            return;
+          }
+
+          if (type === 'product_changed') {
+            const eventPayload = {
+              action: data.action || 'updated',
+              product_id: data.product_id,
+              branch_id: data.branch_id || null,
+            };
+            if (onProductChangeRef.current) {
+              onProductChangeRef.current(eventPayload);
             }
             return;
           }

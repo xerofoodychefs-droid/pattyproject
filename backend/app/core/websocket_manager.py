@@ -162,6 +162,84 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"[WS_PRODUCT_SYNC_ERR] Failed to run product broadcast: {e}")
 
+    async def broadcast_product_changed(
+        self,
+        action: str,
+        product_id: str,
+        branch_id: Optional[str] = None
+    ) -> None:
+        """
+        Broadcasts product catalog changes (created, updated, deleted, availability_changed)
+        to all connected customer browsers in real-time.
+        Minimal, non-sensitive payload.
+        Isolates failures so a broken socket never interrupts delivery to other clients.
+        """
+        payload = {
+            "type": "product_changed",
+            "action": str(action),
+            "product_id": str(product_id),
+            "branch_id": str(branch_id) if branch_id else None,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+        async with self._lock:
+            recipients = list(self._product_connections.keys())
+
+        if not recipients:
+            logger.debug(f"[WS_PRODUCT_CHANGE_NOOP] No active customer sockets for product={product_id} action={action}")
+            return
+
+        dead_sockets = []
+        delivered_count = 0
+
+        for ws in recipients:
+            try:
+                await ws.send_json(payload)
+                delivered_count += 1
+            except (WebSocketDisconnect, ConnectionResetError, RuntimeError) as exc:
+                logger.warning(f"[WS_PRODUCT_CHANGE_FAIL] Socket disconnected during send: {type(exc).__name__}")
+                dead_sockets.append(ws)
+            except Exception as exc:
+                logger.error(f"[WS_PRODUCT_CHANGE_ERROR] Unexpected send error: {exc}")
+                dead_sockets.append(ws)
+
+        if dead_sockets:
+            async with self._lock:
+                for ws in dead_sockets:
+                    self._product_connections.pop(ws, None)
+            logger.info(f"[WS_PRODUCT_CHANGE_CLEANUP] Pruned {len(dead_sockets)} dead sockets. Remaining: {len(self._product_connections)}")
+
+        logger.info(
+            f"[WS_PRODUCT_CHANGE_BROADCAST] action={action} product_id={product_id} branch_id={branch_id} "
+            f"delivered={delivered_count} pruned={len(dead_sockets)}"
+        )
+
+    def sync_broadcast_product_changed(
+        self,
+        action: str,
+        product_id: str,
+        branch_id: Optional[str] = None
+    ) -> None:
+        """
+        Synchronous wrapper allowing synchronous endpoints to trigger the async product catalog broadcast safely.
+        """
+        coro = self.broadcast_product_changed(action, product_id, branch_id)
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                loop.create_task(coro)
+                return
+        except RuntimeError:
+            pass
+
+        if self._main_loop and self._main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self._main_loop)
+        else:
+            try:
+                asyncio.run(coro)
+            except Exception as e:
+                logger.error(f"[WS_PRODUCT_CHANGE_SYNC_ERR] Failed to run product change broadcast: {e}")
+
     async def broadcast_shop_status(
         self,
         is_open: bool,
