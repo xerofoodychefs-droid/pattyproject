@@ -15,8 +15,11 @@ export const CustomerFooter: React.FC = () => {
             <div className="space-y-4 lg:col-span-1">
               <Link to="/" className="inline-flex items-center gap-3 group">
                 <img
-                  src="/logo.png"
+                  src="/logo.webp"
                   alt="Patty Project"
+                  loading="lazy"
+                  decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                   className="w-12 h-12 object-contain group-hover:scale-105 transition-transform"
                 />
                 <div>

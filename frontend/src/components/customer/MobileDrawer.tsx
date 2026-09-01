@@ -77,7 +77,7 @@ export const MobileDrawer: React.FC<Props> = ({ onClose }) => {
       <div 
         className="absolute inset-0 bg-cover bg-center pointer-events-none z-0 opacity-15 filter contrast-125 brightness-75"
         style={{ 
-          backgroundImage: `url('/herobackground.png')`,
+          backgroundImage: `url('/herobackground.webp')`,
         }}
         aria-hidden="true"
       />
@@ -96,8 +96,11 @@ export const MobileDrawer: React.FC<Props> = ({ onClose }) => {
             className="flex items-center gap-2.5 group focus:outline-none transition-transform"
           >
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="Patty Project"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
               className="w-9 h-9 object-contain shrink-0 group-hover:scale-110 transition-transform duration-200"
             />
             <div className="flex flex-col">

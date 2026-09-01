@@ -266,10 +266,26 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
   }
 }
 
+const inMemoryCache = new Map<string, { data: any; expiresAt: number }>();
+
 export const api = {
   get: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'GET' }),
+  getCached: async <T>(endpoint: string, ttlMs: number = 30000, options?: RequestInit): Promise<T> => {
+    const now = Date.now();
+    const cached = inMemoryCache.get(endpoint);
+    if (cached && cached.expiresAt > now) {
+      return cached.data as T;
+    }
+    const fresh = await request<T>(endpoint, { ...options, method: 'GET' });
+    inMemoryCache.set(endpoint, { data: fresh, expiresAt: now + ttlMs });
+    return fresh;
+  },
   post: <T>(endpoint: string, body: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
   put: <T>(endpoint: string, body?: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(endpoint: string, body?: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'DELETE' }),
+  clearCache: (endpoint?: string) => {
+    if (endpoint) inMemoryCache.delete(endpoint);
+    else inMemoryCache.clear();
+  }
 };

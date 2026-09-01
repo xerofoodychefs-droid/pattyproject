@@ -165,14 +165,14 @@ export const CustomerMenu: React.FC = () => {
         let currentBranch = useCartStore.getState().selectedBranch;
         const branchParam = currentBranch?.id ? `?branch_id=${currentBranch.id}` : '';
 
-        // Concurrent high-speed data fetch (All 6 requests fully parallelized)
+        // Concurrent high-speed data fetch (Static configs cached in-memory)
         const [branchData, catData, prodData, todayData, pageOffersData, comboData] = await Promise.all([
-          api.get<Branch[]>('/branches').catch(() => []),
-          api.get<Category[]>('/categories').catch(() => []),
+          api.getCached<Branch[]>('/branches', 60000).catch(() => []),
+          api.getCached<Category[]>('/categories', 60000).catch(() => []),
           api.get<Product[]>(`/products${branchParam}`).catch(() => []),
-          api.get<any>('/promotions/settings/todays-offers').catch(() => null),
-          api.get<any>('/promotions/settings/offers-page').catch(() => null),
-          api.get<any>('/promotions/settings/combo-deals').catch(() => null)
+          api.getCached<any>('/promotions/settings/todays-offers', 30000).catch(() => null),
+          api.getCached<any>('/promotions/settings/offers-page', 30000).catch(() => null),
+          api.getCached<any>('/promotions/settings/combo-deals', 30000).catch(() => null)
         ]);
 
         if (!isMounted) return;

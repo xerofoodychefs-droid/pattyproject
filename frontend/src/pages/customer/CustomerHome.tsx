@@ -6,11 +6,11 @@ import { Product } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { useCartStore } from '../../store/cartStore';
 import { useProductRealtime } from '../../hooks/useProductRealtime';
-import categoryBannerImg from '../../assets/categories_showcase_banner.png';
-import categoryBannerMobileImg from '../../assets/categories_showcase_mobile.png';
-import offerBg1 from '../../assets/offer_bg_1.png';
-import offerBg2 from '../../assets/offer_bg_2.png';
-import offerBg3 from '../../assets/offer_bg_3.png';
+import categoryBannerImg from '../../assets/categories_showcase_banner.webp';
+import categoryBannerMobileImg from '../../assets/categories_showcase_mobile.webp';
+import offerBg1 from '../../assets/offer_bg_1.webp';
+import offerBg2 from '../../assets/offer_bg_2.webp';
+import offerBg3 from '../../assets/offer_bg_3.webp';
 
 export const CustomerHome: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -111,7 +111,7 @@ export const CustomerHome: React.FC = () => {
 
   const fetchTodaysOffers = async () => {
     try {
-      const data = await api.get<any>('/promotions/settings/todays-offers');
+      const data = await api.getCached<any>('/promotions/settings/todays-offers', 30000);
       if (data && Array.isArray(data.cards) && data.cards.length > 0) {
         setTodaysOffersData(data);
       }
@@ -319,11 +319,12 @@ export const CustomerHome: React.FC = () => {
             >
               <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
-                  src={mcProduct?.image_url || '/product_the_mc_project.png'}
+                  src={mcProduct?.image_url || '/product_the_mc_project.webp'}
                   alt="MC Project"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/product_the_mc_project.png'; }}
                 />
               </div>
               <div className="space-y-2">
@@ -347,11 +348,12 @@ export const CustomerHome: React.FC = () => {
             >
               <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
-                  src={outlawProduct?.image_url || '/product_the_outlaw_project_.png'}
+                  src={outlawProduct?.image_url || '/product_the_outlaw_project_.webp'}
                   alt="Outlaw Project"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/product_the_outlaw_project_.png'; }}
                 />
               </div>
               <div className="space-y-2">
@@ -375,11 +377,12 @@ export const CustomerHome: React.FC = () => {
             >
               <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
-                  src={pastramiProduct?.image_url || '/product_pastrami_burger_.png'}
+                  src={pastramiProduct?.image_url || '/product_pastrami_burger_.webp'}
                   alt="Pastrami Burger"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/product_pastrami_burger_.png'; }}
                 />
               </div>
               <div className="space-y-2">
@@ -406,11 +409,12 @@ export const CustomerHome: React.FC = () => {
             >
               <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
-                  src={chickenProduct?.image_url || '/product_buffalo_chicken_sando_.png'}
+                  src={chickenProduct?.image_url || '/product_buffalo_chicken_sando_.webp'}
                   alt="Fried Chicken Sando"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/product_buffalo_chicken_sando_.png'; }}
                 />
               </div>
               <div className="space-y-2">
@@ -434,11 +438,12 @@ export const CustomerHome: React.FC = () => {
             >
               <div className="w-32 sm:w-44 lg:w-40 xl:w-44 h-32 sm:h-44 lg:h-40 xl:h-44 shrink-0 relative overflow-hidden rounded-2xl bg-transparent">
                 <img
-                  src={halloumiProduct?.image_url || '/product_the_halloumi_project_veg.png'}
+                  src={halloumiProduct?.image_url || '/product_the_halloumi_project_veg.webp'}
                   alt="Halloumi Burger"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/product_the_halloumi_project_veg.png'; }}
                 />
               </div>
               <div className="space-y-2">

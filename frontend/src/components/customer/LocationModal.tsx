@@ -182,7 +182,14 @@ export const LocationModal: React.FC<Props> = ({ onClose }) => {
       <div className="bg-[#121212] border border-[#262626] rounded-2xl w-full max-w-md p-6 shadow-2xl relative space-y-5 text-white">
         {/* Header */}
         <div className="flex flex-col items-center text-center relative">
-          <img src="/logo.png" alt="Patty Project" className="w-14 h-14 object-contain mb-2" />
+          <img
+            src="/logo.webp"
+            alt="Patty Project"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
+            className="w-14 h-14 object-contain mb-2"
+          />
           <h2 className="text-xl font-bold text-white">Select location</h2>
           <p className="text-xs text-[#9CA3AF] mt-0.5">Find nearest store & check delivery availability.</p>
           <button onClick={onClose} className="absolute top-0 right-0 p-1 text-[#9CA3AF] hover:text-white cursor-pointer">

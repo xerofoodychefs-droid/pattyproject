@@ -40,8 +40,11 @@ export const CustomerHeader: React.FC<Props> = ({ onOpenLocationModal, onOpenMob
 
           <Link to="/" className="flex items-center group">
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="Patty Project"
+              loading="eager"
+              decoding="async"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
               className="w-11 h-11 sm:w-14 sm:h-14 object-contain group-hover:scale-105 transition-transform"
             />
           </Link>

@@ -11,10 +11,12 @@ export const CustomerAbout: React.FC = () => {
         {/* Background Banner Image with focal point at [right_25%] */}
         <div className="absolute inset-0 z-0">
           <img
-            src="/about_hero_banner.png"
+            src="/about_hero_banner.webp"
             alt="Patty Project Hero Burger"
             className="w-full h-full object-cover object-[right_25%] select-none pointer-events-none"
             loading="eager"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/about_hero_banner.png'; }}
           />
           {/* Soft dark gradient on left for guaranteed text readability */}
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 lg:via-black/35 to-transparent pointer-events-none" />

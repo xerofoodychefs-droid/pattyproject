@@ -33,7 +33,7 @@ const DEFAULT_OFFERS_DATA = {
     headline_main: "DEALS THAT",
     headline_highlight: "HIT DIFFERENT.",
     description: "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better.",
-    image_url: "/offers_combo_banner.png"
+    image_url: "/offers_combo_banner.webp"
   },
   offers: [
     {
@@ -44,7 +44,7 @@ const DEFAULT_OFFERS_DATA = {
       tagIcon: 'utensils' as const,
       badge: 'SAVE 15%',
       code: 'COMBO15',
-      image: '/product_the_mc_project.png',
+      image: '/product_the_mc_project.webp',
       description: 'Get our signature double smash burger served with seasoned skin-on fries and any cold drink of your choice.'
     },
     {
@@ -55,7 +55,7 @@ const DEFAULT_OFFERS_DATA = {
       tagIcon: 'utensils' as const,
       badge: 'POPULAR',
       code: 'FEAST20',
-      image: '/product_the_outlaw_project_.png',
+      image: '/product_the_outlaw_project_.webp',
       description: 'The ultimate burger party box! Includes 4 classic smash burgers, 2 large rosemary salt fries, and 4 refreshing drinks.'
     },
     {
@@ -66,7 +66,7 @@ const DEFAULT_OFFERS_DATA = {
       tagIcon: 'clock' as const,
       badge: '£5.99 ONLY',
       code: 'LUNCH599',
-      image: '/product_pastrami_burger_.png',
+      image: '/product_pastrami_burger_.webp',
       description: 'Quick lunch win! Single smash patty burger or crispy chicken sandwich with skin-on fries for just £5.99.'
     },
     {
@@ -186,10 +186,12 @@ export const CustomerOffers: React.FC = () => {
         {!loading && (
           <div className="absolute top-0 right-0 bottom-0 h-full w-full max-w-[1200px] flex justify-end items-center pointer-events-none select-none z-0 p-3 sm:p-5 lg:p-6 animate-in fade-in duration-300">
             <img
-              src={currentOffersData.banner.image_url || "/offers_combo_banner.png"}
+              src={currentOffersData.banner.image_url || "/offers_combo_banner.webp"}
               alt="Patty Project Exclusive Offers Combo"
               className="h-full w-auto max-h-[92%] sm:max-h-[95%] object-contain object-right select-none"
               loading="eager"
+              decoding="async"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/offers_combo_banner.png'; }}
             />
           </div>
         )}

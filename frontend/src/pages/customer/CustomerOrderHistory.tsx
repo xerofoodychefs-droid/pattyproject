@@ -228,7 +228,7 @@ export const CustomerOrderHistory: React.FC = () => {
         <div className="space-y-4">
           {filteredOrders.map((order) => {
             const itemCount = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 1;
-            const displayImg = '/herobackground.png';
+            const displayImg = '/herobackground.webp';
 
             return (
               <div

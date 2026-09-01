@@ -365,8 +365,11 @@ export const CustomerLogin: React.FC = () => {
       <div className="hidden lg:block absolute inset-y-0 right-0 w-[55%] xl:w-[58%] pointer-events-none overflow-hidden z-0">
         <div className="relative w-full h-full">
           <img
-            src="/herobackground.png"
+            src="/herobackground.webp"
             alt="Patty Project Hero Burger"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/herobackground.png'; }}
             className="w-full h-full object-cover object-center select-none"
           />
           {/* Soft Dark Gradient overlays */}
@@ -382,8 +385,11 @@ export const CustomerLogin: React.FC = () => {
             {/* Patty Project Brand Logo */}
             <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 flex items-center justify-center">
               <img
-                src="/logo.png"
+                src="/logo.webp"
                 alt="Patty Project"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                 className="w-full h-full object-contain select-none"
               />
             </div>

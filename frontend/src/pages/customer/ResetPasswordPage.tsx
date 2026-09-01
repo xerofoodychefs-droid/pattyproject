@@ -66,8 +66,11 @@ export const ResetPasswordPage: React.FC = () => {
       <div className="hidden lg:block absolute inset-y-0 right-0 w-[55%] xl:w-[58%] pointer-events-none overflow-hidden z-0">
         <div className="relative w-full h-full">
           <img
-            src="/herobackground.png"
+            src="/herobackground.webp"
             alt="Patty Project Hero"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/herobackground.png'; }}
             className="w-full h-full object-cover object-center select-none"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-[#070707] via-[#070707]/70 to-transparent" />
