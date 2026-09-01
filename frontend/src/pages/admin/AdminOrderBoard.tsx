@@ -12,6 +12,7 @@ import { audioAlert } from '../../utils/audioAlert';
 import { AdminOrderDetailsModal } from './AdminOrderDetailsModal';
 import { ThermalReceiptModal } from '../../components/admin/ThermalReceiptModal';
 import { hasAutoPrinted, markAutoPrinted } from '../../utils/printThermalReceipt';
+import { sendDirectPosPrint } from '../../utils/directPosPrint';
 
 export const AdminOrderBoard: React.FC = () => {
   const { user } = useAuthStore();
@@ -190,7 +191,7 @@ export const AdminOrderBoard: React.FC = () => {
         removeAlert(orderId);
       }
 
-      // Auto-trigger 80mm POS receipt printing upon successful order acceptance
+      // Auto-trigger direct 80mm POS receipt printing upon successful order acceptance
       if (newStatus === 'ACCEPTED') {
         if (!hasAutoPrinted(orderId)) {
           markAutoPrinted(orderId);
@@ -198,7 +199,7 @@ export const AdminOrderBoard: React.FC = () => {
             ? updatedOrder
             : (orders.find((o) => o.id === orderId) || updatedOrder);
           if (targetOrder) {
-            setAutoPrintOrder(targetOrder);
+            sendDirectPosPrint(targetOrder);
           }
         }
       }
