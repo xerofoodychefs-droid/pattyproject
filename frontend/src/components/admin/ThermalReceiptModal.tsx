@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { Order } from '../../types';
 
@@ -142,8 +143,8 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
 
   const addressLines = formatAddressLines();
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-black print:p-0 print:m-0 print:bg-transparent print:static print:block">
+  const modalContent = (
+    <div className="thermal-receipt-portal fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-black print:p-0 print:m-0 print:bg-transparent print:static print:block">
       <div className="thermal-receipt-80mm bg-white rounded-lg max-w-md w-full p-5 shadow-2xl font-mono text-xs text-left relative max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:rounded-none print:p-0 print:m-0 print:w-full print:static">
         {/* Close Button (Screen Only) */}
         <div className="flex justify-end print:hidden mb-1">
@@ -399,4 +400,8 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 };
