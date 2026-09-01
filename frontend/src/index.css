@@ -232,7 +232,9 @@ input:-webkit-autofill:active {
     padding: 0 !important;
   }
 
-  /* 4. Ensure the portal container and thermal receipt are the only visible nodes */
+  /* 4. Dedicated print-only portal container */
+  .thermal-receipt-print-root,
+  .thermal-receipt-print-root > div,
   .thermal-receipt-portal,
   .thermal-receipt-portal > div {
     display: block !important;
@@ -250,12 +252,14 @@ input:-webkit-autofill:active {
     box-shadow: none !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
+    color: #000000 !important;
   }
 
   /* 5. Exact 76mm active printable area on 80mm thermal paper roll */
+  .thermal-receipt-76mm,
   .thermal-receipt-80mm {
-    position: static !important;
     display: block !important;
+    position: static !important;
     width: 76mm !important;
     max-width: 76mm !important;
     min-width: 76mm !important;
@@ -282,20 +286,19 @@ input:-webkit-autofill:active {
   }
 
   /* 6. Solid Pure Black High-Contrast Typography */
+  .thermal-receipt-76mm,
+  .thermal-receipt-76mm *,
   .thermal-receipt-80mm,
-  .thermal-receipt-80mm p,
-  .thermal-receipt-80mm span,
-  .thermal-receipt-80mm div,
-  .thermal-receipt-80mm h2,
-  .thermal-receipt-80mm td,
-  .thermal-receipt-80mm th,
-  .thermal-receipt-80mm [class*="text-"] {
+  .thermal-receipt-80mm * {
     color: #000000 !important;
     text-rendering: geometricPrecision !important;
     -webkit-font-smoothing: antialiased !important;
   }
 
   /* 7. Solid Pure Black Dividers (Zero Gray Dithering) */
+  .thermal-receipt-76mm hr,
+  .thermal-receipt-76mm .border-dashed,
+  .thermal-receipt-76mm [class*="border-"],
   .thermal-receipt-80mm hr,
   .thermal-receipt-80mm .border-dashed,
   .thermal-receipt-80mm [class*="border-"] {
@@ -304,6 +307,7 @@ input:-webkit-autofill:active {
   }
 
   /* 8. Monochrome High-Contrast Logo */
+  .thermal-receipt-76mm img,
   .thermal-receipt-80mm img {
     filter: grayscale(100%) contrast(250%) !important;
     -webkit-print-color-adjust: exact !important;
