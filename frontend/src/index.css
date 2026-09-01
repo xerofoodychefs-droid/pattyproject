@@ -184,7 +184,7 @@ input:-webkit-autofill:active {
 /* 80mm Thermal POS Receipt Printing Rules */
 /* ========================================================================== */
 @page {
-  size: 72mm auto;
+  size: portrait;
   margin: 0;
 }
 
