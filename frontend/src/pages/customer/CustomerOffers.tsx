@@ -180,11 +180,11 @@ export const CustomerOffers: React.FC = () => {
       {/* HEADER BANNER WITH FITTED COMBO BACKGROUND IMAGE */}
       <section 
         aria-label="Exclusive Offers Banner"
-        className="w-full bg-black relative overflow-hidden min-h-[260px] sm:min-h-[300px] lg:h-[340px] xl:h-[380px] flex items-center justify-center"
+        className="w-full bg-black relative overflow-hidden min-h-[240px] sm:min-h-[270px] lg:h-[300px] xl:h-[340px] flex items-center"
       >
         {/* Right-aligned combo visual fitted inside the banner */}
         {!loading && (
-          <div className="absolute top-0 right-0 bottom-0 h-full w-full max-w-[1200px] flex justify-end items-center pointer-events-none select-none z-0 p-3 sm:p-5 lg:p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-y-0 right-0 w-full sm:w-[58%] lg:w-[48%] xl:w-[46%] flex justify-end items-center pointer-events-none select-none z-0 p-3 sm:p-4 lg:p-5 lg:pr-8 xl:pr-12 animate-in fade-in duration-300">
             <img
               src={currentOffersData.banner.image_url || "/offers_combo_banner.webp"}
               alt="Patty Project Exclusive Offers Combo"
@@ -197,11 +197,11 @@ export const CustomerOffers: React.FC = () => {
         )}
 
         {/* Soft edge gradient to ensure 100% crisp text readability */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent sm:via-black/50 md:via-transparent z-[1] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent sm:via-black/60 md:via-black/30 lg:via-transparent z-[1] pointer-events-none" />
 
         {/* Banner Content Container */}
-        <div className="w-full max-w-[1360px] h-full mx-auto px-4 sm:px-8 lg:px-12 flex items-center relative z-10 py-8 sm:py-0">
-          <div className="w-full sm:w-1/2 lg:max-w-[540px] text-left">
+        <div className="w-full max-w-[1240px] xl:max-w-[1280px] h-full mx-auto px-4 sm:px-6 lg:px-8 flex items-center relative z-10 py-6 sm:py-0">
+          <div className="w-full sm:w-1/2 lg:max-w-[480px] text-left">
             {loading ? (
               <div className="space-y-3 animate-pulse">
                 <div className="h-3 w-28 bg-[#222] rounded" />
@@ -210,14 +210,14 @@ export const CustomerOffers: React.FC = () => {
               </div>
             ) : (
               <>
-                <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.14em] block mb-2 sm:mb-2.5">
+                <span className="text-[#FF5A00] text-[11px] sm:text-[12px] font-extrabold uppercase tracking-[0.14em] block mb-1.5 sm:mb-2">
                   {currentOffersData.banner.tagline || "EXCLUSIVE OFFERS"}
                 </span>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[44px] font-black uppercase tracking-tight leading-[0.98]">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[40px] font-black uppercase tracking-tight leading-[0.98]">
                   <span className="text-white block">{currentOffersData.banner.headline_main || "DEALS THAT"}</span>
                   <span className="text-[#FF5A00] block mt-1">{currentOffersData.banner.headline_highlight || "HIT DIFFERENT."}</span>
                 </h1>
-                <p className="mt-3 sm:mt-4 text-[#A1A1AA] text-xs sm:text-sm md:text-base leading-relaxed max-w-[460px]">
+                <p className="mt-2.5 sm:mt-3 text-[#A1A1AA] text-xs sm:text-sm leading-relaxed max-w-[420px]">
                   {currentOffersData.banner.description || "Handpicked combos, limited-time treats and exclusive perks crafted to make your meal even better."}
                 </p>
               </>
@@ -227,7 +227,7 @@ export const CustomerOffers: React.FC = () => {
       </section>
 
       {/* MAIN CONTENT AREA (SEAMLESS FLOW WITH PURE BLACK BACKGROUND) */}
-      <main className="flex-1 w-full max-w-[1360px] mx-auto px-4 sm:px-8 lg:px-12 pt-4 pb-12 sm:pt-6 sm:pb-16 space-y-8">
+      <main className="flex-1 w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-10 sm:pt-5 sm:pb-14 space-y-7">
         {/* CATEGORY FILTER BAR (MATCHING MENU PAGE SHAPE) */}
         <section className="w-full flex justify-center">
           <div className="w-full flex items-center justify-start sm:justify-center gap-2.5 pb-2 overflow-x-auto scrollbar-none scroll-smooth">

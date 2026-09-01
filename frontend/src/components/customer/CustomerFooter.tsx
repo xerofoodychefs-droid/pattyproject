@@ -6,8 +6,8 @@ export const CustomerFooter: React.FC = () => {
   return (
     <footer className="w-full bg-black text-white border-t border-white/[0.08] relative z-10">
       {/* 1. Main Footer Content: 100% Full-width section with edge-to-edge distribution */}
-      <div className="w-full pt-14 pb-12">
-        <div className="w-full px-6 sm:px-10 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="w-full pt-12 pb-10">
+        <div className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
           {/* 5-Column Grid spanning full available browser width */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-8 xl:gap-12 2xl:gap-16">
 
@@ -204,8 +204,8 @@ export const CustomerFooter: React.FC = () => {
       </div>
 
       {/* 2. Bottom Bar / Sub-Footer & Copyright: 100% Full-width border-t and background */}
-      <div className="w-full border-t border-white/[0.08] py-6 bg-black">
-        <div className="w-full px-6 sm:px-10 lg:px-12 xl:px-16 2xl:px-20 flex flex-col sm:flex-row items-center justify-between text-xs text-[#9CA3AF] gap-4">
+      <div className="w-full border-t border-white/[0.08] py-5 bg-black">
+        <div className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#9CA3AF] gap-4">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 sm:gap-6 lg:gap-8">
             <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link to="/refund-cancellation" className="hover:text-white transition-colors">Refund & Cancellation Policy</Link>

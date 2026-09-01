@@ -152,10 +152,10 @@ export const CustomerHome: React.FC = () => {
   return (
     <div className="pb-0 space-y-6 sm:space-y-16">
       {/* Hero Section matching exact reference image */}
-      <section id="hero" className="relative bg-black min-h-[calc(100vh-68px)] lg:h-[calc(100vh-68px)] flex flex-col justify-between overflow-hidden px-6 sm:px-10 lg:px-16 xl:px-20 2xl:px-24 pt-6 lg:pt-8 pb-6 lg:pb-8">
+      <section id="hero" className="relative bg-black min-h-[calc(100vh-64px)] lg:h-[calc(100vh-64px)] flex flex-col justify-between overflow-hidden px-6 sm:px-8 lg:px-12 xl:px-14 pt-4 lg:pt-6 pb-4 lg:pb-6">
         
         {/* Full-bleed right side burger background image overlay */}
-        <div className="absolute inset-y-0 right-0 w-full lg:w-[62%] xl:w-[66%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
+        <div className="absolute inset-y-0 right-0 w-full lg:w-[60%] xl:w-[64%] pointer-events-none overflow-hidden flex items-center justify-end z-0">
           <img
             src="/herobackground.webp"
             alt="Hero Smash Burger"
@@ -167,14 +167,14 @@ export const CustomerHome: React.FC = () => {
         </div>
 
         {/* Top/Middle Hero Content (Headline + Description + Buttons) */}
-        <div className="relative z-10 my-auto max-w-[560px]">
+        <div className="relative z-10 my-auto max-w-[500px]">
           {/* Orange Location Tag */}
-          <span className="text-xs lg:text-sm text-[#FF5500] tracking-[0.25em] font-extrabold uppercase block mb-3 sm:mb-4">
+          <span className="text-xs text-[#FF5500] tracking-[0.25em] font-extrabold uppercase block mb-2.5 sm:mb-3">
             LONDON
           </span>
 
           {/* Giant Headline matching exact reference screenshot */}
-          <h1 className="text-5xl sm:text-7xl lg:text-[4.5rem] xl:text-[5.5rem] 2xl:text-[6.2rem] font-black leading-[0.9] tracking-tight font-hero uppercase">
+          <h1 className="text-4xl sm:text-6xl lg:text-[4rem] xl:text-[4.8rem] 2xl:text-[5.4rem] font-black leading-[0.9] tracking-tight font-hero uppercase">
             <span className="text-white">SMASH.</span><br />
             <span className="text-[#FF5500]">STACK.</span><br />
             <span className="text-white">SATISFY.</span>
@@ -202,7 +202,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* WELCOME TO PATTY PROJECT BRAND INTRODUCTION SECTION */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-8 pb-0 text-center text-white space-y-6">
+      <section className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10 pt-6 pb-0 text-center text-white space-y-5">
         {/* Top 3 Stars */}
         <div className="flex items-center justify-center gap-1.5 text-[#FF5500]">
           <Star className="w-4 h-4 fill-[#FF5500]" />
@@ -270,7 +270,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* CATEGORIES SHOWCASE BANNER (DIRECTLY ABOVE SIGNATURE BURGERS) */}
-      <section className="w-full max-w-[1360px] mx-auto px-4 sm:px-10 lg:px-12 pt-2 pb-0 sm:pt-4 sm:pb-1">
+      <section className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-4 sm:px-8 lg:px-10 pt-2 pb-0 sm:pt-3 sm:pb-1">
         <Link to="/order" className="block w-full overflow-hidden rounded-2xl sm:rounded-3xl hover:opacity-95 transition-opacity">
           {/* Mobile View: 2-column + full width stack matching attached photo */}
           <img
@@ -295,7 +295,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* SIGNATURE BURGERS & TODAY'S OFFERS SECTION */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 space-y-8 sm:space-y-14 pt-4 sm:pt-6 pb-2 sm:pb-14">
+      <section className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10 space-y-7 sm:space-y-12 pt-3 sm:pt-5 pb-2 sm:pb-12">
         {/* SIGNATURE BURGERS SHOWCASE SECTION (Full Width & Large Scale matching reference poster) */}
         <div className="space-y-8 sm:space-y-10">
           <div className="flex items-center justify-between">
@@ -526,7 +526,7 @@ export const CustomerHome: React.FC = () => {
       </section>
 
       {/* HUNGRY? UNLOCK YOUR PATTYPROJECT MEAL BANNER matching Screenshot */}
-      <section className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-2 pb-8 sm:py-12 text-center text-white space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10 pt-2 pb-6 sm:py-10 text-center text-white space-y-3.5 sm:space-y-5">
         {/* Main 2-Line Headline in Serif */}
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif tracking-wide leading-tight max-w-4xl mx-auto uppercase">
           <span className="text-white">HUNGRY? </span>

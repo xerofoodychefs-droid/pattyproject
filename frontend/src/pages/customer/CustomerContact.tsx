@@ -62,15 +62,15 @@ export const CustomerContact: React.FC = () => {
     <div className="min-h-[calc(100vh-70px)] bg-black text-white selection:bg-[#FF5500] selection:text-white relative overflow-hidden flex flex-col justify-between">
       
       {/* Desktop Background Image filling the right half */}
-      <div className="absolute top-0 right-0 bottom-0 w-full lg:w-[55%] xl:w-[58%] pointer-events-none z-0 hidden lg:block overflow-hidden">
+      <div className="absolute top-0 right-0 bottom-0 w-full lg:w-[50%] xl:w-[52%] pointer-events-none z-0 hidden lg:block overflow-hidden">
         <img
           src="/contact_background.jpg"
           alt="Patty Project Restaurant Interior & Bar"
-          className="w-full h-full object-cover object-left-top select-none"
+          className="w-full h-full object-cover object-center lg:object-right-top select-none"
         />
         {/* Soft edge gradient to blend seamlessly into solid black left half */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />
       </div>
 
       {/* Mobile Background Image filling the background with dark overlay */}
@@ -84,24 +84,24 @@ export const CustomerContact: React.FC = () => {
       </div>
 
       {/* Main Content Container */}
-      <div className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 py-10 sm:py-14 lg:py-16 relative z-10 flex-1 flex items-center">
+      <div className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10 py-8 sm:py-12 lg:py-14 relative z-10 flex-1 flex items-center">
         
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 items-center">
           
           {/* ========================================================================= */}
           {/* LEFT COLUMN: Contact Header, Info & Form */}
           {/* ========================================================================= */}
-          <div className="lg:col-span-6 xl:col-span-5 space-y-6 max-w-xl">
+          <div className="lg:col-span-6 xl:col-span-6 space-y-5 max-w-lg">
             
             {/* Header Info */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div>
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-[#FF5500] block">
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#FF5500] block">
                   CONTACT US
                 </span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-[56px] font-black uppercase text-white tracking-tight font-hero leading-[0.94] pt-1">
+              <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black uppercase text-white tracking-tight font-hero leading-[0.94] pt-1">
                 GET IN TOUCH
               </h1>
 

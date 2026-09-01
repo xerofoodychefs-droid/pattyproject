@@ -379,11 +379,11 @@ export const CustomerLogin: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="relative z-10 flex-1 flex items-center justify-center lg:w-[50%] xl:w-[48%] lg:pl-[8vw] px-4 sm:px-12 lg:px-8 py-8 my-auto">
-        <div className="w-full max-w-[520px] bg-[#121212] border border-[#222222] rounded-2xl p-6 sm:p-12 shadow-2xl shadow-black/90 my-auto flex flex-col justify-between">
+      <div className="relative z-10 flex-1 flex items-center justify-center lg:w-[48%] xl:w-[46%] lg:pl-[7vw] px-4 sm:px-8 lg:px-6 py-6 my-auto">
+        <div className="w-full max-w-[460px] bg-[#121212] border border-[#222222] rounded-2xl p-5 sm:p-9 shadow-2xl shadow-black/90 my-auto flex flex-col justify-between">
           <div>
             {/* Patty Project Brand Logo */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 flex items-center justify-center">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 flex items-center justify-center">
               <img
                 src="/logo.webp"
                 alt="Patty Project"

@@ -7,29 +7,29 @@ export const CustomerAbout: React.FC = () => {
       {/* ========================================================================= */}
       {/* HERO SECTION: Exact Typography & Font matching Offers Page */}
       {/* ========================================================================= */}
-      <section aria-label="About Us Hero" className="relative w-full bg-black h-[360px] sm:h-[420px] lg:h-[460px] xl:h-[500px] overflow-hidden flex items-center">
-        {/* Background Banner Image with focal point at [right_25%] */}
+      <section aria-label="About Us Hero" className="relative w-full bg-black h-[320px] sm:h-[380px] lg:h-[420px] xl:h-[450px] overflow-hidden flex items-center">
+        {/* Background Banner Image with focal point aligned to the right */}
         <div className="absolute inset-0 z-0">
           <img
             src="/about_hero_banner.webp"
             alt="Patty Project Hero Burger"
-            className="w-full h-full object-cover object-[right_25%] select-none pointer-events-none"
+            className="w-full h-full object-cover object-center lg:object-right select-none pointer-events-none"
             loading="eager"
             decoding="async"
             onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/about_hero_banner.png'; }}
           />
           {/* Soft dark gradient on left for guaranteed text readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 lg:via-black/35 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 sm:via-black/60 lg:via-black/40 to-transparent pointer-events-none" />
         </div>
 
         {/* Hero Text Content using exact Offers page font & typography scale */}
-        <div className="relative z-10 w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12">
+        <div className="relative z-10 w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10">
           <div className="max-w-xl space-y-2 sm:space-y-2.5">
-            <span className="text-[#FF5A00] text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.1em] block mb-1.5 sm:mb-2">
+            <span className="text-[#FF5A00] text-[11px] sm:text-[12px] font-extrabold uppercase tracking-[0.1em] block mb-1.5 sm:mb-2">
               ABOUT US
             </span>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-[44px] xl:text-[50px] font-black uppercase tracking-tight leading-[0.94]">
+            <h1 className="text-2xl sm:text-3xl lg:text-[40px] xl:text-[46px] font-black uppercase tracking-tight leading-[0.94]">
               <span className="text-white block">FOUR MATES.</span>
               <span className="text-white block">ONE PROJECT.</span>
               <span className="text-[#FF5A00] block">PROPER BURGERS.</span>
@@ -41,15 +41,15 @@ export const CustomerAbout: React.FC = () => {
       {/* ========================================================================= */}
       {/* MAIN CONTENT: Full Desktop Container */}
       {/* ========================================================================= */}
-      <div className="w-full max-w-[1360px] mx-auto px-6 sm:px-10 lg:px-12 pt-10 sm:pt-14">
+      <div className="w-full max-w-[1240px] xl:max-w-[1280px] mx-auto px-6 sm:px-8 lg:px-10 pt-8 sm:pt-12">
         
         {/* Two-Column Grid: Left Story (7 cols) / Right Brand Principles (5 cols) */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 xl:gap-24 items-start">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 xl:gap-20 items-start">
           
           {/* ========================================================================= */}
           {/* LEFT COLUMN: Authentic Brand Story */}
           {/* ========================================================================= */}
-          <div className="lg:col-span-7 space-y-6 text-sm sm:text-base lg:text-[16px] text-[#A1A1A1] leading-[1.8] max-w-[850px]">
+          <div className="lg:col-span-7 space-y-6 text-sm sm:text-base lg:text-[16px] text-[#A1A1A1] leading-[1.8]">
             <p>
               <span className="text-[#FF5A00] font-semibold">Patty Project</span> started with four mates, years of experience in London's kitchens, and one shared idea — to build something of our own.
             </p>
