@@ -80,6 +80,9 @@ interface ComboDealItem {
   is_active: boolean;
   modifiers: { name: string; price: number }[];
   ingredients?: string;
+  min_choices?: number;
+  max_choices?: number;
+  choice_group_name?: string;
 }
 
 interface ComboDealsConfig {
@@ -206,6 +209,7 @@ export const AdminOfferSettings: React.FC = () => {
   const [editingCombo, setEditingCombo] = useState<ComboDealItem | null>(null);
   const [isAddingNewCombo, setIsAddingNewCombo] = useState(false);
   const [editingComboIngredients, setEditingComboIngredients] = useState<string[]>([]);
+  const [comboValidationError, setComboValidationError] = useState<string | null>(null);
 
   // Hidden File Input refs
   const cardFileInputRefs = [
@@ -379,6 +383,31 @@ export const AdminOfferSettings: React.FC = () => {
   };
 
   const handleSaveComboItem = async (comboItem: ComboDealItem) => {
+    // Validate choice limits if configured
+    const minC = comboItem.min_choices;
+    const maxC = comboItem.max_choices;
+    const validMods = (comboItem.modifiers || []).filter(m => m.name && m.name.trim() !== '');
+
+    if (minC !== undefined && minC < 0) {
+      setComboValidationError("Minimum choices cannot be negative.");
+      return;
+    }
+    if (maxC !== undefined && maxC < 0) {
+      setComboValidationError("Maximum choices cannot be negative.");
+      return;
+    }
+    if (minC !== undefined && maxC !== undefined) {
+      if (minC > maxC) {
+        setComboValidationError(`Minimum choices (${minC}) cannot exceed maximum choices (${maxC}).`);
+        return;
+      }
+      if (maxC > validMods.length) {
+        setComboValidationError(`Maximum choices (${maxC}) cannot exceed the number of available choices (${validMods.length}).`);
+        return;
+      }
+    }
+    setComboValidationError(null);
+
     const finalCombo = {
       ...comboItem,
       ingredients: editingComboIngredients.filter(i => i.trim() !== '').join(', ')
@@ -425,6 +454,7 @@ export const AdminOfferSettings: React.FC = () => {
   };
 
   const handleOpenEditCombo = (combo: ComboDealItem) => {
+    setComboValidationError(null);
     setEditingCombo({
       ...combo,
       modifiers: Array.isArray(combo.modifiers) ? [...combo.modifiers] : []
@@ -440,6 +470,7 @@ export const AdminOfferSettings: React.FC = () => {
   };
 
   const handleOpenCreateCombo = () => {
+    setComboValidationError(null);
     const newCombo: ComboDealItem = {
       id: `combo-${Date.now()}`,
       name: '',
@@ -1301,12 +1332,17 @@ export const AdminOfferSettings: React.FC = () => {
                     />
                   </div>
 
-                  {/* Customizable Choices (Modifiers) */}
+                  {/* Customizable Choices (Choice Group & Limits) */}
                   <div className="bg-[#181818] border border-[#262626] p-4 rounded-xl space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-[#262626]">
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                        Customizable Choices ({editingCombo.modifiers?.length || 0})
-                      </h4>
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                          Customizable Choices ({editingCombo.modifiers?.length || 0})
+                        </h4>
+                        <p className="text-[10px] text-[#71717A]">
+                          Configure choice options and customer selection limits.
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() =>
@@ -1321,6 +1357,94 @@ export const AdminOfferSettings: React.FC = () => {
                         <span>Add Choice</span>
                       </button>
                     </div>
+
+                    {/* Choice Group Label */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#A1A1AA] mb-1">
+                        Choice Group Label (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Drink choices / Choose your side"
+                        value={editingCombo.choice_group_name || ''}
+                        onChange={(e) => setEditingCombo({ ...editingCombo, choice_group_name: e.target.value })}
+                        className="w-full bg-[#121212] border border-[#262626] rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-[#FF5500]"
+                      />
+                    </div>
+
+                    {/* Selection Limits: Minimum and Maximum choices */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#D1D5DB] mb-1">
+                          Minimum choices
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="e.g. 1 (Blank = no limit)"
+                          value={editingCombo.min_choices !== undefined ? editingCombo.min_choices : ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                            setEditingCombo({ ...editingCombo, min_choices: isNaN(val as any) ? undefined : val });
+                          }}
+                          className="w-full bg-[#121212] border border-[#262626] rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-[#FF5500]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#D1D5DB] mb-1">
+                          Maximum choices
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="e.g. 1 (Blank = no limit)"
+                          value={editingCombo.max_choices !== undefined ? editingCombo.max_choices : ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                            setEditingCombo({ ...editingCombo, max_choices: isNaN(val as any) ? undefined : val });
+                          }}
+                          className="w-full bg-[#121212] border border-[#262626] rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-[#FF5500]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Helpful Dynamic Text */}
+                    <div className="text-[11px] px-2.5 py-1.5 rounded-lg bg-[#121212] border border-[#262626] text-[#A1A1AA] flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-[#FF5500] shrink-0" />
+                      <span>
+                        {(() => {
+                          const min = editingCombo.min_choices;
+                          const max = editingCombo.max_choices;
+                          const groupLabel = editingCombo.choice_group_name ? editingCombo.choice_group_name.toLowerCase() : 'item';
+                          const itemNoun = groupLabel.includes('drink') ? 'drink' : 'item';
+                          const itemsNoun = groupLabel.includes('drink') ? 'drinks' : 'items';
+                          if (min === undefined && max === undefined) {
+                            return "No selection limits configured (all choices optional).";
+                          }
+                          if (min === 1 && max === 1) {
+                            return `Customer must choose 1 ${itemNoun}.`;
+                          }
+                          if (min !== undefined && max !== undefined && min === max) {
+                            return `Customer must choose exactly ${min} ${min === 1 ? itemNoun : itemsNoun}.`;
+                          }
+                          if (min === 0 && max !== undefined && max > 0) {
+                            return `Customer may optionally choose up to ${max} ${max === 1 ? itemNoun : itemsNoun}.`;
+                          }
+                          if (min !== undefined && max !== undefined && min < max) {
+                            return `Customer must choose between ${min} and ${max} ${itemsNoun}.`;
+                          }
+                          return "Configure minimum and maximum choices for this combo.";
+                        })()}
+                      </span>
+                    </div>
+
+                    {/* Inline Validation Error Banner */}
+                    {comboValidationError && (
+                      <div className="p-2.5 bg-[#2A1212] border border-[#EF4444]/40 rounded-lg text-xs text-[#FCA5A5] flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-[#EF4444] shrink-0" />
+                        <span>{comboValidationError}</span>
+                      </div>
+                    )}
 
                     {(!editingCombo.modifiers || editingCombo.modifiers.length === 0) ? (
                       <p className="text-xs text-[#71717A] italic py-2 text-center">

@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '../../api/client';
-import { Product, Category, Branch } from '../../types';
+import { Product, Category, Branch, ProductChoiceGroup, ProductModifier } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
 import { useCartStore } from '../../store/cartStore';
 import { useProductRealtime } from '../../hooks/useProductRealtime';
@@ -211,6 +211,48 @@ export const CustomerMenu: React.FC = () => {
               p => p.id === c.id || p.sku === `COMBO-${c.id}` || p.name.trim().toLowerCase() === c.name.trim().toLowerCase()
             );
 
+            const hasChoiceLimits = (c.min_choices !== undefined && c.min_choices !== null) ||
+                                   (c.max_choices !== undefined && c.max_choices !== null);
+
+            let comboChoiceGroups: ProductChoiceGroup[] = [];
+            let comboModifiers: ProductModifier[] = [];
+
+            if (hasChoiceLimits && Array.isArray(c.modifiers) && c.modifiers.length > 0) {
+              const minSel = typeof c.min_choices === 'number' ? Math.max(0, c.min_choices) : 0;
+              const maxSel = typeof c.max_choices === 'number' ? Math.max(minSel, c.max_choices) : c.modifiers.length;
+              const grpName = c.choice_group_name && c.choice_group_name.trim() !== ''
+                ? c.choice_group_name.trim()
+                : 'Choice Options';
+
+              comboChoiceGroups = [{
+                id: `cg-${c.id}`,
+                product_id: c.id,
+                name: grpName,
+                min_selections: minSel,
+                max_selections: maxSel,
+                is_required: minSel > 0,
+                display_order: 1,
+                options: c.modifiers.map((m: any, mIdx: number) => ({
+                  id: `cgo-${c.id}-${mIdx}`,
+                  group_id: `cg-${c.id}`,
+                  name: m.name,
+                  price_delta: Number(m.price || 0),
+                  is_active: true,
+                  display_order: mIdx + 1
+                }))
+              }];
+              comboModifiers = [];
+            } else {
+              comboModifiers = Array.isArray(c.modifiers) ? c.modifiers.map((m: any, mIdx: number) => ({
+                id: `mod-${c.id}-${mIdx}`,
+                name: m.name,
+                price: Number(m.price || 0),
+                is_required: false,
+                is_active: true
+              })) : [];
+              comboChoiceGroups = [];
+            }
+
             const comboProd: Product = {
               id: c.id || `combo-${Date.now()}`,
               name: c.name,
@@ -235,17 +277,22 @@ export const CustomerMenu: React.FC = () => {
               category_id: comboCategory?.id || 'category-combo-offers',
               is_active: true,
               is_bestseller: true,
-              modifiers: Array.isArray(c.modifiers) ? c.modifiers.map((m: any, mIdx: number) => ({
-                id: `mod-${c.id}-${mIdx}`,
-                name: m.name,
-                price: Number(m.price || 0),
-                is_required: false,
-                is_active: true
-              })) : []
+              modifiers: comboModifiers,
+              choice_groups: comboChoiceGroups
             };
 
             if (existingIdx >= 0) {
-              currentProducts[existingIdx] = { ...currentProducts[existingIdx], ...comboProd };
+              const existingChoiceGroups = currentProducts[existingIdx].choice_groups;
+              const finalChoiceGroups = (hasChoiceLimits && existingChoiceGroups && existingChoiceGroups.length > 0)
+                ? existingChoiceGroups
+                : comboChoiceGroups;
+
+              currentProducts[existingIdx] = {
+                ...currentProducts[existingIdx],
+                ...comboProd,
+                modifiers: hasChoiceLimits ? [] : comboProd.modifiers,
+                choice_groups: finalChoiceGroups
+              };
             } else {
               currentProducts.push(comboProd);
             }

@@ -457,7 +457,7 @@ export const ProductDetailModal: React.FC<Props> = ({ product, onClose }) => {
                             >
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                                  className={`w-5 h-5 ${grp.max_selections === 1 ? 'rounded-full' : 'rounded-md'} border flex items-center justify-center transition-colors shrink-0 ${
                                     isSelected
                                       ? 'border-[#FF5A00] bg-[#FF5A00] text-white'
                                       : 'border-[#242424] bg-[#0D0D0D]'

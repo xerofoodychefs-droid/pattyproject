@@ -277,6 +277,25 @@ export const CustomerCart: React.FC = () => {
                         £{item.product.base_price.toFixed(2)}
                       </p>
 
+                      {(item as any).selectedChoices && (item as any).selectedChoices.length > 0 && (
+                        <div className="pt-1 space-y-0.5">
+                          <span className="text-[11px] font-medium text-[#71717A] block">
+                            Choices:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(item as any).selectedChoices.map((choice: any, i: number) => (
+                              <span
+                                key={i}
+                                className="text-xs bg-[#151515] border border-[#FF5A00]/30 text-[#F5F5F5] px-2 py-0.5 rounded font-normal"
+                              >
+                                {choice.option_name}
+                                {choice.price_delta > 0 ? ` (+£${Number(choice.price_delta).toFixed(2)})` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {item.selectedModifiers && item.selectedModifiers.length > 0 && (
                         <div className="pt-1 space-y-0.5">
                           <span className="text-[11px] font-medium text-[#71717A] block">

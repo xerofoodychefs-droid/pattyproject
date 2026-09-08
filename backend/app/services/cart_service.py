@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 
 from app.models.cart import Cart, CartItem
-from app.models.product import Product
+from app.models.product import Product, ProductChoiceGroup, ProductChoiceOption
 from app.models.branch import Branch
 from app.schemas.cart import (
     CartResponse,
@@ -123,6 +123,72 @@ def add_item_to_cart(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=reason or f"This item is currently unavailable because its category is outside its serving hours."
         )
+
+    # Authoritative choice group validation
+    db_groups = db.query(ProductChoiceGroup).filter(
+        ProductChoiceGroup.product_id == product.id
+    ).order_by(ProductChoiceGroup.display_order.asc()).all()
+
+    if db_groups:
+        submitted_choices = choices or []
+        validated_choices = []
+        for grp in db_groups:
+            grp_choices = [
+                c for c in submitted_choices
+                if isinstance(c, dict) and (
+                    c.get("group_id") == grp.id or
+                    str(c.get("group_name", "")).strip().lower() == grp.name.strip().lower()
+                )
+            ]
+            count = len(grp_choices)
+            if (grp.is_required and count < grp.min_selections) or (count > 0 and count < grp.min_selections):
+                if grp.min_selections == grp.max_selections:
+                    msg = f"Please select exactly {grp.min_selections} items for {grp.name}."
+                else:
+                    msg = f"Please select at least {grp.min_selections} items for {grp.name}."
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+            if count > grp.max_selections:
+                msg = f"You can select at most {grp.max_selections} items for {grp.name}."
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+            # Prevent duplicate option selections within the same group
+            opt_identifiers = [
+                (c.get("option_id") or c.get("id") or c.get("option_name") or c.get("name"))
+                for c in grp_choices
+                if (c.get("option_id") or c.get("id") or c.get("option_name") or c.get("name"))
+            ]
+            if len(opt_identifiers) != len(set(opt_identifiers)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Duplicate choices are not permitted for {grp.name}."
+                )
+
+            for c_input in grp_choices:
+                opt_id = c_input.get("option_id") or c_input.get("id")
+                opt_name = c_input.get("option_name") or c_input.get("name")
+                query_opt = db.query(ProductChoiceOption).filter(
+                    ProductChoiceOption.group_id == grp.id,
+                    ProductChoiceOption.is_active == True
+                )
+                if opt_id:
+                    db_opt = query_opt.filter(ProductChoiceOption.id == opt_id).first()
+                else:
+                    db_opt = query_opt.filter(ProductChoiceOption.name == opt_name).first()
+
+                if not db_opt:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Selected choice '{opt_name or opt_id}' in '{grp.name}' is invalid or unavailable."
+                    )
+
+                validated_choices.append({
+                    "group_id": grp.id,
+                    "group_name": grp.name,
+                    "option_id": db_opt.id,
+                    "option_name": db_opt.name,
+                    "price_delta": db_opt.price_delta
+                })
+        choices = validated_choices
 
     target_mod_sig, target_choice_sig, target_rem_sig = _normalize_configuration(modifiers, choices, removed_ingredients)
 

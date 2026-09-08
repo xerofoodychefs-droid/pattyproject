@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import get_db
 from app.models.promotion import Coupon, OfferSetting
-from app.models.product import Category, Product, ProductModifier
+from app.models.product import Category, Product, ProductModifier, ProductChoiceGroup, ProductChoiceOption
 from app.schemas.promotion import CouponCreateRequest, CouponResponse
 from app.api.endpoints.auth import require_role
 from app.models.user import UserRole, User
@@ -184,17 +184,53 @@ def sync_combo_deals_to_products(db: Session, combos: List[Dict[str, Any]]):
                 prod.is_active = is_active
                 db.flush()
 
-            mods = item.get("modifiers", [])
-            if isinstance(mods, list):
+            min_c = item.get("min_choices")
+            max_c = item.get("max_choices")
+            raw_mods = item.get("modifiers", [])
+            valid_mods = [m for m in raw_mods if isinstance(m, dict) and m.get("name") and str(m.get("name")).strip()]
+
+            has_explicit_limits = (min_c is not None and max_c is not None)
+
+            if has_explicit_limits and len(valid_mods) > 0:
+                min_val = int(min_c)
+                max_val = int(max_c)
+                grp_name = (item.get("choice_group_name") or "Customizable Choices").strip() or "Customizable Choices"
+
+                # Remove existing modifiers to prevent duplicate display as checkbox add-ons
                 db.query(ProductModifier).filter(ProductModifier.product_id == prod.id).delete()
-                for m in mods:
-                    if isinstance(m, dict) and m.get("name"):
-                        db.add(ProductModifier(
-                            product_id=prod.id,
-                            name=m["name"],
-                            price=float(m.get("price", 0.0)),
-                            is_active=True
-                        ))
+
+                # Clean & recreate ProductChoiceGroup for this combo product
+                db.query(ProductChoiceGroup).filter(ProductChoiceGroup.product_id == prod.id).delete()
+                choice_group = ProductChoiceGroup(
+                    product_id=prod.id,
+                    name=grp_name,
+                    min_selections=min_val,
+                    max_selections=max_val,
+                    is_required=(min_val > 0),
+                    display_order=0
+                )
+                db.add(choice_group)
+                db.flush()
+
+                for opt_idx, m in enumerate(valid_mods):
+                    db.add(ProductChoiceOption(
+                        group_id=choice_group.id,
+                        name=str(m["name"]).strip(),
+                        price_delta=float(m.get("price", 0.0)),
+                        is_active=True,
+                        display_order=opt_idx
+                    ))
+            else:
+                # Existing legacy behavior: no choice limits, sync to ProductModifier
+                db.query(ProductChoiceGroup).filter(ProductChoiceGroup.product_id == prod.id).delete()
+                db.query(ProductModifier).filter(ProductModifier.product_id == prod.id).delete()
+                for m in valid_mods:
+                    db.add(ProductModifier(
+                        product_id=prod.id,
+                        name=str(m["name"]).strip(),
+                        price=float(m.get("price", 0.0)),
+                        is_active=True
+                    ))
 
         # Deactivate any combo products that were removed from the combo list
         existing_combos = db.query(Product).filter(Product.category_id == combo_cat.id).all()
@@ -435,6 +471,56 @@ def update_combo_deals_settings(
     db: Session = Depends(get_db)
 ):
     """Super Admin update Combo Deals configuration and sync to menu products."""
+    combos = payload.get("combos", [])
+    if not isinstance(combos, list):
+        raise HTTPException(status_code=400, detail="Invalid payload: 'combos' must be a list.")
+
+    # Authoritative validation of combo choice selection limits
+    for idx, item in enumerate(combos):
+        if not isinstance(item, dict):
+            continue
+        combo_name = (item.get("name") or item.get("title") or f"Combo #{idx + 1}").strip()
+        min_c = item.get("min_choices")
+        max_c = item.get("max_choices")
+        mods = [m for m in item.get("modifiers", []) if isinstance(m, dict) and m.get("name") and str(m.get("name")).strip()]
+        num_choices = len(mods)
+
+        if min_c is not None or max_c is not None:
+            if min_c is None or max_c is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Both minimum and maximum choices must be specified for '{combo_name}'."
+                )
+            try:
+                min_val = int(min_c)
+                max_val = int(max_c)
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Choice selection limits for '{combo_name}' must be valid integers."
+                )
+
+            if min_val < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Minimum choices cannot be negative for '{combo_name}'."
+                )
+            if max_val < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Maximum choices cannot be negative for '{combo_name}'."
+                )
+            if min_val > max_val:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Minimum choices ({min_val}) cannot exceed maximum choices ({max_val}) for '{combo_name}'."
+                )
+            if max_val > num_choices:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Maximum choices ({max_val}) cannot exceed the number of available choices ({num_choices}) for '{combo_name}'."
+                )
+
     setting = db.query(OfferSetting).filter(OfferSetting.key == "combo_deals").first()
     if not setting:
         setting = OfferSetting(key="combo_deals", data=payload)
