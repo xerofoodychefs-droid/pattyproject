@@ -12,6 +12,7 @@ import {
 import { api } from '../../api/client';
 import { Product, Category, Branch, ProductChoiceGroup, ProductModifier } from '../../types';
 import { ProductDetailModal } from './ProductDetailModal';
+import { isProductSoldOut, sortProductsWithSoldOutAtBottom } from '../../utils/productAvailability';
 import { useCartStore } from '../../store/cartStore';
 import { useProductRealtime } from '../../hooks/useProductRealtime';
 import { useShopHoursStore, formatTime12h } from '../../store/shopHoursStore';
@@ -406,14 +407,20 @@ export const CustomerMenu: React.FC = () => {
     );
   };
 
-  // High-performance memoized product list
+  // High-performance memoized product list: available items first, sold-out items at bottom
   const filteredProducts = useMemo(() => {
-    if (selectedCategory === 'ALL') return products;
-    if (selectedCategory === 'COMBO_DEALS') return products.filter(isComboProduct);
-    const cat = categories.find((c) => c.id === selectedCategory);
-    return products.filter(
-      (p) => p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug)
-    );
+    let baseList: Product[];
+    if (selectedCategory === 'ALL') {
+      baseList = products;
+    } else if (selectedCategory === 'COMBO_DEALS') {
+      baseList = products.filter(isComboProduct);
+    } else {
+      const cat = categories.find((c) => c.id === selectedCategory);
+      baseList = products.filter(
+        (p) => p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug)
+      );
+    }
+    return sortProductsWithSoldOutAtBottom(baseList);
   }, [products, selectedCategory, categories]);
 
   const categoryIcons: Record<string, React.ReactNode> = {
@@ -616,7 +623,7 @@ export const CustomerMenu: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 lg:gap-4">
             {filteredProducts.map((p) => {
               const displayImg = p.image_url || '/placeholder-burger.svg';
-              const isOutOfStock = p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
+              const isOutOfStock = isProductSoldOut(p);
 
               const rawName = p.name || '';
               const isVeg = rawName.includes('[VEG]');

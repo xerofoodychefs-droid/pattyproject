@@ -353,14 +353,35 @@ export const CustomerMenu: React.FC = () => {
     );
   };
 
-  // High-performance memoized product list
+  // Exact condition used by CustomerMenu to render the "SOLD OUT" badge/overlay
+  const isProductSoldOut = (p: Product): boolean => {
+    return p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
+  };
+
+  // High-performance memoized product list: available items first, sold-out items at bottom
   const filteredProducts = useMemo(() => {
-    if (selectedCategory === 'ALL') return products;
-    if (selectedCategory === 'COMBO_DEALS') return products.filter(isComboProduct);
-    const cat = categories.find((c) => c.id === selectedCategory);
-    return products.filter(
-      (p) => p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug)
-    );
+    let baseList: Product[];
+    if (selectedCategory === 'ALL') {
+      baseList = products;
+    } else if (selectedCategory === 'COMBO_DEALS') {
+      baseList = products.filter(isComboProduct);
+    } else {
+      const cat = categories.find((c) => c.id === selectedCategory);
+      baseList = products.filter(
+        (p) => p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug)
+      );
+    }
+
+    const available: Product[] = [];
+    const soldOut: Product[] = [];
+    for (const p of baseList) {
+      if (isProductSoldOut(p)) {
+        soldOut.push(p);
+      } else {
+        available.push(p);
+      }
+    }
+    return [...available, ...soldOut];
   }, [products, selectedCategory, categories]);
 
   const categoryIcons: Record<string, React.ReactNode> = {
@@ -542,7 +563,7 @@ export const CustomerMenu: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
             {filteredProducts.map((p) => {
               const displayImg = p.image_url || '/placeholder-burger.svg';
-              const isOutOfStock = p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
+              const isOutOfStock = isProductSoldOut(p);
 
               const isVeg = p.name.includes('[VEG]');
               const isVegan = p.name.includes('[VEGAN]');

@@ -92,11 +92,28 @@ export const PublicMenuPage: React.FC = () => {
     },
   });
 
-  const filteredProducts = products.filter((p) => {
-    if (selectedCategory === 'ALL') return true;
-    const cat = categories.find((c) => c.id === selectedCategory);
-    return p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug);
-  });
+  const isProductSoldOut = (p: Product): boolean => {
+    return p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
+  };
+
+  const filteredProducts = (() => {
+    const baseList = products.filter((p) => {
+      if (selectedCategory === 'ALL') return true;
+      const cat = categories.find((c) => c.id === selectedCategory);
+      return p.category_id === selectedCategory || (cat && (p as any).category?.slug === cat.slug);
+    });
+
+    const available: Product[] = [];
+    const soldOut: Product[] = [];
+    for (const p of baseList) {
+      if (isProductSoldOut(p)) {
+        soldOut.push(p);
+      } else {
+        available.push(p);
+      }
+    }
+    return [...available, ...soldOut];
+  })();
 
   const categoryIcons: Record<string, React.ReactNode> = {
     all: <LayoutGrid className="w-4 h-4" />,
@@ -183,7 +200,7 @@ export const PublicMenuPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
             {filteredProducts.map((p) => {
               const displayImg = p.image_url || '/placeholder-burger.svg';
-              const isOutOfStock = p.is_available === false || (p.stock_quantity !== undefined && p.stock_quantity <= 0);
+              const isOutOfStock = isProductSoldOut(p);
               const isVeg = p.name.includes('[VEG]');
               const isVegan = p.name.includes('[VEGAN]');
               const cleanName = p.name.replace('[VEG]', '').replace('[VEGAN]', '').trim();
